@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" fill="none">
+  <defs>
+    <linearGradient id="featureBaseB" x1="120" y1="80" x2="1500" y2="820" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff8f2"/>
+      <stop offset="0.55" stop-color="#fff1e7"/>
+      <stop offset="1" stop-color="#ffe7da"/>
+    </linearGradient>
+    <radialGradient id="featureGlowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(340 720) rotate(90) scale(260 360)">
+      <stop stop-color="#fb923c" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#fb923c" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="featureGridB" width="92" height="92" patternUnits="userSpaceOnUse">
+      <path d="M92 0H0V92" stroke="rgba(124,45,18,0.06)" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="900" fill="url(#featureBaseB)"/>
+  <rect width="1600" height="900" fill="url(#featureGridB)"/>
+  <rect width="1600" height="900" fill="url(#featureGlowB)"/>
+  <path d="M120 820C316 592 566 474 892 484C1124 490 1336 560 1502 694" stroke="rgba(194,65,12,0.12)" stroke-width="2"/>
+  <path d="M182 732C366 552 604 470 888 492" stroke="rgba(194,65,12,0.08)" stroke-width="1.5"/>
+</svg>

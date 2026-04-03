@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" fill="none">
+  <defs>
+    <linearGradient id="featureBaseD" x1="100" y1="60" x2="1500" y2="860" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f9f7ff"/>
+      <stop offset="0.52" stop-color="#f0ebff"/>
+      <stop offset="1" stop-color="#e8e1ff"/>
+    </linearGradient>
+    <radialGradient id="featureGlowD" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(520 180) rotate(90) scale(230 330)">
+      <stop stop-color="#a78bfa" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#a78bfa" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="featureGridD" width="94" height="94" patternUnits="userSpaceOnUse">
+      <path d="M94 0H0V94" stroke="rgba(76,29,149,0.05)" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="900" fill="url(#featureBaseD)"/>
+  <rect width="1600" height="900" fill="url(#featureGridD)"/>
+  <rect width="1600" height="900" fill="url(#featureGlowD)"/>
+  <path d="M190 130H1414" stroke="rgba(91,33,182,0.08)" stroke-width="1.5"/>
+  <path d="M190 216H1414" stroke="rgba(91,33,182,0.06)" stroke-width="1.5"/>
+  <path d="M190 302H1414" stroke="rgba(91,33,182,0.04)" stroke-width="1.5"/>
+  <path d="M1240 92L1466 318" stroke="rgba(91,33,182,0.08)" stroke-width="2"/>
+</svg>

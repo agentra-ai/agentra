@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1200" fill="none">
+  <defs>
+    <linearGradient id="heroBase" x1="90" y1="40" x2="1460" y2="1120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#07111d"/>
+      <stop offset="0.48" stop-color="#0c1830"/>
+      <stop offset="1" stop-color="#13274a"/>
+    </linearGradient>
+    <radialGradient id="heroGlowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1160 250) rotate(90) scale(320 420)">
+      <stop stop-color="#7dd3fc" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#7dd3fc" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="heroGlowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(420 920) rotate(90) scale(360 520)">
+      <stop stop-color="#60a5fa" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#60a5fa" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="heroGlowC" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(820 640) rotate(90) scale(440 600)">
+      <stop stop-color="#f8fafc" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#f8fafc" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="heroGrid" width="96" height="96" patternUnits="userSpaceOnUse">
+      <path d="M96 0H0V96" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+    </pattern>
+    <polygon id="heroBlade" points="800,370 860,470 824,548 800,528 776,548 740,470"/>
+  </defs>
+
+  <rect width="1600" height="1200" fill="url(#heroBase)"/>
+  <rect width="1600" height="1200" fill="url(#heroGrid)"/>
+  <rect width="1600" height="1200" fill="url(#heroGlowA)"/>
+  <rect width="1600" height="1200" fill="url(#heroGlowB)"/>
+  <rect width="1600" height="1200" fill="url(#heroGlowC)"/>
+
+  <g opacity="0.55">
+    <circle cx="800" cy="640" r="292" stroke="rgba(255,255,255,0.08)" stroke-width="1.5"/>
+    <circle cx="800" cy="640" r="376" stroke="rgba(125,211,252,0.11)" stroke-width="1.5"/>
+    <circle cx="800" cy="640" r="470" stroke="rgba(96,165,250,0.07)" stroke-width="1.5"/>
+  </g>
+
+  <g fill="#dbeafe" fill-opacity="0.18">
+    <use href="#heroBlade"/>
+    <use href="#heroBlade" transform="rotate(120 800 640)"/>
+    <use href="#heroBlade" transform="rotate(240 800 640)"/>
+  </g>
+  <circle cx="800" cy="640" r="26" fill="rgba(219,234,254,0.2)"/>
+
+  <path d="M76 1020C340 860 606 808 836 826C1088 846 1284 930 1524 1118" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+  <path d="M196 142C452 258 644 420 758 644" stroke="rgba(125,211,252,0.09)" stroke-width="2"/>
+</svg>

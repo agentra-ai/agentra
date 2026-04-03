@@ -20,14 +20,22 @@ type FooterGroup = {
 };
 
 export type LandingDict = {
-  header: { github: string; login: string; dashboard: string };
+  header: { login: string; dashboard: string };
   hero: {
+    kicker: string;
     headlineLine1: string;
     headlineLine2: string;
     subheading: string;
     cta: string;
     worksWith: string;
+    proofChips: string[];
     imageAlt: string;
+  };
+  valueProps: {
+    label: string;
+    headline: string;
+    description: string;
+    items: { title: string; description: string }[];
   };
   features: {
     teammates: FeatureSection;
@@ -41,7 +49,6 @@ export type LandingDict = {
     headlineFaded: string;
     steps: { title: string; description: string }[];
     cta: string;
-    ctaGithub: string;
   };
   openSource: {
     label: string;
