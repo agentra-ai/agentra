@@ -9,9 +9,9 @@ export function FAQSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <section id="faq" className="bg-[#f8f8f8] text-[#0a0d12]">
-      <div className="mx-auto max-w-[860px] px-4 py-24 sm:px-6 sm:py-32 lg:py-40">
-        <div className="text-center">
+    <section id="faq" className="bg-[#f5f8fc] text-[#0a0d12]">
+      <div className="mx-auto max-w-[980px] px-4 py-24 sm:px-6 sm:py-28 lg:py-32">
+        <div className="max-w-[680px]">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#0a0d12]/40">
             {t.faq.label}
           </p>
@@ -20,19 +20,19 @@ export function FAQSection() {
           </h2>
         </div>
 
-        <div className="mt-14 divide-y divide-[#0a0d12]/10 sm:mt-16">
+        <div className="mt-14 overflow-hidden rounded-[28px] border border-[#0a0d12]/8 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.06)] sm:mt-16">
           {t.faq.items.map((faq, i) => (
-            <div key={i}>
+            <div key={i} className={cn(i > 0 && "border-t border-[#0a0d12]/8")}>
               <button
                 onClick={() => setOpenIndex(openIndex === i ? null : i)}
-                className="flex w-full items-start justify-between gap-4 py-6 text-left"
+                className="flex w-full items-start justify-between gap-4 px-6 py-6 text-left sm:px-8"
               >
                 <span className="text-[16px] font-semibold leading-snug text-[#0a0d12] sm:text-[17px]">
                   {faq.question}
                 </span>
                 <span
                   className={cn(
-                    "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-[#0a0d12]/12 text-[#0a0d12]/40 transition-transform",
+                    "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-[#0a0d12]/12 bg-[#f7faff] text-[#0a0d12]/40 transition-transform",
                     openIndex === i && "rotate-45",
                   )}
                 >
@@ -56,7 +56,7 @@ export function FAQSection() {
                 )}
               >
                 <div className="overflow-hidden">
-                  <p className="pb-6 pr-12 text-[14px] leading-[1.7] text-[#0a0d12]/56 sm:text-[15px]">
+                  <p className="px-6 pb-6 pr-12 text-[14px] leading-[1.8] text-[#0a0d12]/56 sm:px-8 sm:text-[15px]">
                     {faq.answer}
                   </p>
                 </div>

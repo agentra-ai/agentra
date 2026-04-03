@@ -2,6 +2,7 @@
 
 import { LandingHeader } from "./landing-header";
 import { LandingHero } from "./landing-hero";
+import { WhyAgentraSection } from "./why-agentra-section";
 import { FeaturesSection } from "./features-section";
 import { HowItWorksSection } from "./how-it-works-section";
 import { OpenSourceSection } from "./open-source-section";
@@ -16,6 +17,7 @@ export function AgentraLanding() {
         <LandingHero />
       </div>
 
+      <WhyAgentraSection />
       <FeaturesSection />
       <HowItWorksSection />
       <OpenSourceSection />

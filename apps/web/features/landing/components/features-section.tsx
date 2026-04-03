@@ -166,7 +166,7 @@ function TeammatesVisual() {
         <div className="flex items-center gap-1.5 min-w-0 text-xs">
           <span className="text-muted-foreground">Agentra Demo</span>
           <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-          <span className="text-muted-foreground">MUL-18</span>
+          <span className="text-muted-foreground">AGN-18</span>
           <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
           <span className="truncate">Refactor API error handling middleware</span>
         </div>
@@ -417,7 +417,7 @@ function AutonomousVisual() {
         <div className="flex items-center gap-1.5 min-w-0 text-xs">
           <span className="text-muted-foreground">Agentra Demo</span>
           <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-          <span className="text-muted-foreground">MUL-18</span>
+          <span className="text-muted-foreground">AGN-18</span>
           <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
           <span className="truncate">Refactor API error handling middleware</span>
         </div>
@@ -951,7 +951,7 @@ function RuntimesVisual() {
 function buildFeatures(t: LandingDict) {
   const keys = ["teammates", "autonomous", "skills", "runtimes"] as const;
   const visuals = [TeammatesVisual, AutonomousVisual, SkillsVisual, RuntimesVisual];
-  const bgImages = [undefined, "/images/feature-bg-2.jpg", "/images/feature-bg-3.jpg", "/images/feature-bg-4.jpg"];
+  const bgImages = [undefined, "/images/feature-bg-2.svg", "/images/feature-bg-3.svg", "/images/feature-bg-4.svg"];
 
   return keys.map((key, i) => ({
     ...t.features[key],
@@ -1050,7 +1050,7 @@ export function FeaturesSection() {
                   {feature.visual ? (
                     <div className="relative overflow-hidden rounded-sm">
                       <Image
-                        src={feature.bgImage ?? "/images/feature-bg.jpg"}
+                        src={feature.bgImage ?? "/images/feature-bg.svg"}
                         alt=""
                         fill
                         className="object-cover object-center"

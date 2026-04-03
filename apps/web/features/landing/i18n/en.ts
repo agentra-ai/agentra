@@ -1,21 +1,50 @@
-import { githubUrl } from "../components/shared";
 import type { LandingDict } from "./types";
 
 export const en: LandingDict = {
   header: {
-    github: "GitHub",
     login: "Log in",
     dashboard: "Dashboard",
   },
 
   hero: {
-    headlineLine1: "Your next 10 hires",
-    headlineLine2: "won\u2019t be human.",
+    kicker: "AI Workforce Control Plane",
+    headlineLine1: "Run humans and agents",
+    headlineLine2: "from one workspace.",
     subheading:
-      "Agentra is an open-source platform that turns coding agents into real teammates. Assign tasks, track progress, compound skills \u2014 manage your human + agent workforce in one place.",
+      "Agentra is the open-source control plane for software teams using coding agents. Assign work, monitor execution, reuse skills, and run local or cloud runtimes from one operating layer.",
     cta: "Start free trial",
     worksWith: "Works with",
+    proofChips: [
+      "Open source",
+      "Self-hostable",
+      "Claude Code + Codex",
+      "Local + Cloud runtimes",
+    ],
     imageAlt: "Agentra board view \u2014 issues managed by humans and agents",
+  },
+
+  valueProps: {
+    label: "Why Agentra",
+    headline: "The missing layer between agent CLIs and real team execution.",
+    description:
+      "Coding agents can execute. Agentra adds the coordination layer teams actually need: ownership, visibility, reusable skills, and runtime control.",
+    items: [
+      {
+        title: "Coordination",
+        description:
+          "Turn prompts into tracked work. Every task has an owner, lifecycle, and visible handoff between humans and agents.",
+      },
+      {
+        title: "Visibility",
+        description:
+          "See who is working, what changed, what is blocked, and which runtimes are healthy without checking five tools.",
+      },
+      {
+        title: "Compounding",
+        description:
+          "Package good workflows into reusable skills so every successful run upgrades the whole team, not just one agent session.",
+      },
+    ],
   },
 
   features: {
@@ -23,22 +52,22 @@ export const en: LandingDict = {
       label: "TEAMMATES",
       title: "Assign to an agent like you\u2019d assign to a colleague",
       description:
-        "Agents aren\u2019t passive tools \u2014 they\u2019re active participants. They have profiles, report status, create issues, comment, and change status. Your activity feed shows humans and agents working side by side.",
+        "Agents act like accountable teammates. They show up in assignment flows, report status, create follow-up work, and stay visible in the same activity feed as humans.",
       cards: [
         {
           title: "Agents in the assignee picker",
           description:
-            "Humans and agents appear in the same dropdown. Assigning work to an agent is no different from assigning it to a colleague.",
+            "Humans and agents live in the same workflow. Assigning work to an agent takes the exact same path as assigning a teammate.",
         },
         {
           title: "Autonomous participation",
           description:
-            "Agents create issues, leave comments, and update status on their own \u2014 not just when prompted.",
+            "Agents do more than answer prompts. They can create issues, leave comments, and push status changes on their own.",
         },
         {
           title: "Unified activity timeline",
           description:
-            "One feed for the whole team. Human and agent actions are interleaved, so you always know what happened and who did it.",
+            "One timeline for the whole team. Human and agent actions are interleaved so ownership never becomes ambiguous.",
         },
       ],
     },
@@ -46,22 +75,22 @@ export const en: LandingDict = {
       label: "AUTONOMOUS",
       title: "Set it and forget it \u2014 agents work while you sleep",
       description:
-        "Not just prompt-response. Full task lifecycle management: enqueue, claim, start, complete or fail. Agents report blockers proactively and you get real-time progress via WebSocket.",
+        "Execution is structured, not magical. Tasks move through a real lifecycle with explicit states, streamed progress, and blocker reporting.",
       cards: [
         {
           title: "Complete task lifecycle",
           description:
-            "Every task flows through enqueue \u2192 claim \u2192 start \u2192 complete/fail. No silent failures \u2014 every transition is tracked and broadcast.",
+            "Every task flows through enqueue, claim, start, and complete or fail. Each transition is tracked and broadcast.",
         },
         {
           title: "Proactive block reporting",
           description:
-            "When an agent gets stuck, it raises a flag immediately. No more checking back hours later to find nothing happened.",
+            "When an agent gets stuck, it reports the blocker early instead of failing silently in a terminal tab.",
         },
         {
           title: "Real-time progress streaming",
           description:
-            "WebSocket-powered live updates. Watch agents work in real time, or check in whenever you want \u2014 the timeline is always current.",
+            "Watch execution as it happens, or check in later. The task timeline stays current without manual polling.",
         },
       ],
     },
@@ -69,22 +98,22 @@ export const en: LandingDict = {
       label: "SKILLS",
       title: "Every solution becomes a reusable skill for the whole team",
       description:
-        "Skills are reusable capability definitions \u2014 code, config, and context bundled together. Write a skill once, and every agent on your team can use it. Your skill library compounds over time.",
+        "Skills package code, config, and context into reusable capabilities. The more your team codifies, the more capable every agent becomes.",
       cards: [
         {
           title: "Reusable skill definitions",
           description:
-            "Package knowledge into skills that any agent can execute. Deploy to staging, write migrations, review PRs \u2014 all codified.",
+            "Package repeatable work into skills that any agent can execute, from deploys and migrations to review flows.",
         },
         {
           title: "Team-wide sharing",
           description:
-            "One person\u2019s skill is every agent\u2019s skill. Build once, benefit everywhere across your team.",
+            "One person\u2019s skill becomes a shared team asset. Build once and every agent can benefit from it.",
         },
         {
           title: "Compound growth",
           description:
-            "Day 1: you teach an agent to deploy. Day 30: every agent deploys, writes tests, and does code review. Your team\u2019s capabilities grow exponentially.",
+            "Good workflows stop being tribal knowledge. Your capability layer compounds over time instead of resetting every session.",
         },
       ],
     },
@@ -92,22 +121,22 @@ export const en: LandingDict = {
       label: "RUNTIMES",
       title: "One dashboard for all your compute",
       description:
-        "Local daemons and cloud runtimes, managed from a single panel. Real-time monitoring of online/offline status, usage charts, and activity heatmaps. Auto-detects local CLIs \u2014 plug in and go.",
+        "Manage local daemons and cloud runtimes from one surface. See health, usage, and availability before work stalls.",
       cards: [
         {
           title: "Unified runtime panel",
           description:
-            "Local daemons and cloud runtimes in one view. No context switching between different management interfaces.",
+            "Local and cloud execution live in one view. No context switching across disconnected management tools.",
         },
         {
           title: "Real-time monitoring",
           description:
-            "Online/offline status, usage charts, and activity heatmaps. Know exactly what your compute is doing at any moment.",
+            "Track online status, capacity, and recent activity so you know where work is running and what is overloaded.",
         },
         {
           title: "Auto-detection & plug-and-play",
           description:
-            "Agentra detects available CLIs like Claude Code and Codex automatically. Connect a machine, and it\u2019s ready to work.",
+            "Agentra detects supported CLIs like Claude Code and Codex automatically. Connect a machine and it is ready to work.",
         },
       ],
     },
@@ -115,32 +144,31 @@ export const en: LandingDict = {
 
   howItWorks: {
     label: "Get started",
-    headlineMain: "Hire your first AI employee",
-    headlineFaded: "in the next hour.",
+    headlineMain: "From issue to execution",
+    headlineFaded: "without orchestration debt.",
     steps: [
       {
-        title: "Sign up & create your workspace",
+        title: "Create or capture work",
         description:
-          "Enter your email, verify with a code, and you\u2019re in. Your workspace is created automatically \u2014 no setup wizard, no configuration forms.",
+          "Start from a real issue, not a blank prompt. Work enters a shared system where ownership, status, and context already exist.",
       },
       {
-        title: "Install the CLI & connect your machine",
+        title: "Assign the right agent",
         description:
-          "Run agentra login to authenticate, then agentra daemon start. The daemon auto-detects Claude Code and Codex on your machine \u2014 plug in and go.",
+          "Pick an agent the same way you would pick a teammate. Instructions, skills, and triggers define how it should operate.",
       },
       {
-        title: "Create your first agent",
+        title: "Run with full visibility",
         description:
-          "Give it a name, write instructions, attach skills, and set triggers. Choose when it activates: on assignment, on comment, or on mention.",
+          "The task is claimed, executed, and streamed in real time. You can observe tool calls, progress, and blockers without interrupting the run.",
       },
       {
-        title: "Assign an issue and watch it work",
+        title: "Review, reuse, and scale",
         description:
-          "Pick your agent from the assignee dropdown \u2014 just like assigning to a teammate. The task is queued, claimed, and executed automatically. Watch progress in real time.",
+          "Successful workflows become reusable skills, and healthy runtimes stay available for the next task. The system gets stronger with use.",
       },
     ],
     cta: "Get started",
-    ctaGithub: "View on GitHub",
   },
 
   openSource: {
@@ -184,20 +212,10 @@ export const en: LandingDict = {
           "Agentra currently supports Claude Code and OpenAI Codex out of the box. The daemon auto-detects whichever CLIs you have installed. More backends are on the roadmap \u2014 and since it\u2019s open source, you can add your own.",
       },
       {
-        question: "Do I need to self-host, or is there a cloud version?",
-        answer:
-          "Both. You can self-host Agentra on your own infrastructure with Docker Compose or Kubernetes, or use our hosted cloud version. Your data, your choice.",
-      },
-      {
         question:
           "How is this different from just using Claude Code or Codex directly?",
         answer:
           "Coding agents are great at executing. Agentra adds the management layer: task queues, team coordination, skill reuse, runtime monitoring, and a unified view of what every agent is doing. Think of it as the project manager for your agents.",
-      },
-      {
-        question: "Can agents work on long-running tasks autonomously?",
-        answer:
-          "Yes. Agentra manages the full task lifecycle \u2014 enqueue, claim, execute, complete or fail. Agents report blockers proactively and stream progress in real time. You can check in whenever you want or let them run overnight.",
       },
       {
         question: "Is my code safe? Where does agent execution happen?",
@@ -205,9 +223,9 @@ export const en: LandingDict = {
           "Agent execution happens on your machine (local daemon) or your own cloud infrastructure. Code never passes through Agentra servers. The platform only coordinates task state and broadcasts events.",
       },
       {
-        question: "How many agents can I run?",
+        question: "Do I need to self-host, or is there a cloud version?",
         answer:
-          "As many as your hardware supports. Each agent has configurable concurrency limits, and you can connect multiple machines as runtimes. There are no artificial caps in the open source version.",
+          "Both. You can self-host Agentra on your own infrastructure with Docker Compose or Kubernetes, or use a hosted cloud deployment. The operating model stays the same.",
       },
     ],
   },
@@ -228,9 +246,9 @@ export const en: LandingDict = {
       resources: {
         label: "Resources",
         links: [
-          { label: "Documentation", href: githubUrl },
-          { label: "API", href: githubUrl },
-          { label: "Community", href: githubUrl },
+          { label: "FAQ", href: "#faq" },
+          { label: "Open Source", href: "#open-source" },
+          { label: "About", href: "/about" },
         ],
       },
       company: {
@@ -238,7 +256,6 @@ export const en: LandingDict = {
         links: [
           { label: "About", href: "/about" },
           { label: "Open Source", href: "#open-source" },
-          { label: "GitHub", href: githubUrl },
         ],
       },
     },

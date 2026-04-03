@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" fill="none">
+  <defs>
+    <linearGradient id="featureBaseA" x1="80" y1="40" x2="1520" y2="860" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f8fbff"/>
+      <stop offset="0.55" stop-color="#eef4ff"/>
+      <stop offset="1" stop-color="#e8f0ff"/>
+    </linearGradient>
+    <radialGradient id="featureGlowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1180 180) rotate(90) scale(220 320)">
+      <stop stop-color="#93c5fd" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#93c5fd" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="featureGridA" width="88" height="88" patternUnits="userSpaceOnUse">
+      <path d="M88 0H0V88" stroke="rgba(15,23,42,0.06)" stroke-width="1"/>
+    </pattern>
+    <polygon id="featureBladeA" points="1120,180 1168,258 1138,318 1120,303 1102,318 1072,258"/>
+  </defs>
+  <rect width="1600" height="900" fill="url(#featureBaseA)"/>
+  <rect width="1600" height="900" fill="url(#featureGridA)"/>
+  <rect width="1600" height="900" fill="url(#featureGlowA)"/>
+  <circle cx="1120" cy="260" r="202" stroke="rgba(59,130,246,0.12)" stroke-width="1.5"/>
+  <circle cx="1120" cy="260" r="268" stroke="rgba(15,23,42,0.06)" stroke-width="1.5"/>
+  <g fill="#2563eb" fill-opacity="0.12">
+    <use href="#featureBladeA"/>
+    <use href="#featureBladeA" transform="rotate(120 1120 260)"/>
+    <use href="#featureBladeA" transform="rotate(240 1120 260)"/>
+  </g>
+</svg>

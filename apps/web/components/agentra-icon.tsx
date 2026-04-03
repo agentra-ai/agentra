@@ -1,22 +1,10 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface AgentraIconProps extends React.ComponentProps<"span"> {
-  /**
-   * If true, play a one-time entrance spin animation.
-   */
   animate?: boolean;
-  /**
-   * If true, disable hover spin animation.
-   */
   noSpin?: boolean;
-  /**
-   * If true, show a border around the icon.
-   */
   bordered?: boolean;
-  /**
-   * Size of the bordered icon: "sm" (default), "md", "lg"
-   */
   size?: "sm" | "md" | "lg";
 }
 
@@ -26,11 +14,29 @@ const borderedSizes = {
   lg: { wrapper: "p-2.5", icon: "size-5" },
 };
 
-/**
- * Pure CSS 8-pointed asterisk icon matching the Agentra logo.
- * Uses currentColor so it adapts to light/dark themes automatically.
- * Clip-path polygon traced from the original SVG path coordinates.
- */
+function AgentraMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      className={cn("block size-full", className)}
+      aria-hidden="true"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <polygon
+          id="agentra-blade"
+          points="50,7 67.5,36 57,58 50,52 43,58 32.5,36"
+        />
+      </defs>
+      <use href="#agentra-blade" fill="currentColor" />
+      <use href="#agentra-blade" fill="currentColor" transform="rotate(120 50 50)" />
+      <use href="#agentra-blade" fill="currentColor" transform="rotate(240 50 50)" />
+      <circle cx="50" cy="50" r="7.5" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function AgentraIcon({
   className,
   animate = false,
@@ -47,39 +53,25 @@ export function AgentraIcon({
     return () => clearTimeout(timer);
   }, [animate]);
 
-  const clipPath = `polygon(
-    45% 62.1%, 45% 100%, 55% 100%, 55% 62.1%,
-    81.8% 88.9%, 88.9% 81.8%, 62.1% 55%, 100% 55%,
-    100% 45%, 62.1% 45%, 88.9% 18.2%, 81.8% 11.1%,
-    55% 37.9%, 55% 0%, 45% 0%, 45% 37.9%,
-    18.2% 11.1%, 11.1% 18.2%, 37.9% 45%, 0% 45%,
-    0% 55%, 37.9% 55%, 11.1% 81.8%, 18.2% 88.9%
-  )`;
+  const iconClassName = cn(
+    !entranceDone && "animate-entrance-spin",
+    entranceDone && !noSpin && "hover:animate-spin",
+  );
 
   if (bordered) {
     const sizeConfig = borderedSizes[size];
     return (
       <span
         className={cn(
-          "inline-flex items-center justify-center border border-border rounded-md",
+          "inline-flex items-center justify-center rounded-md border border-border",
           sizeConfig.wrapper,
-          className
+          className,
         )}
         aria-hidden="true"
         {...props}
       >
-        <span
-          className={cn(
-            "block",
-            sizeConfig.icon,
-            !entranceDone && "animate-entrance-spin",
-            entranceDone && !noSpin && "hover:animate-spin"
-          )}
-        >
-          <span
-            className="block size-full bg-current"
-            style={{ clipPath }}
-          />
+        <span className={cn("block", sizeConfig.icon, iconClassName)}>
+          <AgentraMark />
         </span>
       </span>
     );
@@ -87,19 +79,13 @@ export function AgentraIcon({
 
   return (
     <span
-      className={cn(
-        "inline-block size-[1em]",
-        !entranceDone && "animate-entrance-spin",
-        entranceDone && !noSpin && "hover:animate-spin",
-        className
-      )}
+      className={cn("inline-block size-[1em]", className)}
       aria-hidden="true"
       {...props}
     >
-      <span
-        className="block size-full bg-current"
-        style={{ clipPath }}
-      />
+      <span className={cn("block size-full", iconClassName)}>
+        <AgentraMark />
+      </span>
     </span>
   );
 }
