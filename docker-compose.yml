@@ -1,0 +1,78 @@
+name: agentra
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agentra}
+      POSTGRES_USER: ${POSTGRES_USER:-agentra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentra}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agentra} -d ${POSTGRES_DB:-agentra}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      target: server-runtime
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-agentra}:${POSTGRES_PASSWORD:-agentra}@postgres:5432/${POSTGRES_DB:-agentra}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["./migrate"]
+    command: ["up"]
+    restart: "no"
+
+  server:
+    build:
+      context: .
+      target: server-runtime
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-agentra}:${POSTGRES_PASSWORD:-agentra}@postgres:5432/${POSTGRES_DB:-agentra}?sslmode=disable
+      PORT: 8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      target: web-runtime
+      args:
+        REMOTE_API_URL: http://server:8080
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    depends_on:
+      server:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

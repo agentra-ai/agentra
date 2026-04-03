@@ -1,0 +1,54 @@
+version: 2
+
+project_name: agentra
+
+builds:
+  - id: agentra
+    main: ./cmd/agentra
+    dir: server
+    binary: agentra
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+brews:
+  - name: agentra
+    repository:
+      owner: agentra-ai
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/agentra-ai/agentra"
+    description: "Agentra CLI — local agent runtime and management tool for the Agentra platform"
+    license: "Apache-2.0"
+    install: |
+      bin.install "agentra"
+    test: |
+      system "#{bin}/agentra", "version"

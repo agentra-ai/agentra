@@ -1,0 +1,48 @@
+node_modules
+dist
+*.log
+.eslintcache
+.DS_Store
+.envrc
+
+# build outputs
+.turbo
+.next
+out
+build
+bin
+dist-electron
+*.tsbuildinfo
+
+# env
+.env*
+!.env.example
+
+# test coverage
+coverage
+
+# Go
+server/bin/
+server/tmp/
+server/migrate
+server/daemon
+server/agentra
+
+# Test artifacts
+test-results/
+apps/web/test-results/
+
+# context (agent workspace)
+.context
+
+# local settings
+.claude/
+.tool-versions
+
+# feature tracking
+_features/
+
+# platform specific
+*.dmg
+*.app
+server/server
