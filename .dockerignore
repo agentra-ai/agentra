@@ -1,0 +1,13 @@
+.git
+.github
+.omx
+node_modules
+apps/web/node_modules
+apps/web/.next
+server/bin
+.env
+.env.worktree
+e2e
+playwright-report
+test-results
+*.log

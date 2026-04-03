@@ -1,0 +1,31 @@
+{
+  "name": "agentra",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:web": "pnpm --filter @agentra/web dev",
+    "build": "pnpm --filter @agentra/web build",
+    "typecheck": "pnpm --filter @agentra/web typecheck",
+    "test": "pnpm --filter @agentra/web test",
+    "lint": "pnpm --filter @agentra/web lint",
+    "clean": "pnpm --filter @agentra/web clean && rm -rf node_modules"
+  },
+  "packageManager": "pnpm@10.28.2",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ],
+    "overrides": {
+      "@types/react": "catalog:",
+      "@types/react-dom": "catalog:"
+    }
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "catalog:",
+    "@types/pg": "^8.20.0",
+    "pg": "^8.20.0",
+    "typescript": "catalog:"
+  }
+}
