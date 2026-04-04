@@ -2,13 +2,15 @@ import { cookies, headers } from "next/headers";
 import { LocaleProvider } from "@/features/landing/i18n";
 import type { Locale } from "@/features/landing/i18n";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
     {
       "@type": "Organization",
       name: "Agentra",
-      url: "https://www.agentra.ai",
+      url: siteUrl,
       sameAs: ["https://github.com/agentra-ai/agentra"],
     },
     {

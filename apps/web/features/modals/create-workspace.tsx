@@ -98,11 +98,8 @@ export function CreateWorkspaceModal({ onClose }: { onClose: () => void }) {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Workspace URL</Label>
-                <div className="flex items-center gap-0 rounded-md border bg-background focus-within:ring-2 focus-within:ring-ring">
-                  <span className="pl-3 text-sm text-muted-foreground select-none">
-                    agentra.app/
-                  </span>
+                <Label>Workspace Slug</Label>
+                <div className="rounded-md border bg-background focus-within:ring-2 focus-within:ring-ring">
                   <Input
                     type="text"
                     value={slug}

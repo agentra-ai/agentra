@@ -75,17 +75,6 @@ export type LandingDict = {
   };
   about: {
     title: string;
-    nameLine: {
-      prefix: string;
-      mul: string;
-      tiplexed: string;
-      i: string;
-      nformationAnd: string;
-      c: string;
-      omputing: string;
-      a: string;
-      gent: string;
-    };
     paragraphs: string[];
     cta: string;
   };
