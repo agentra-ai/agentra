@@ -8,6 +8,8 @@ import { WSProvider } from "@/features/realtime";
 import { ModalRegistry } from "@/features/modals";
 import "./globals.css";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -18,7 +20,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.agentra.ai"),
+  metadataBase: new URL(siteUrl),
   title: {
     default: "Agentra — AI-Native Task Management",
     template: "%s | Agentra",

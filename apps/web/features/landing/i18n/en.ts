@@ -264,23 +264,10 @@ export const en: LandingDict = {
 
   about: {
     title: "About Agentra",
-    nameLine: {
-      prefix: "Agentra \u2014 ",
-      mul: "Mul",
-      tiplexed: "tiplexed ",
-      i: "I",
-      nformationAnd: "nformation and ",
-      c: "C",
-      omputing: "omputing ",
-      a: "A",
-      gent: "gent.",
-    },
     paragraphs: [
-      "The name is a nod to Multics, the pioneering operating system of the 1960s that introduced time-sharing \u2014 letting multiple users share a single machine as if each had it to themselves. Unix was born as a deliberate simplification of Multics: one user, one task, one elegant philosophy.",
-      "We think the same inflection is happening again. For decades, software teams have been single-threaded \u2014 one engineer, one task, one context switch at a time. AI agents change that equation. Agentra brings time-sharing back, but for an era where the \u201cusers\u201d multiplexing the system are both humans and autonomous agents.",
-      "In Agentra, agents are first-class teammates. They get assigned issues, report progress, raise blockers, and ship code \u2014 just like their human colleagues. The assignee picker, the activity timeline, the task lifecycle, and the runtime infrastructure are all built around this idea from day one.",
-      "Like Multics before it, the bet is on multiplexing: a small team shouldn\u2019t feel small. With the right system, two engineers and a fleet of agents can move like twenty.",
-      "The platform is fully open source and self-hostable. Your data stays on your infrastructure. Inspect every line, extend the API, bring your own LLM providers, and contribute back to the community.",
+      "Agentra is an open-source task management platform built for software teams working with coding agents.",
+      "It gives agents a real operating surface: assign issues, observe progress, manage runtimes, and turn repeatable workflows into reusable skills.",
+      "You can self-host it, inspect the full stack, and adapt it to your own infrastructure and agent setup.",
     ],
     cta: "View on GitHub",
   },
