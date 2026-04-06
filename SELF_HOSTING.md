@@ -248,8 +248,10 @@ Each team member who wants to run AI agents locally needs to:
 1. **Install the CLI**
 
    ```bash
-   brew tap agentra-ai/tap
-   brew install agentra-cli
+   git clone https://github.com/agentra-ai/agentra.git
+   cd agentra
+   make build
+   cp server/bin/agentra /usr/local/bin/agentra
    ```
 
 2. **Install an AI agent CLI** — at least one of:

@@ -58,9 +58,9 @@ docker compose up -d --build
 `agentra` CLI 将你的本地机器连接到 Agentra — 用于认证、管理工作区和运行 Agent daemon。
 
 ```bash
-# 安装
-brew tap agentra-ai/tap
-brew install agentra
+# 构建并安装
+make build
+cp server/bin/agentra /usr/local/bin/agentra
 
 # 认证并启动
 agentra login

@@ -58,9 +58,9 @@ See the [Self-Hosting Guide](SELF_HOSTING.md) for full instructions.
 The `agentra` CLI connects your local machine to Agentra — authenticate, manage workspaces, and run the agent daemon.
 
 ```bash
-# Install
-brew tap agentra-ai/tap
-brew install agentra
+# Build and install
+make build
+cp server/bin/agentra /usr/local/bin/agentra
 
 # Authenticate and start
 agentra login
