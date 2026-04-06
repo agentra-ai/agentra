@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -58,37 +57,12 @@ func IsBrewInstall() bool {
 		resolved = exePath
 	}
 
-	brewPrefix := GetBrewPrefix()
-	if brewPrefix != "" && strings.HasPrefix(resolved, brewPrefix) {
-		return true
-	}
-
 	for _, prefix := range []string{"/opt/homebrew", "/usr/local", "/home/linuxbrew/.linuxbrew"} {
 		if strings.HasPrefix(resolved, prefix+"/Cellar/") {
 			return true
 		}
 	}
 	return false
-}
-
-// GetBrewPrefix returns the Homebrew prefix by running `brew --prefix`, or empty string.
-func GetBrewPrefix() string {
-	out, err := exec.Command("brew", "--prefix").Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
-// UpdateViaBrew runs `brew upgrade agentra-ai/tap/agentra`.
-// Returns the combined output and any error.
-func UpdateViaBrew() (string, error) {
-	cmd := exec.Command("brew", "upgrade", "agentra-ai/tap/agentra")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return string(out), fmt.Errorf("brew upgrade failed: %w", err)
-	}
-	return string(out), nil
 }
 
 // UpdateViaDownload downloads the latest release binary from GitHub and replaces
@@ -193,4 +167,3 @@ func extractBinaryFromTarGz(r io.Reader, name string) ([]byte, error) {
 		}
 	}
 }
-

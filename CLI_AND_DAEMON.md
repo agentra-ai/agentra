@@ -4,13 +4,6 @@ The `agentra` CLI connects your local machine to Agentra. It handles authenticat
 
 ## Installation
 
-### Homebrew (macOS/Linux)
-
-```bash
-brew tap agentra-ai/tap
-brew install agentra-cli
-```
-
 ### Build from Source
 
 ```bash
@@ -26,7 +19,7 @@ cp server/bin/agentra /usr/local/bin/agentra
 agentra update
 ```
 
-This auto-detects your installation method (Homebrew or manual) and upgrades accordingly.
+This downloads the latest GitHub release and replaces the current binary in place.
 
 ## Quick Start
 
