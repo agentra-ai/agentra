@@ -67,7 +67,7 @@ services:
       context: .
       target: web-runtime
       args:
-        REMOTE_API_URL: ${REMOTE_API_URL}
+        REMOTE_API_URL: ${REMOTE_API_URL:-http://server:8080}
     environment:
       HOSTNAME: ${WEB_HOSTNAME}
       PORT: ${WEB_INTERNAL_PORT}
