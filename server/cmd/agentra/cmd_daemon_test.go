@@ -6,7 +6,7 @@ import (
 )
 
 func TestShouldReplaceLegacyDaemon(t *testing.T) {
-	t.Run("replaces running multica daemon", func(t *testing.T) {
+	t.Run("replaces running legacy daemon", func(t *testing.T) {
 		health := map[string]any{
 			"status":     "running",
 			"server_url": "https://server.multica.orb.local",

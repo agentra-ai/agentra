@@ -131,7 +131,7 @@ func runDaemonBackground(cmd *cobra.Command) error {
 			if pidText == "" {
 				pidText = "unknown"
 			}
-			fmt.Fprintf(os.Stderr, "Stopping legacy multica daemon on port %d (pid %s) before starting agentra...\n", healthPort, pidText)
+			fmt.Fprintf(os.Stderr, "Stopping legacy daemon on port %d (pid %s) before starting agentra...\n", healthPort, pidText)
 			if err := stopRunningDaemon(healthPort, health); err != nil {
 				return err
 			}
