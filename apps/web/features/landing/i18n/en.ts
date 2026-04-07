@@ -19,7 +19,7 @@ export const en: LandingDict = {
     liveLabel: "Product proof",
     cycleLabel: "One task. One shared thread.",
     cycleHint:
-      "The scene shows work arriving as a task, moving through an agent handoff, landing in human review, and ending as reusable team capability.",
+      "A real task moves through one shared thread: assigned once, executed visibly, reviewed in context, then saved as reusable team capability.",
     sceneAriaLabel:
       "Agentra product panel showing a shared AI task moving through the team workflow",
     proofChips: [

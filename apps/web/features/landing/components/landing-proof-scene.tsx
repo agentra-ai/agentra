@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
 const STATION_POINTS = [
-  new THREE.Vector3(-3.2, 0.2, -0.7),
-  new THREE.Vector3(-0.9, 0.7, 1.1),
-  new THREE.Vector3(1.8, 0.35, 1.4),
-  new THREE.Vector3(3.1, 0.15, -0.5),
-  new THREE.Vector3(0.2, -0.25, -1.45),
+  new THREE.Vector3(-3.1, 1.02, -0.38),
+  new THREE.Vector3(2.95, 0.92, -0.08),
+  new THREE.Vector3(3.18, 0.42, 1.02),
+  new THREE.Vector3(0.52, 0.1, 1.38),
+  new THREE.Vector3(-2.72, 0.34, 0.92),
 ];
 
 const FLOW_CURVE = new THREE.CatmullRomCurve3(
@@ -17,7 +17,7 @@ const FLOW_CURVE = new THREE.CatmullRomCurve3(
   ),
   true,
   "catmullrom",
-  0.2,
+  0.12,
 );
 
 export function LandingProofScene({
@@ -51,12 +51,15 @@ export function LandingProofScene({
     }
 
     const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x040816, 9, 15);
+
     const createRenderer = () =>
       new THREE.WebGLRenderer({
         antialias: true,
         alpha: true,
         powerPreference: "high-performance",
       });
+
     let renderer: ReturnType<typeof createRenderer>;
 
     try {
@@ -72,159 +75,267 @@ export function LandingProofScene({
     mountNode.appendChild(renderer.domElement);
     setRenderMode("webgl");
 
-    const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
-    camera.position.set(0, 4.1, 10.5);
-    camera.lookAt(0, 0.1, 0);
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+    camera.position.set(0.05, 3.8, 8.35);
+    camera.lookAt(0, 0.82, 0.38);
 
-    const ambientLight = new THREE.AmbientLight(0xe2f1ff, 0.9);
-    const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    keyLight.position.set(4, 6, 5);
-    const cyanLight = new THREE.PointLight(0x22d3ee, 2.4, 18, 2);
-    cyanLight.position.set(-3.4, 2.6, 3.8);
-    const emeraldLight = new THREE.PointLight(0x34d399, 1.9, 16, 2);
-    emeraldLight.position.set(3.8, 2.4, -3.2);
-    scene.add(ambientLight, keyLight, cyanLight, emeraldLight);
+    const ambientLight = new THREE.AmbientLight(0xe5f3ff, 0.96);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.16);
+    keyLight.position.set(4.6, 7.8, 4.2);
+    const cyanLight = new THREE.PointLight(0x22d3ee, 3.1, 20, 2);
+    cyanLight.position.set(-3.8, 2.8, 3.5);
+    const emeraldLight = new THREE.PointLight(0x34d399, 2.3, 18, 2);
+    emeraldLight.position.set(3.3, 2.4, -2.8);
+    const rimLight = new THREE.PointLight(0x93c5fd, 1.7, 16, 2);
+    rimLight.position.set(0.8, 3.2, 4.8);
+    scene.add(ambientLight, keyLight, cyanLight, emeraldLight, rimLight);
 
-    const deckGroup = new THREE.Group();
-    deckGroup.rotation.x = -0.54;
-    deckGroup.rotation.z = -0.1;
-    scene.add(deckGroup);
+    const boardGroup = new THREE.Group();
+    boardGroup.rotation.x = -0.16;
+    boardGroup.rotation.z = -0.04;
+    boardGroup.position.y = 0.38;
+    scene.add(boardGroup);
 
-    const deck = new THREE.Mesh(
-      new THREE.BoxGeometry(9.4, 0.34, 5.4),
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(9.55, 0.3, 5.5),
       new THREE.MeshStandardMaterial({
-        color: 0x091120,
-        metalness: 0.7,
-        roughness: 0.28,
+        color: 0x08101d,
+        metalness: 0.74,
+        roughness: 0.24,
       }),
     );
-    deckGroup.add(deck);
+    boardGroup.add(board);
 
-    const deckTop = new THREE.Mesh(
-      new THREE.BoxGeometry(8.9, 0.04, 5.05),
+    const boardTop = new THREE.Mesh(
+      new THREE.BoxGeometry(9.02, 0.045, 5.08),
       new THREE.MeshStandardMaterial({
-        color: 0x102038,
-        metalness: 0.08,
-        roughness: 0.66,
+        color: 0x10223d,
+        metalness: 0.1,
+        roughness: 0.6,
         transparent: true,
-        opacity: 0.96,
+        opacity: 0.98,
       }),
     );
-    deckTop.position.y = 0.2;
-    deckGroup.add(deckTop);
+    boardTop.position.y = 0.18;
+    boardGroup.add(boardTop);
+
+    const gridGroup = new THREE.Group();
+    for (let index = 0; index < 7; index += 1) {
+      const vertical = new THREE.Mesh(
+        new THREE.BoxGeometry(0.018, 0.02, 4.92),
+        new THREE.MeshBasicMaterial({
+          color: 0x1b3658,
+          transparent: true,
+          opacity: 0.18,
+        }),
+      );
+      vertical.position.set(-3 + index, 0.2, 0);
+      gridGroup.add(vertical);
+    }
+    for (let index = 0; index < 4; index += 1) {
+      const horizontal = new THREE.Mesh(
+        new THREE.BoxGeometry(8.72, 0.02, 0.018),
+        new THREE.MeshBasicMaterial({
+          color: 0x1b3658,
+          transparent: true,
+          opacity: 0.14,
+        }),
+      );
+      horizontal.position.set(0, 0.2, -1.5 + index);
+      gridGroup.add(horizontal);
+    }
+    boardGroup.add(gridGroup);
 
     const railMaterial = new THREE.MeshStandardMaterial({
-      color: 0x0f2745,
+      color: 0x163457,
       emissive: 0x0ea5e9,
-      emissiveIntensity: 0.3,
-      metalness: 0.45,
-      roughness: 0.24,
+      emissiveIntensity: 0.34,
+      metalness: 0.48,
+      roughness: 0.22,
     });
     const rail = new THREE.Mesh(
-      new THREE.TubeGeometry(FLOW_CURVE, 220, 0.05, 14, true),
+      new THREE.TubeGeometry(FLOW_CURVE, 240, 0.06, 16, true),
       railMaterial,
     );
-    deckGroup.add(rail);
+    rail.position.y = 0.22;
+    boardGroup.add(rail);
 
-    const laneGlowMaterial = new THREE.MeshBasicMaterial({
+    const railGlowMaterial = new THREE.MeshBasicMaterial({
       color: 0x22d3ee,
       transparent: true,
-      opacity: 0.08,
+      opacity: 0.14,
     });
-    const laneGlow = new THREE.Mesh(
-      new THREE.TubeGeometry(FLOW_CURVE, 220, 0.1, 14, true),
-      laneGlowMaterial,
+    const railGlow = new THREE.Mesh(
+      new THREE.TubeGeometry(FLOW_CURVE, 240, 0.13, 16, true),
+      railGlowMaterial,
     );
-    deckGroup.add(laneGlow);
+    railGlow.position.y = 0.22;
+    boardGroup.add(railGlow);
 
-    const packet = new THREE.Mesh(
-      new THREE.SphereGeometry(0.16, 20, 20),
-      new THREE.MeshStandardMaterial({
-        color: 0xf0f9ff,
-        emissive: 0x67e8f9,
-        emissiveIntensity: 2.6,
-      }),
-    );
-    deckGroup.add(packet);
+    const stations = STATION_POINTS.map((point) => {
+      const stationGroup = new THREE.Group();
+      stationGroup.position.copy(point);
+      stationGroup.position.y += 0.26;
 
-    const cardGeometry = new THREE.BoxGeometry(1.2, 0.12, 0.78);
-    const cardMaterial = new THREE.MeshStandardMaterial({
-      color: 0xf8fafc,
-      emissive: 0x38bdf8,
-      emissiveIntensity: 0.08,
-      metalness: 0.16,
-      roughness: 0.68,
-    });
-
-    const floatingCards = [0.08, 0.41, 0.74].map((offset, index) => {
-      const card = new THREE.Mesh(cardGeometry, cardMaterial.clone());
-      const point = FLOW_CURVE.getPointAt(offset);
-      card.position.copy(point);
-      card.position.y += 0.32 + index * 0.02;
-      card.rotation.y = -0.2 + index * 0.16;
-      deckGroup.add(card);
-      return card;
-    });
-
-    const nodeShellGeometry = new THREE.SphereGeometry(0.24, 24, 24);
-    const nodeCoreGeometry = new THREE.SphereGeometry(0.1, 18, 18);
-    const nodeRingGeometry = new THREE.TorusGeometry(0.34, 0.02, 16, 48);
-
-    const nodes = STATION_POINTS.map((point) => {
-      const group = new THREE.Group();
-      group.position.copy(point);
-
-      const shellMaterial = new THREE.MeshStandardMaterial({
-        color: 0x12243f,
-        emissive: 0x08111d,
-        emissiveIntensity: 0.25,
-        metalness: 0.24,
-        roughness: 0.28,
-      });
-      const shell = new THREE.Mesh(
-        nodeShellGeometry,
-        shellMaterial,
-      );
-      const coreMaterial = new THREE.MeshStandardMaterial({
-        color: 0xe0f2fe,
-        emissive: 0x22d3ee,
-        emissiveIntensity: 1.1,
-      });
-      const core = new THREE.Mesh(
-        nodeCoreGeometry,
-        coreMaterial,
-      );
-      const ringMaterial = new THREE.MeshStandardMaterial({
-        color: 0x7dd3fc,
-        emissive: 0x0ea5e9,
-        emissiveIntensity: 0.22,
+      const padMaterial = new THREE.MeshBasicMaterial({
+        color: 0x22d3ee,
         transparent: true,
-        opacity: 0.86,
+        opacity: 0.18,
       });
-      const ring = new THREE.Mesh(
-        nodeRingGeometry,
-        ringMaterial,
+      const pad = new THREE.Mesh(
+        new THREE.CircleGeometry(0.52, 36),
+        padMaterial,
       );
-      ring.rotation.x = Math.PI / 2;
+      pad.rotation.x = -Math.PI / 2;
+      stationGroup.add(pad);
 
-      group.add(shell, core, ring);
-      deckGroup.add(group);
+      const plinth = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.38, 0.46, 0.16, 28),
+        new THREE.MeshStandardMaterial({
+          color: 0x102744,
+          emissive: 0x08111d,
+          emissiveIntensity: 0.18,
+          metalness: 0.34,
+          roughness: 0.3,
+        }),
+      );
+      plinth.position.y = 0.08;
+      stationGroup.add(plinth);
+
+      const orbMaterial = new THREE.MeshStandardMaterial({
+        color: 0xe2f2ff,
+        emissive: 0x22d3ee,
+        emissiveIntensity: 0.9,
+      });
+      const orb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.1, 18, 18),
+        orbMaterial,
+      );
+      orb.position.y = 0.24;
+      stationGroup.add(orb);
+
+      const cardGroup = new THREE.Group();
+      cardGroup.position.y = 0.62;
+      stationGroup.add(cardGroup);
+
+      const card = new THREE.Mesh(
+        new THREE.BoxGeometry(1.06, 0.08, 0.7),
+        new THREE.MeshStandardMaterial({
+          color: 0xf2f8ff,
+          emissive: 0x38bdf8,
+          emissiveIntensity: 0.08,
+          metalness: 0.12,
+          roughness: 0.56,
+          transparent: true,
+          opacity: 0.94,
+        }),
+      );
+      cardGroup.add(card);
+
+      const lineMaterial = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.42,
+      });
+      const lineA = new THREE.Mesh(
+        new THREE.BoxGeometry(0.62, 0.015, 0.055),
+        lineMaterial,
+      );
+      lineA.position.set(0, 0.055, -0.16);
+      cardGroup.add(lineA);
+
+      const lineB = new THREE.Mesh(
+        new THREE.BoxGeometry(0.42, 0.015, 0.05),
+        lineMaterial.clone(),
+      );
+      lineB.position.set(-0.08, 0.055, 0.04);
+      cardGroup.add(lineB);
+
+      const lineDotMaterial = new THREE.MeshBasicMaterial({
+        color: 0x34d399,
+        transparent: true,
+        opacity: 0.7,
+      });
+      const lineDot = new THREE.Mesh(
+        new THREE.BoxGeometry(0.14, 0.015, 0.05),
+        lineDotMaterial,
+      );
+      lineDot.position.set(0.27, 0.055, 0.19);
+      cardGroup.add(lineDot);
+
+      boardGroup.add(stationGroup);
 
       return {
-        group,
-        shell: shellMaterial,
-        core: coreMaterial,
-        ring: ringMaterial,
+        group: stationGroup,
+        cardGroup,
+        padMaterial,
+        orbMaterial,
+        lineDotMaterial,
       };
     });
 
+    const packetGroup = new THREE.Group();
+    const packetBody = new THREE.Mesh(
+      new THREE.BoxGeometry(0.56, 0.11, 0.34),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: 0x38bdf8,
+        emissiveIntensity: 0.22,
+        metalness: 0.14,
+        roughness: 0.34,
+      }),
+    );
+    packetGroup.add(packetBody);
+
+    const packetAccent = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, 0.02, 0.06),
+      new THREE.MeshBasicMaterial({
+        color: 0x22d3ee,
+        transparent: true,
+        opacity: 0.85,
+      }),
+    );
+    packetAccent.position.set(0, 0.065, -0.08);
+    packetGroup.add(packetAccent);
+
+    const packetHaloMaterial = new THREE.MeshBasicMaterial({
+      color: 0x22d3ee,
+      transparent: true,
+      opacity: 0.22,
+    });
+    const packetHalo = new THREE.Mesh(
+      new THREE.TorusGeometry(0.26, 0.03, 14, 40),
+      packetHaloMaterial,
+    );
+    packetHalo.rotation.x = Math.PI / 2;
+    packetGroup.add(packetHalo);
+    packetGroup.position.y = 0.54;
+    boardGroup.add(packetGroup);
+
+    const trailMaterials = Array.from({ length: 4 }, (_, index) =>
+      new THREE.MeshBasicMaterial({
+        color: index % 2 === 0 ? 0x22d3ee : 0x34d399,
+        transparent: true,
+        opacity: 0.22 - index * 0.04,
+      }),
+    );
+    const trailPackets = trailMaterials.map((material, index) => {
+      const ghost = new THREE.Mesh(
+        new THREE.BoxGeometry(0.42 - index * 0.04, 0.08, 0.24 - index * 0.02),
+        material,
+      );
+      ghost.position.y = 0.5;
+      boardGroup.add(ghost);
+      return ghost;
+    });
+
     const particleGeometry = new THREE.BufferGeometry();
-    const particleCount = 42;
+    const particleCount = 48;
     const particlePositions = new Float32Array(particleCount * 3);
     for (let index = 0; index < particleCount; index += 1) {
-      particlePositions[index * 3] = (Math.random() - 0.5) * 9;
-      particlePositions[index * 3 + 1] = Math.random() * 2.2 + 0.6;
-      particlePositions[index * 3 + 2] = (Math.random() - 0.5) * 6.4;
+      particlePositions[index * 3] = (Math.random() - 0.5) * 8.4;
+      particlePositions[index * 3 + 1] = Math.random() * 1.8 + 0.7;
+      particlePositions[index * 3 + 2] = (Math.random() - 0.5) * 5.8;
     }
     particleGeometry.setAttribute(
       "position",
@@ -236,7 +347,7 @@ export function LandingProofScene({
         color: 0x93c5fd,
         size: 0.05,
         transparent: true,
-        opacity: 0.45,
+        opacity: 0.55,
       }),
     );
     scene.add(particles);
@@ -258,7 +369,7 @@ export function LandingProofScene({
     const animate = () => {
       const elapsed = clock.getElapsedTime();
       const targetProgress =
-        ((activeIndexRef.current % STATION_POINTS.length) + 0.02) /
+        ((activeIndexRef.current % STATION_POINTS.length) + 0.01) /
         STATION_POINTS.length;
 
       const currentProgress = progressRef.current;
@@ -266,42 +377,49 @@ export function LandingProofScene({
       const wrappedDelta =
         directDelta > 0 ? directDelta - 1 : directDelta < 0 ? directDelta + 1 : 0;
       const delta =
-        Math.abs(directDelta) <= Math.abs(wrappedDelta) ? directDelta : wrappedDelta;
-      progressRef.current = (currentProgress + delta * 0.05 + 1) % 1;
+        Math.abs(directDelta) <= Math.abs(wrappedDelta)
+          ? directDelta
+          : wrappedDelta;
+      progressRef.current = (currentProgress + delta * 0.06 + 1) % 1;
 
       const packetPoint = FLOW_CURVE.getPointAt(progressRef.current);
-      packet.position.copy(packetPoint);
-      packet.position.y += 0.12;
-      packet.scale.setScalar(1 + Math.sin(elapsed * 4.2) * 0.06);
+      packetGroup.position.set(packetPoint.x, packetPoint.y + 0.52, packetPoint.z);
+      packetGroup.rotation.z = Math.sin(elapsed * 3.5) * 0.06;
+      packetGroup.rotation.x = Math.cos(elapsed * 2.4) * 0.04;
+      packetHalo.rotation.z = elapsed * 1.4;
+      packetHaloMaterial.opacity = 0.18 + Math.sin(elapsed * 4.2) * 0.05;
 
-      nodes.forEach((node, index) => {
+      trailPackets.forEach((ghost, index) => {
+        const offset = (progressRef.current - (index + 1) * 0.03 + 1) % 1;
+        const point = FLOW_CURVE.getPointAt(offset);
+        ghost.position.set(point.x, point.y + 0.48, point.z);
+        ghost.rotation.z = Math.sin(elapsed * 2.6 + index) * 0.04;
+      });
+
+      stations.forEach((station, index) => {
         const isActive = index === activeIndexRef.current;
         const emphasis = isActive ? 1 : 0.28;
-        const pulseScale = isActive ? 1.06 + Math.sin(elapsed * 3) * 0.05 : 0.96;
 
-        node.group.scale.setScalar(pulseScale);
-        node.shell.emissiveIntensity = 0.2 + emphasis * 0.8;
-        node.core.emissiveIntensity = 0.5 + emphasis * 2.2;
-        node.ring.emissiveIntensity = 0.12 + emphasis * 1.15;
+        station.group.position.y =
+          STATION_POINTS[index].y +
+          0.26 +
+          Math.sin(elapsed * 1.6 + index * 0.7) * 0.04;
+        station.cardGroup.rotation.z =
+          Math.sin(elapsed * 1.2 + index * 0.9) * 0.035;
+        station.cardGroup.scale.setScalar(isActive ? 1.05 : 0.98);
+        station.padMaterial.opacity = 0.14 + emphasis * 0.2;
+        station.orbMaterial.emissiveIntensity = 0.55 + emphasis * 1.5;
+        station.lineDotMaterial.opacity = 0.4 + emphasis * 0.4;
       });
 
-      floatingCards.forEach((card, index) => {
-        const offset = (0.1 + index * 0.27 + elapsed * 0.03) % 1;
-        const point = FLOW_CURVE.getPointAt(offset);
-        card.position.x = point.x;
-        card.position.z = point.z;
-        card.position.y = 0.34 + Math.sin(elapsed * 1.4 + index) * 0.08;
-        card.rotation.z = Math.sin(elapsed * 1.1 + index) * 0.08;
-      });
+      railMaterial.emissiveIntensity = 0.3 + Math.sin(elapsed * 2.1) * 0.05;
+      railGlowMaterial.opacity = 0.12 + Math.sin(elapsed * 2.4) * 0.025;
+      particles.rotation.y = elapsed * 0.035;
+      particles.position.y = Math.sin(elapsed * 0.55) * 0.04;
 
-      particles.rotation.y = elapsed * 0.05;
-      particles.position.y = Math.sin(elapsed * 0.6) * 0.08;
-      laneGlowMaterial.opacity = 0.08 + Math.sin(elapsed * 2.3) * 0.015;
-      railMaterial.emissiveIntensity = 0.26 + Math.sin(elapsed * 2) * 0.04;
-
-      camera.position.x = Math.sin(elapsed * 0.18) * 0.55;
-      camera.position.y = 4.1 + Math.cos(elapsed * 0.22) * 0.12;
-      camera.lookAt(0, 0.12, 0);
+      camera.position.x = 0.05 + Math.sin(elapsed * 0.18) * 0.22;
+      camera.position.y = 3.8 + Math.cos(elapsed * 0.2) * 0.06;
+      camera.lookAt(0, 0.82, 0.38);
 
       renderer.render(scene, camera);
       frameId = window.requestAnimationFrame(animate);
@@ -325,17 +443,11 @@ export function LandingProofScene({
               | Array<{ dispose: () => void }>;
           },
         ) => {
-          const mesh = object as {
-            geometry?: { dispose: () => void };
-            material?:
-              | { dispose: () => void }
-              | Array<{ dispose: () => void }>;
-          };
-          if (mesh.geometry) {
-            mesh.geometry.dispose();
+          if (object.geometry) {
+            object.geometry.dispose();
           }
 
-          const material = mesh.material;
+          const material = object.material;
           if (Array.isArray(material)) {
             material.forEach((value) => value.dispose());
           } else if (material) {
@@ -356,7 +468,7 @@ export function LandingProofScene({
         className={renderMode === "webgl" ? "h-full w-full" : "hidden"}
       />
       {renderMode === "fallback" ? (
-        <div className="h-full w-full bg-[radial-gradient(circle_at_30%_30%,rgba(56,189,248,0.24),transparent_24%),radial-gradient(circle_at_68%_42%,rgba(52,211,153,0.18),transparent_22%),linear-gradient(180deg,rgba(8,15,28,0.9),rgba(4,8,18,0.98))]" />
+        <div className="h-full w-full bg-[radial-gradient(circle_at_28%_24%,rgba(56,189,248,0.22),transparent_24%),radial-gradient(circle_at_72%_48%,rgba(52,211,153,0.18),transparent_22%),linear-gradient(180deg,rgba(8,15,28,0.9),rgba(4,8,18,0.98))]" />
       ) : null}
     </div>
   );
