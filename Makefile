@@ -14,13 +14,13 @@ POSTGRES_PASSWORD ?= agentra
 POSTGRES_PORT ?= 5432
 PORT ?= 8080
 FRONTEND_PORT ?= 3000
-FRONTEND_ORIGIN ?= http://localhost:$(FRONTEND_PORT)
+FRONTEND_ORIGIN ?= http://web.agentra.orb.local
 AGENTRA_APP_URL ?= $(FRONTEND_ORIGIN)
 DATABASE_URL ?= postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable
-NEXT_PUBLIC_API_URL ?= http://localhost:$(PORT)
-NEXT_PUBLIC_WS_URL ?= ws://localhost:$(PORT)/ws
+NEXT_PUBLIC_API_URL ?= http://server.agentra.orb.local
+NEXT_PUBLIC_WS_URL ?= ws://server.agentra.orb.local/ws
 GOOGLE_REDIRECT_URI ?= $(FRONTEND_ORIGIN)/auth/callback
-AGENTRA_SERVER_URL ?= ws://localhost:$(PORT)/ws
+AGENTRA_SERVER_URL ?= ws://server.agentra.orb.local/ws
 
 export
 

@@ -35,13 +35,13 @@ func TestResolveAppURL(t *testing.T) {
 		}
 	})
 
-	t.Run("defaults to production", func(t *testing.T) {
+	t.Run("defaults to local OrbStack web", func(t *testing.T) {
 		t.Setenv("AGENTRA_APP_URL", "")
 		t.Setenv("FRONTEND_ORIGIN", "")
 		t.Setenv("HOME", t.TempDir()) // avoid reading real config
 
-		if got := resolveAppURL(cmd); got != "http://localhost:3000" {
-			t.Fatalf("resolveAppURL() = %q, want %q", got, "http://localhost:3000")
+		if got := resolveAppURL(cmd); got != "http://web.agentra.orb.local" {
+			t.Fatalf("resolveAppURL() = %q, want %q", got, "http://web.agentra.orb.local")
 		}
 	})
 }
@@ -49,12 +49,12 @@ func TestResolveAppURL(t *testing.T) {
 func TestResolveServerURL(t *testing.T) {
 	cmd := testCmd()
 
-	t.Run("defaults to local daemon server", func(t *testing.T) {
+	t.Run("defaults to local OrbStack server", func(t *testing.T) {
 		t.Setenv("AGENTRA_SERVER_URL", "")
 		t.Setenv("HOME", t.TempDir())
 
-		if got := resolveServerURL(cmd); got != "http://localhost:8080" {
-			t.Fatalf("resolveServerURL() = %q, want %q", got, "http://localhost:8080")
+		if got := resolveServerURL(cmd); got != "http://server.agentra.orb.local" {
+			t.Fatalf("resolveServerURL() = %q, want %q", got, "http://server.agentra.orb.local")
 		}
 	})
 }

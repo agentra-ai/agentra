@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	DefaultServerURL             = "ws://localhost:8080/ws"
+	DefaultServerURL             = "ws://server.agentra.orb.local/ws"
 	DefaultPollInterval          = 3 * time.Second
 	DefaultHeartbeatInterval     = 15 * time.Second
 	DefaultAgentTimeout          = 2 * time.Hour
