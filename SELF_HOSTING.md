@@ -227,8 +227,10 @@ CORS_ALLOWED_ORIGINS=https://app.example.com
 
 # Frontend
 REMOTE_API_URL=https://api.example.com
+NEXT_PUBLIC_SITE_URL=https://app.example.com
 NEXT_PUBLIC_API_URL=https://api.example.com
 NEXT_PUBLIC_WS_URL=wss://api.example.com/ws
+NEXT_PUBLIC_CLI_CALLBACK_HOSTS=localhost,127.0.0.1
 ```
 
 ## Health Check
@@ -266,12 +268,18 @@ Each team member who wants to run AI agents locally needs to:
    export AGENTRA_APP_URL=https://app.example.com
    export AGENTRA_SERVER_URL=wss://api.example.com/ws
 
+   # Keep the browser callback on the local machine running the CLI
+   export AGENTRA_LOCAL_BIND_HOST=127.0.0.1
+   export AGENTRA_CALLBACK_HOST=localhost
+
    # Login (opens browser)
    agentra login
 
    # Start the daemon
    agentra daemon start
    ```
+
+`AGENTRA_APP_URL` and `AGENTRA_SERVER_URL` should point at your deployed Agentra services. `AGENTRA_LOCAL_BIND_HOST` and `AGENTRA_CALLBACK_HOST` stay local because the browser hands the login token back to a loopback listener started by the CLI on the same machine.
 
 The daemon auto-detects installed agent CLIs and registers itself with the server. When an agent is assigned a task in Agentra, the daemon picks it up, creates an isolated workspace, runs the agent, and reports results back.
 
