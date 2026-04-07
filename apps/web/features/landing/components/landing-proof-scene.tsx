@@ -51,7 +51,7 @@ export function LandingProofScene({
     }
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x040816, 9, 15);
+    scene.fog = new THREE.Fog(0x040816, 12, 20);
 
     const createRenderer = () =>
       new THREE.WebGLRenderer({
@@ -75,9 +75,9 @@ export function LandingProofScene({
     mountNode.appendChild(renderer.domElement);
     setRenderMode("webgl");
 
-    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
-    camera.position.set(0.05, 3.8, 8.35);
-    camera.lookAt(0, 0.82, 0.38);
+    const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 100);
+    camera.position.set(0.18, 3.2, 7.1);
+    camera.lookAt(0.18, 1.08, 0.58);
 
     const ambientLight = new THREE.AmbientLight(0xe5f3ff, 0.96);
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.16);
@@ -91,9 +91,10 @@ export function LandingProofScene({
     scene.add(ambientLight, keyLight, cyanLight, emeraldLight, rimLight);
 
     const boardGroup = new THREE.Group();
-    boardGroup.rotation.x = -0.16;
-    boardGroup.rotation.z = -0.04;
-    boardGroup.position.y = 0.38;
+    boardGroup.rotation.x = -0.34;
+    boardGroup.rotation.z = -0.06;
+    boardGroup.position.y = 0.78;
+    boardGroup.scale.setScalar(1.06);
     scene.add(boardGroup);
 
     const board = new THREE.Mesh(
@@ -109,11 +110,11 @@ export function LandingProofScene({
     const boardTop = new THREE.Mesh(
       new THREE.BoxGeometry(9.02, 0.045, 5.08),
       new THREE.MeshStandardMaterial({
-        color: 0x10223d,
+        color: 0x112a4a,
         metalness: 0.1,
-        roughness: 0.6,
+        roughness: 0.52,
         transparent: true,
-        opacity: 0.98,
+        opacity: 1,
       }),
     );
     boardTop.position.y = 0.18;
@@ -123,10 +124,10 @@ export function LandingProofScene({
     for (let index = 0; index < 7; index += 1) {
       const vertical = new THREE.Mesh(
         new THREE.BoxGeometry(0.018, 0.02, 4.92),
-        new THREE.MeshBasicMaterial({
-          color: 0x1b3658,
+      new THREE.MeshBasicMaterial({
+          color: 0x28507e,
           transparent: true,
-          opacity: 0.18,
+          opacity: 0.22,
         }),
       );
       vertical.position.set(-3 + index, 0.2, 0);
@@ -136,9 +137,9 @@ export function LandingProofScene({
       const horizontal = new THREE.Mesh(
         new THREE.BoxGeometry(8.72, 0.02, 0.018),
         new THREE.MeshBasicMaterial({
-          color: 0x1b3658,
+          color: 0x28507e,
           transparent: true,
-          opacity: 0.14,
+          opacity: 0.18,
         }),
       );
       horizontal.position.set(0, 0.2, -1.5 + index);
@@ -147,14 +148,14 @@ export function LandingProofScene({
     boardGroup.add(gridGroup);
 
     const railMaterial = new THREE.MeshStandardMaterial({
-      color: 0x163457,
+      color: 0x1d4a76,
       emissive: 0x0ea5e9,
-      emissiveIntensity: 0.34,
+      emissiveIntensity: 0.52,
       metalness: 0.48,
-      roughness: 0.22,
+      roughness: 0.18,
     });
     const rail = new THREE.Mesh(
-      new THREE.TubeGeometry(FLOW_CURVE, 240, 0.06, 16, true),
+      new THREE.TubeGeometry(FLOW_CURVE, 240, 0.078, 18, true),
       railMaterial,
     );
     rail.position.y = 0.22;
@@ -163,10 +164,10 @@ export function LandingProofScene({
     const railGlowMaterial = new THREE.MeshBasicMaterial({
       color: 0x22d3ee,
       transparent: true,
-      opacity: 0.14,
+      opacity: 0.22,
     });
     const railGlow = new THREE.Mesh(
-      new THREE.TubeGeometry(FLOW_CURVE, 240, 0.13, 16, true),
+      new THREE.TubeGeometry(FLOW_CURVE, 240, 0.18, 20, true),
       railGlowMaterial,
     );
     railGlow.position.y = 0.22;
@@ -183,51 +184,63 @@ export function LandingProofScene({
         opacity: 0.18,
       });
       const pad = new THREE.Mesh(
-        new THREE.CircleGeometry(0.52, 36),
+        new THREE.CircleGeometry(0.6, 40),
         padMaterial,
       );
       pad.rotation.x = -Math.PI / 2;
       stationGroup.add(pad);
 
       const plinth = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.38, 0.46, 0.16, 28),
+        new THREE.CylinderGeometry(0.42, 0.5, 0.18, 28),
         new THREE.MeshStandardMaterial({
-          color: 0x102744,
+          color: 0x143359,
           emissive: 0x08111d,
-          emissiveIntensity: 0.18,
+          emissiveIntensity: 0.26,
           metalness: 0.34,
-          roughness: 0.3,
+          roughness: 0.26,
         }),
       );
-      plinth.position.y = 0.08;
+      plinth.position.y = 0.09;
       stationGroup.add(plinth);
+
+      const stem = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.02, 0.02, 0.34, 12),
+        new THREE.MeshBasicMaterial({
+          color: 0x38bdf8,
+          transparent: true,
+          opacity: 0.34,
+        }),
+      );
+      stem.position.y = 0.35;
+      stationGroup.add(stem);
 
       const orbMaterial = new THREE.MeshStandardMaterial({
         color: 0xe2f2ff,
         emissive: 0x22d3ee,
-        emissiveIntensity: 0.9,
+        emissiveIntensity: 1.15,
       });
       const orb = new THREE.Mesh(
-        new THREE.SphereGeometry(0.1, 18, 18),
+        new THREE.SphereGeometry(0.13, 20, 20),
         orbMaterial,
       );
-      orb.position.y = 0.24;
+      orb.position.y = 0.26;
       stationGroup.add(orb);
 
       const cardGroup = new THREE.Group();
-      cardGroup.position.y = 0.62;
+      cardGroup.position.y = 0.7;
+      cardGroup.rotation.x = 0.26;
       stationGroup.add(cardGroup);
 
       const card = new THREE.Mesh(
-        new THREE.BoxGeometry(1.06, 0.08, 0.7),
+        new THREE.BoxGeometry(1.18, 0.08, 0.76),
         new THREE.MeshStandardMaterial({
           color: 0xf2f8ff,
           emissive: 0x38bdf8,
-          emissiveIntensity: 0.08,
+          emissiveIntensity: 0.12,
           metalness: 0.12,
-          roughness: 0.56,
+          roughness: 0.5,
           transparent: true,
-          opacity: 0.94,
+          opacity: 0.96,
         }),
       );
       cardGroup.add(card);
@@ -235,7 +248,7 @@ export function LandingProofScene({
       const lineMaterial = new THREE.MeshBasicMaterial({
         color: 0x38bdf8,
         transparent: true,
-        opacity: 0.42,
+        opacity: 0.56,
       });
       const lineA = new THREE.Mesh(
         new THREE.BoxGeometry(0.62, 0.015, 0.055),
@@ -254,7 +267,7 @@ export function LandingProofScene({
       const lineDotMaterial = new THREE.MeshBasicMaterial({
         color: 0x34d399,
         transparent: true,
-        opacity: 0.7,
+        opacity: 0.82,
       });
       const lineDot = new THREE.Mesh(
         new THREE.BoxGeometry(0.14, 0.015, 0.05),
@@ -280,9 +293,9 @@ export function LandingProofScene({
       new THREE.MeshStandardMaterial({
         color: 0xffffff,
         emissive: 0x38bdf8,
-        emissiveIntensity: 0.22,
+        emissiveIntensity: 0.38,
         metalness: 0.14,
-        roughness: 0.34,
+        roughness: 0.28,
       }),
     );
     packetGroup.add(packetBody);
@@ -292,7 +305,7 @@ export function LandingProofScene({
       new THREE.MeshBasicMaterial({
         color: 0x22d3ee,
         transparent: true,
-        opacity: 0.85,
+        opacity: 0.92,
       }),
     );
     packetAccent.position.set(0, 0.065, -0.08);
@@ -301,10 +314,10 @@ export function LandingProofScene({
     const packetHaloMaterial = new THREE.MeshBasicMaterial({
       color: 0x22d3ee,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.28,
     });
     const packetHalo = new THREE.Mesh(
-      new THREE.TorusGeometry(0.26, 0.03, 14, 40),
+      new THREE.TorusGeometry(0.3, 0.035, 14, 40),
       packetHaloMaterial,
     );
     packetHalo.rotation.x = Math.PI / 2;
@@ -316,12 +329,12 @@ export function LandingProofScene({
       new THREE.MeshBasicMaterial({
         color: index % 2 === 0 ? 0x22d3ee : 0x34d399,
         transparent: true,
-        opacity: 0.22 - index * 0.04,
+        opacity: 0.24 - index * 0.045,
       }),
     );
     const trailPackets = trailMaterials.map((material, index) => {
       const ghost = new THREE.Mesh(
-        new THREE.BoxGeometry(0.42 - index * 0.04, 0.08, 0.24 - index * 0.02),
+        new THREE.BoxGeometry(0.48 - index * 0.04, 0.08, 0.28 - index * 0.02),
         material,
       );
       ghost.position.y = 0.5;
@@ -383,16 +396,16 @@ export function LandingProofScene({
       progressRef.current = (currentProgress + delta * 0.06 + 1) % 1;
 
       const packetPoint = FLOW_CURVE.getPointAt(progressRef.current);
-      packetGroup.position.set(packetPoint.x, packetPoint.y + 0.52, packetPoint.z);
+      packetGroup.position.set(packetPoint.x, packetPoint.y + 0.58, packetPoint.z);
       packetGroup.rotation.z = Math.sin(elapsed * 3.5) * 0.06;
       packetGroup.rotation.x = Math.cos(elapsed * 2.4) * 0.04;
       packetHalo.rotation.z = elapsed * 1.4;
-      packetHaloMaterial.opacity = 0.18 + Math.sin(elapsed * 4.2) * 0.05;
+      packetHaloMaterial.opacity = 0.22 + Math.sin(elapsed * 4.2) * 0.06;
 
       trailPackets.forEach((ghost, index) => {
         const offset = (progressRef.current - (index + 1) * 0.03 + 1) % 1;
         const point = FLOW_CURVE.getPointAt(offset);
-        ghost.position.set(point.x, point.y + 0.48, point.z);
+        ghost.position.set(point.x, point.y + 0.54, point.z);
         ghost.rotation.z = Math.sin(elapsed * 2.6 + index) * 0.04;
       });
 
@@ -404,22 +417,23 @@ export function LandingProofScene({
           STATION_POINTS[index].y +
           0.26 +
           Math.sin(elapsed * 1.6 + index * 0.7) * 0.04;
+        station.group.scale.setScalar(isActive ? 1.06 : 1);
         station.cardGroup.rotation.z =
           Math.sin(elapsed * 1.2 + index * 0.9) * 0.035;
-        station.cardGroup.scale.setScalar(isActive ? 1.05 : 0.98);
-        station.padMaterial.opacity = 0.14 + emphasis * 0.2;
-        station.orbMaterial.emissiveIntensity = 0.55 + emphasis * 1.5;
-        station.lineDotMaterial.opacity = 0.4 + emphasis * 0.4;
+        station.cardGroup.scale.setScalar(isActive ? 1.08 : 0.98);
+        station.padMaterial.opacity = 0.18 + emphasis * 0.28;
+        station.orbMaterial.emissiveIntensity = 0.7 + emphasis * 1.8;
+        station.lineDotMaterial.opacity = 0.48 + emphasis * 0.42;
       });
 
-      railMaterial.emissiveIntensity = 0.3 + Math.sin(elapsed * 2.1) * 0.05;
-      railGlowMaterial.opacity = 0.12 + Math.sin(elapsed * 2.4) * 0.025;
+      railMaterial.emissiveIntensity = 0.48 + Math.sin(elapsed * 2.1) * 0.08;
+      railGlowMaterial.opacity = 0.18 + Math.sin(elapsed * 2.4) * 0.04;
       particles.rotation.y = elapsed * 0.035;
       particles.position.y = Math.sin(elapsed * 0.55) * 0.04;
 
-      camera.position.x = 0.05 + Math.sin(elapsed * 0.18) * 0.22;
-      camera.position.y = 3.8 + Math.cos(elapsed * 0.2) * 0.06;
-      camera.lookAt(0, 0.82, 0.38);
+      camera.position.x = 0.18 + Math.sin(elapsed * 0.18) * 0.16;
+      camera.position.y = 3.2 + Math.cos(elapsed * 0.2) * 0.05;
+      camera.lookAt(0.18, 1.08, 0.58);
 
       renderer.render(scene, camera);
       frameId = window.requestAnimationFrame(animate);
