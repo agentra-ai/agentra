@@ -48,6 +48,13 @@ export interface SendCodeResponse {
   dev_code?: string;
 }
 
+function createRequestId(): string {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (uuid) return uuid.slice(0, 8);
+
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.slice(0, 8);
+}
+
 export class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
@@ -97,7 +104,7 @@ export class ApiClient {
   }
 
   private async fetch<T>(path: string, init?: RequestInit): Promise<T> {
-    const rid = crypto.randomUUID().slice(0, 8);
+    const rid = createRequestId();
     const start = Date.now();
     const method = init?.method ?? "GET";
 
@@ -555,7 +562,7 @@ export class ApiClient {
     if (opts?.issueId) formData.append("issue_id", opts.issueId);
     if (opts?.commentId) formData.append("comment_id", opts.commentId);
 
-    const rid = crypto.randomUUID().slice(0, 8);
+    const rid = createRequestId();
     const start = Date.now();
     this.logger.info("→ POST /api/upload-file", { rid });
 

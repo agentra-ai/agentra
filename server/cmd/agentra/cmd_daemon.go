@@ -119,17 +119,31 @@ func runDaemonStart(cmd *cobra.Command, _ []string) error {
 func runDaemonBackground(cmd *cobra.Command) error {
 	profile := resolveProfile(cmd)
 	healthPort := healthPortForProfile(profile)
+	desiredServerURL := resolveServerURL(cmd)
 
 	// Check if daemon is already running.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	health := checkDaemonHealthOnPort(ctx, healthPort)
 	if health["status"] == "running" {
-		label := "daemon"
-		if profile != "" {
-			label = fmt.Sprintf("daemon [%s]", profile)
+		if shouldReplaceLegacyDaemon(health) {
+			pidText := daemonPIDText(health)
+			if pidText == "" {
+				pidText = "unknown"
+			}
+			fmt.Fprintf(os.Stderr, "Stopping legacy multica daemon on port %d (pid %s) before starting agentra...\n", healthPort, pidText)
+			if err := stopRunningDaemon(healthPort, health); err != nil {
+				return err
+			}
+		} else if err := daemonStartConflictError(profile, health, desiredServerURL); err != nil {
+			return err
+		} else {
+			label := "daemon"
+			if profile != "" {
+				label = fmt.Sprintf("daemon [%s]", profile)
+			}
+			return fmt.Errorf("%s is already running (pid %v)", label, health["pid"])
 		}
-		return fmt.Errorf("%s is already running (pid %v)", label, health["pid"])
 	}
 
 	// Resolve current executable.
@@ -162,6 +176,7 @@ func runDaemonBackground(cmd *cobra.Command) error {
 		logFile.Close()
 		return fmt.Errorf("start daemon: %w", err)
 	}
+	childPID := child.Process.Pid
 	logFile.Close()
 
 	// Detach: we don't Wait() on the child — it runs independently.
@@ -169,24 +184,22 @@ func runDaemonBackground(cmd *cobra.Command) error {
 
 	// Write PID file.
 	pidPath := daemonPIDPathForProfile(profile)
-	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(child.Process.Pid)), 0o644); err != nil {
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(childPID)), 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not write PID file: %v\n", err)
 	}
 
-	// Wait briefly and verify daemon started via health endpoint.
-	time.Sleep(2 * time.Second)
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel2()
-	health = checkDaemonHealthOnPort(ctx2, healthPort)
+	// Give the daemon enough time to authenticate, register runtimes,
+	// and warm any repo cache before declaring startup failed.
+	health = waitForDaemonHealth(healthPort, 20*time.Second)
 	if health["status"] != "running" {
 		fmt.Fprintf(os.Stderr, "Daemon may not have started successfully. Check logs:\n  %s\n", logPath)
 		return nil
 	}
 
 	if profile != "" {
-		fmt.Fprintf(os.Stderr, "Daemon [%s] started (pid %d, version %s)\n", profile, child.Process.Pid, version)
+		fmt.Fprintf(os.Stderr, "Daemon [%s] started (pid %d, version %s)\n", profile, childPID, version)
 	} else {
-		fmt.Fprintf(os.Stderr, "Daemon started (pid %d, version %s)\n", child.Process.Pid, version)
+		fmt.Fprintf(os.Stderr, "Daemon started (pid %d, version %s)\n", childPID, version)
 	}
 	fmt.Fprintf(os.Stderr, "Logs: %s\n", logPath)
 	return nil
@@ -304,14 +317,15 @@ func runDaemonForeground(cmd *cobra.Command) error {
 			logger.Error("failed to start new daemon", "error", err)
 			return nil
 		}
+		childPID := child.Process.Pid
 		logFile.Close()
 		child.Process.Release()
 
 		// Write new PID file.
 		pidPath := daemonPIDPathForProfile(profile)
-		os.WriteFile(pidPath, []byte(strconv.Itoa(child.Process.Pid)), 0o644)
+		os.WriteFile(pidPath, []byte(strconv.Itoa(childPID)), 0o644)
 
-		logger.Info("new daemon started", "pid", child.Process.Pid)
+		logger.Info("new daemon started", "pid", childPID)
 	}
 
 	return nil
@@ -396,6 +410,9 @@ func runDaemonStatus(cmd *cobra.Command, _ []string) error {
 	}
 
 	fmt.Fprintf(os.Stdout, "%s:      running (pid %v, uptime %v)\n", label, health["pid"], health["uptime"])
+	if serverURL := daemonHealthString(health, "server_url"); serverURL != "" {
+		fmt.Fprintf(os.Stdout, "Server URL:  %s\n", serverURL)
+	}
 	if agents, ok := health["agents"].([]any); ok && len(agents) > 0 {
 		parts := make([]string, len(agents))
 		for i, a := range agents {
@@ -459,4 +476,138 @@ func checkDaemonHealthOnPort(ctx context.Context, port int) map[string]any {
 func flagString(cmd *cobra.Command, name string) string {
 	val, _ := cmd.Flags().GetString(name)
 	return val
+}
+
+func daemonHealthString(health map[string]any, key string) string {
+	raw, _ := health[key].(string)
+	return strings.TrimSpace(raw)
+}
+
+func daemonPIDFromHealth(health map[string]any) (int, bool) {
+	raw, ok := health["pid"]
+	if !ok {
+		return 0, false
+	}
+
+	switch pid := raw.(type) {
+	case float64:
+		if pid <= 0 {
+			return 0, false
+		}
+		return int(pid), true
+	case int:
+		if pid <= 0 {
+			return 0, false
+		}
+		return pid, true
+	case int64:
+		if pid <= 0 {
+			return 0, false
+		}
+		return int(pid), true
+	default:
+		return 0, false
+	}
+}
+
+func daemonPIDText(health map[string]any) string {
+	if pid, ok := daemonPIDFromHealth(health); ok {
+		return strconv.Itoa(pid)
+	}
+	return ""
+}
+
+func shouldReplaceLegacyDaemon(health map[string]any) bool {
+	if health["status"] != "running" {
+		return false
+	}
+	return strings.Contains(strings.ToLower(daemonHealthString(health, "server_url")), "multica")
+}
+
+func daemonStartConflictError(profile string, health map[string]any, desiredServerURL string) error {
+	if health["status"] != "running" {
+		return nil
+	}
+
+	runningServerURL := daemonHealthString(health, "server_url")
+	if runningServerURL == "" || desiredServerURL == "" || runningServerURL == desiredServerURL {
+		return nil
+	}
+
+	label := "daemon"
+	if profile != "" {
+		label = fmt.Sprintf("daemon [%s]", profile)
+	}
+
+	pidText := daemonPIDText(health)
+	if pidText == "" {
+		return fmt.Errorf(
+			"%s health port is occupied by a daemon targeting %s; this CLI is configured for %s. Stop the conflicting daemon or use a named profile",
+			label,
+			runningServerURL,
+			desiredServerURL,
+		)
+	}
+
+	return fmt.Errorf(
+		"%s health port is occupied by a daemon targeting %s (pid %s); this CLI is configured for %s. Stop the conflicting daemon or use a named profile",
+		label,
+		runningServerURL,
+		pidText,
+		desiredServerURL,
+	)
+}
+
+func stopRunningDaemon(healthPort int, health map[string]any) error {
+	pid, ok := daemonPIDFromHealth(health)
+	if !ok {
+		return fmt.Errorf("could not determine daemon PID from health endpoint")
+	}
+
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return fmt.Errorf("find process %d: %w", pid, err)
+	}
+
+	if err := process.Signal(syscall.SIGTERM); err != nil {
+		return fmt.Errorf("stop daemon (pid %d): %w", pid, err)
+	}
+
+	for i := 0; i < 20; i++ {
+		time.Sleep(250 * time.Millisecond)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		current := checkDaemonHealthOnPort(ctx, healthPort)
+		cancel()
+
+		if current["status"] != "running" {
+			return nil
+		}
+
+		currentPID, ok := daemonPIDFromHealth(current)
+		if ok && currentPID != pid {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("daemon (pid %d) did not stop within 5s", pid)
+}
+
+func waitForDaemonHealth(healthPort int, timeout time.Duration) map[string]any {
+	deadline := time.Now().Add(timeout)
+
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		health := checkDaemonHealthOnPort(ctx, healthPort)
+		cancel()
+
+		if health["status"] == "running" {
+			return health
+		}
+		if time.Now().After(deadline) {
+			return health
+		}
+
+		time.Sleep(250 * time.Millisecond)
+	}
 }

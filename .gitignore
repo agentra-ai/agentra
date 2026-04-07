@@ -46,3 +46,4 @@ _features/
 *.dmg
 *.app
 server/server
+.tmp

@@ -2,6 +2,7 @@ name: agentra
 
 services:
   postgres:
+    container_name: agentra-postgres
     image: pgvector/pgvector:pg17
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-agentra}
@@ -20,6 +21,7 @@ services:
     restart: unless-stopped
 
   migrate:
+    container_name: agentra-migrate
     build:
       context: .
       target: server-runtime
@@ -35,6 +37,7 @@ services:
     restart: "no"
 
   server:
+    container_name: agentra-server
     build:
       context: .
       target: server-runtime
@@ -59,6 +62,7 @@ services:
     restart: unless-stopped
 
   web:
+    container_name: agentra-web
     build:
       context: .
       target: web-runtime
