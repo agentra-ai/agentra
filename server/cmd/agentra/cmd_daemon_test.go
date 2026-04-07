@@ -66,3 +66,25 @@ func TestDaemonStartConflictError(t *testing.T) {
 		}
 	})
 }
+
+func TestDaemonPIDFromHealth(t *testing.T) {
+	t.Run("prefers positive pid", func(t *testing.T) {
+		health := map[string]any{"pid": float64(59595)}
+
+		pid, ok := daemonPIDFromHealth(health)
+		if !ok {
+			t.Fatal("daemonPIDFromHealth() ok = false, want true")
+		}
+		if pid != 59595 {
+			t.Fatalf("daemonPIDFromHealth() pid = %d, want 59595", pid)
+		}
+	})
+
+	t.Run("rejects negative pid", func(t *testing.T) {
+		health := map[string]any{"pid": float64(-1)}
+
+		if pid, ok := daemonPIDFromHealth(health); ok || pid != 0 {
+			t.Fatalf("daemonPIDFromHealth() = (%d, %v), want (0, false)", pid, ok)
+		}
+	})
+}

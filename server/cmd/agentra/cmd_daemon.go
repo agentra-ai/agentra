@@ -196,10 +196,20 @@ func runDaemonBackground(cmd *cobra.Command) error {
 		return nil
 	}
 
+	reportedPID := childPID
+	if healthPID, ok := daemonPIDFromHealth(health); ok {
+		reportedPID = healthPID
+		if reportedPID != childPID {
+			if err := os.WriteFile(pidPath, []byte(strconv.Itoa(reportedPID)), 0o644); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: could not update PID file: %v\n", err)
+			}
+		}
+	}
+
 	if profile != "" {
-		fmt.Fprintf(os.Stderr, "Daemon [%s] started (pid %d, version %s)\n", profile, childPID, version)
+		fmt.Fprintf(os.Stderr, "Daemon [%s] started (pid %d, version %s)\n", profile, reportedPID, version)
 	} else {
-		fmt.Fprintf(os.Stderr, "Daemon started (pid %d, version %s)\n", childPID, version)
+		fmt.Fprintf(os.Stderr, "Daemon started (pid %d, version %s)\n", reportedPID, version)
 	}
 	fmt.Fprintf(os.Stderr, "Logs: %s\n", logPath)
 	return nil
