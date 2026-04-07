@@ -27,6 +27,8 @@ services:
       target: server-runtime
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-agentra}:${POSTGRES_PASSWORD:-agentra}@postgres:5432/${POSTGRES_DB:-agentra}?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,6 +45,7 @@ services:
       - .env
     environment:
       PORT: ${SERVER_INTERNAL_PORT}
+      DATABASE_URL: postgres://${POSTGRES_USER:-agentra}:${POSTGRES_PASSWORD:-agentra}@postgres:5432/${POSTGRES_DB:-agentra}?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
