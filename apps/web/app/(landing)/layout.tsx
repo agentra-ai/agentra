@@ -12,7 +12,6 @@ const jsonLd = {
       "@type": "Organization",
       name: "Agentra",
       url: siteUrl,
-      sameAs: ["https://github.com/agentra-ai/agentra"],
     },
     {
       "@type": "SoftwareApplication",

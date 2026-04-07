@@ -5,7 +5,7 @@ import { AgentraIcon } from "@/components/agentra-icon";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/features/auth";
 import { localeLabels, locales, useLocale } from "../i18n";
-import { GitHubMark, githubUrl, headerButtonClassName } from "./shared";
+import { headerButtonClassName } from "./shared";
 
 export function LandingFooter() {
   const { t, locale, setLocale } = useLocale();
@@ -34,15 +34,6 @@ export function LandingFooter() {
             >
               {user ? t.header.dashboard : t.footer.cta}
             </Link>
-            <Link
-              href={githubUrl}
-              target="_blank"
-              rel="noreferrer"
-              className={headerButtonClassName("ghost", "dark")}
-            >
-              <GitHubMark className="size-4" />
-              {t.footer.links.github}
-            </Link>
           </div>
         </div>
 
@@ -56,14 +47,6 @@ export function LandingFooter() {
               className="transition-colors hover:text-white"
             >
               {t.footer.links.changelog}
-            </Link>
-            <Link
-              href={githubUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="transition-colors hover:text-white"
-            >
-              {t.footer.links.github}
             </Link>
           </nav>
 

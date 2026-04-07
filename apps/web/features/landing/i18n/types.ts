@@ -30,6 +30,16 @@ export type LandingDict = {
     cycleHint: string;
     sceneAriaLabel: string;
     proofChips: string[];
+    panelTaskLabel: string;
+    panelTaskValue: string;
+    panelQueueLabel: string;
+    panelQueueValue: string;
+    panelRuntimeLabel: string;
+    panelFeedLabel: string;
+    panelReviewLabel: string;
+    panelArtifactLabel: string;
+    panelOwnerLabel: string;
+    panelNextLabel: string;
     steps: {
       id: string;
       label: string;
@@ -40,6 +50,11 @@ export type LandingDict = {
       resultLabel: string;
       resultValue: string;
       meta: string;
+      signal: string;
+      owner: string;
+      artifact: string;
+      review: string;
+      nextAction: string;
     }[];
   };
   hero: {
