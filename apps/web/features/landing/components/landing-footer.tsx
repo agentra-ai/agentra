@@ -4,103 +4,93 @@ import Link from "next/link";
 import { AgentraIcon } from "@/components/agentra-icon";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/features/auth";
-import { useLocale, locales, localeLabels } from "../i18n";
+import { localeLabels, locales, useLocale } from "../i18n";
+import { GitHubMark, githubUrl, headerButtonClassName } from "./shared";
 
 export function LandingFooter() {
   const { t, locale, setLocale } = useLocale();
-  const user = useAuthStore((s) => s.user);
-  const groups = Object.values(t.footer.groups);
+  const user = useAuthStore((state) => state.user);
 
   return (
-    <footer className="bg-[#0a0d12] text-white">
-      <div className="mx-auto max-w-[1320px] px-4 sm:px-6 lg:px-8">
-        {/* Top: CTA + link columns */}
-        <div className="flex flex-col gap-12 border-b border-white/10 py-16 sm:py-20 lg:flex-row lg:gap-20">
-          {/* Left — newsletter / CTA */}
-          <div className="lg:w-[340px] lg:shrink-0">
-            <Link href="#product" className="flex items-center gap-3">
+    <footer className="border-t border-white/8 bg-[#05070b] text-white">
+      <div className="mx-auto max-w-[1320px] px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-[32rem]">
+            <Link href="/" className="flex items-center gap-3">
               <AgentraIcon className="size-5 text-white" noSpin />
               <span className="text-[18px] font-semibold tracking-[0.04em] lowercase">
                 agentra
               </span>
             </Link>
-            <p className="mt-4 max-w-[300px] text-[14px] leading-[1.7] text-white/50 sm:text-[15px]">
+            <p className="mt-4 text-[15px] leading-[1.8] text-white/54">
               {t.footer.tagline}
             </p>
-            <div className="mt-6">
-              <Link
-                href={user ? "/issues" : "/login"}
-                className="inline-flex items-center justify-center rounded-[11px] bg-white px-5 py-2.5 text-[13px] font-semibold text-[#0a0d12] transition-colors hover:bg-white/88"
-              >
-                {user ? t.header.dashboard : t.footer.cta}
-              </Link>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href={user ? "/issues" : "/login"}
+              className={headerButtonClassName("solid", "dark")}
+            >
+              {user ? t.header.dashboard : t.footer.cta}
+            </Link>
+            <Link
+              href={githubUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={headerButtonClassName("ghost", "dark")}
+            >
+              <GitHubMark className="size-4" />
+              {t.footer.links.github}
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-8 flex flex-col gap-4 border-t border-white/8 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <nav className="flex flex-wrap items-center gap-5 text-[14px] text-white/58">
+            <Link href="/about" className="transition-colors hover:text-white">
+              {t.footer.links.about}
+            </Link>
+            <Link
+              href="/changelog"
+              className="transition-colors hover:text-white"
+            >
+              {t.footer.links.changelog}
+            </Link>
+            <Link
+              href={githubUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="transition-colors hover:text-white"
+            >
+              {t.footer.links.github}
+            </Link>
+          </nav>
+
+          <div className="flex items-center gap-5">
+            <p className="text-[13px] text-white/34">
+              {t.footer.copyright.replace(
+                "{year}",
+                String(new Date().getFullYear()),
+              )}
+            </p>
+            <div className="flex items-center rounded-full border border-white/10 bg-white/[0.04] p-1">
+              {locales.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setLocale(value)}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors",
+                    value === locale
+                      ? "bg-white text-[#05070b]"
+                      : "text-white/42 hover:text-white/72",
+                  )}
+                >
+                  {localeLabels[value]}
+                </button>
+              ))}
             </div>
-          </div>
-
-          {/* Right — link columns */}
-          <div className="grid flex-1 grid-cols-2 gap-8 sm:grid-cols-4">
-            {groups.map((group) => (
-              <div key={group.label}>
-                <h4 className="text-[12px] font-semibold uppercase tracking-[0.1em] text-white/40">
-                  {group.label}
-                </h4>
-                <ul className="mt-4 flex flex-col gap-2.5">
-                  {group.links.map((link) => (
-                    <li key={link.label}>
-                      <Link
-                        href={link.href}
-                        {...(link.href.startsWith("http")
-                          ? { target: "_blank", rel: "noreferrer" }
-                          : {})}
-                        className="text-[14px] text-white/50 transition-colors hover:text-white"
-                      >
-                        {link.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Bottom: copyright + language switcher */}
-        <div className="flex items-center justify-between py-6">
-          <p className="text-[13px] text-white/36">
-            {t.footer.copyright.replace(
-              "{year}",
-              String(new Date().getFullYear()),
-            )}
-          </p>
-          <div className="flex items-center">
-            {locales.map((l, i) => (
-              <button
-                key={l}
-                onClick={() => setLocale(l)}
-                className={cn(
-                  "px-1.5 py-1 text-[12px] font-medium transition-colors",
-                  l === locale
-                    ? "text-white/70"
-                    : "text-white/30 hover:text-white/50",
-                  i > 0 && "border-l border-white/16",
-                )}
-              >
-                {localeLabels[l]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Giant logo */}
-        <div className="relative overflow-hidden pb-4">
-          <div className="flex items-end gap-6 sm:gap-8">
-            <AgentraIcon
-              className="size-[clamp(4rem,12vw,10rem)] shrink-0 text-white"
-              noSpin
-            />
-            <span className="font-[family-name:var(--font-serif)] text-[clamp(6rem,22vw,16rem)] font-normal leading-[0.82] tracking-[-0.04em] text-white lowercase">
-              agentra
-            </span>
           </div>
         </div>
       </div>

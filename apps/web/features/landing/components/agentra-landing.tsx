@@ -1,27 +1,16 @@
 "use client";
 
 import { LandingHeader } from "./landing-header";
-import { LandingHero } from "./landing-hero";
-import { WhyAgentraSection } from "./why-agentra-section";
-import { FeaturesSection } from "./features-section";
-import { HowItWorksSection } from "./how-it-works-section";
-import { OpenSourceSection } from "./open-source-section";
-import { FAQSection } from "./faq-section";
 import { LandingFooter } from "./landing-footer";
+import { LandingTheater } from "./landing-theater";
 
 export function AgentraLanding() {
   return (
     <>
       <div className="relative">
         <LandingHeader />
-        <LandingHero />
+        <LandingTheater />
       </div>
-
-      <WhyAgentraSection />
-      <FeaturesSection />
-      <HowItWorksSection />
-      <OpenSourceSection />
-      <FAQSection />
       <LandingFooter />
     </>
   );

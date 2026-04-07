@@ -6,6 +6,88 @@ export const zh: LandingDict = {
     dashboard: "\u8fdb\u5165\u5de5\u4f5c\u53f0",
   },
 
+  theater: {
+    kicker: "\u4efb\u52a1\u6267\u884c\u5267\u573a",
+    headlineLine1: "\u770b\u4e00\u4e2a\u4efb\u52a1\u5982\u4f55\u5728 Agentra \u91cc",
+    headlineLine2: "\u4ece\u610f\u56fe\u8d70\u5230\u53ef\u4ea4\u4ed8\u7ed3\u679c\u3002",
+    description:
+      "Agentra \u628a\u6574\u4e2a\u6267\u884c\u95ed\u73af\u653e\u5728\u540c\u4e00\u4e2a\u754c\u9762\u91cc\uff1a\u5de5\u4f5c\u8fdb\u6765\u4e00\u6b21\uff0c\u7531\u5408\u9002\u7684 runtime \u63a5\u624b\uff0c\u7531 skill \u586b\u5145\u80fd\u529b\uff0c\u7ed3\u679c\u518d\u6c89\u6dc0\u6210\u4e0b\u4e00\u6b21\u6267\u884c\u7684\u57fa\u7840\u3002",
+    primaryCta: "\u8fdb\u5165\u5de5\u4f5c\u53f0",
+    secondaryCta: "\u67e5\u770b GitHub",
+    worksWith: "\u8fd0\u884c\u4e8e",
+    stepLabel: "\u5de5\u4f5c\u95ed\u73af",
+    liveLabel: "\u5b9e\u65f6\u72b6\u6001",
+    sceneAriaLabel:
+      "Agentra \u4e94\u4e2a\u6267\u884c\u9636\u6bb5\u7684\u52a8\u753b\u5de5\u4f5c\u6d41\u770b\u677f",
+    proofChips: [
+      "\u4eba\u548c Agent \u5171\u7528\u4e00\u4e2a\u64cd\u4f5c\u9762",
+      "\u672c\u5730\u4e0e\u4e91\u7aef runtime \u7edf\u4e00\u7ba1\u7406",
+      "Skill \u968f\u6bcf\u6b21\u6210\u529f\u6267\u884c\u7ee7\u7eed\u590d\u5229",
+    ],
+    steps: [
+      {
+        id: "capture",
+        label: "\u6355\u83b7",
+        title: "\u5148\u6355\u83b7\u771f\u5b9e\u5de5\u4f5c",
+        description:
+          "\u4ece issue\u3001\u9700\u6c42\u6216\u7ebf\u4e0a\u4fe1\u53f7\u5f00\u59cb\u3002\u5728 Agent \u5f00\u59cb\u4e4b\u524d\uff0c\u4e0a\u4e0b\u6587\u3001owner \u548c\u9a8c\u6536\u6807\u51c6\u5c31\u5df2\u7ecf\u51c6\u5907\u597d\u3002",
+        statusLabel: "\u72b6\u6001",
+        statusValue: "\u5df2\u5b8c\u6210\u5206\u8bca",
+        resultLabel: "\u8f93\u5165",
+        resultValue: "\u4efb\u52a1\u7b80\u62a5\u3001\u4ed3\u5e93\u3001\u9a8c\u6536\u6761\u4ef6",
+        meta: "\u65b0\u5de5\u4f5c\u8fdb\u5165\u5171\u4eab\u961f\u5217\uff0c\u800c\u4e0d\u662f\u843d\u5728\u67d0\u4e2a\u79c1\u6709 prompt \u6807\u7b7e\u9875\u91cc\u3002",
+      },
+      {
+        id: "assign",
+        label: "\u6307\u6d3e",
+        title: "\u8def\u7531\u5230\u5408\u9002\u7684 runtime",
+        description:
+          "\u4e3a\u4efb\u52a1\u9009\u62e9\u5408\u9002\u7684 agent\u3001provider \u548c\u5de5\u4f5c\u533a runtime\u3002\u540c\u4e00\u4e2a\u754c\u9762\u540c\u65f6\u7ba1\u4eba\u3001\u672c\u5730 daemon \u548c\u4e91\u7aef runner\u3002",
+        statusLabel: "\u72b6\u6001",
+        statusValue: "\u5df2\u5339\u914d runtime",
+        resultLabel: "\u8f93\u5165",
+        resultValue: "Agent\u3001provider\u3001\u6743\u9650\u4e0a\u4e0b\u6587",
+        meta: "\u4ece\u6b63\u786e\u7684\u673a\u5668\u548c\u6b63\u786e\u7684\u6267\u884c\u8eab\u4efd\u5f00\u59cb\u8fd0\u884c\u3002",
+      },
+      {
+        id: "execute",
+        label: "\u6267\u884c",
+        title: "\u5728\u6d41\u5f0f\u53ef\u89c1\u6027\u4e2d\u8fd0\u884c",
+        description:
+          "\u4efb\u52a1\u88ab claim \u540e\u5f00\u59cb\u8c03\u7528\u5de5\u5177\u5e76\u6301\u7eed\u63a8\u9001\u8fdb\u5ea6\u3002\u4f60\u53ef\u4ee5\u770b\u5230 run\u3001\u68c0\u67e5 blocker\uff0c\u4e0d\u9700\u8981\u518d\u624b\u52a8 polling\u3002",
+        statusLabel: "\u72b6\u6001",
+        statusValue: "\u6b63\u5728\u5b9e\u65f6\u6d41\u5f0f\u6267\u884c",
+        resultLabel: "\u8f93\u51fa",
+        resultValue: "\u65e5\u5fd7\u3001tool calls\u3001blocker \u4fe1\u53f7",
+        meta: "\u6bcf\u4e00\u6b21\u72b6\u6001\u5207\u6362\u90fd\u53ef\u89c1\uff0cruntime \u7684\u5065\u5eb7\u72b6\u6001\u4e5f\u4f1a\u540c\u6b65\u66f4\u65b0\u3002",
+      },
+      {
+        id: "review",
+        label: "\u8bc4\u5ba1",
+        title: "\u5728\u4e0a\u4e0b\u6587\u91cc\u5b8c\u6210\u8bc4\u5ba1",
+        description:
+          "\u8f93\u51fa\u4ee5\u8bc4\u8bba\u3001\u72b6\u6001\u53d8\u66f4\u548c\u540e\u7eed\u4efb\u52a1\u7684\u5f62\u5f0f\u56de\u5230\u5de5\u4f5c\u533a\uff0c\u4eba\u53ef\u4ee5\u5728\u540c\u4e00\u6761\u64cd\u4f5c\u7ebf\u91cc\u5b8c\u6210 review\u3002",
+        statusLabel: "\u72b6\u6001",
+        statusValue: "\u5f85\u4eba\u5de5\u8bc4\u5ba1",
+        resultLabel: "\u8f93\u51fa",
+        resultValue: "\u4ee3\u7801 diff\u3001\u603b\u7ed3\u3001\u540e\u7eed\u4efb\u52a1",
+        meta: "\u8bc4\u5ba1\u5c31\u53d1\u751f\u5728\u4efb\u52a1\u6240\u5728\u7684\u5730\u65b9\uff0c\u4e0d\u518d\u4f9d\u8d56\u5272\u88c2\u7684\u7ec8\u7aef\u65e5\u5fd7\u3002",
+      },
+      {
+        id: "compound",
+        label: "\u590d\u5229",
+        title: "\u628a\u6210\u529f\u6c89\u6dc0\u4e3a\u53ef\u590d\u7528\u80fd\u529b",
+        description:
+          "\u6210\u529f\u7684 run \u53ef\u4ee5\u56fa\u5316\u4e3a reusable skills \u548c\u53ef\u4fe1\u7684 runtime \u6a21\u5f0f\uff0c\u8ba9\u4e0b\u4e00\u4e2a\u4efb\u52a1\u4ece\u66f4\u9ad8\u7684\u57fa\u7ebf\u5f00\u59cb\u3002",
+        statusLabel: "\u72b6\u6001",
+        statusValue: "\u5df2\u6c89\u6dc0\u4e3a skill",
+        resultLabel: "\u8f93\u51fa",
+        resultValue: "\u53ef\u590d\u7528 workflow\u3001\u53ef\u6301\u7eed\u7684 team memory",
+        meta: "\u7cfb\u7edf\u4f1a\u968f\u4f7f\u7528\u53d8\u5f97\u66f4\u5f3a\uff0c\u800c\u4e0d\u662f\u6bcf\u6b21\u4ece\u96f6\u5f00\u59cb\u3002",
+      },
+    ],
+  },
+
   hero: {
     kicker: "AI \u4eba\u673a\u534f\u4f5c\u63a7\u5236\u53f0",
     headlineLine1: "\u5728\u4e00\u4e2a\u5de5\u4f5c\u533a\u91cc",
@@ -232,32 +314,12 @@ export const zh: LandingDict = {
 
   footer: {
     tagline:
-      "\u4eba\u7c7b + Agent \u56e2\u961f\u7684\u9879\u76ee\u7ba1\u7406\u3002\u5f00\u6e90\u3001\u53ef\u81ea\u6258\u7ba1\u3001\u4e3a\u672a\u6765\u7684\u5de5\u4f5c\u65b9\u5f0f\u800c\u5efa\u3002",
-    cta: "\u5f00\u59cb\u4f7f\u7528",
-    groups: {
-      product: {
-        label: "\u4ea7\u54c1",
-        links: [
-          { label: "\u529f\u80fd\u7279\u6027", href: "#features" },
-          { label: "\u5982\u4f55\u5de5\u4f5c", href: "#how-it-works" },
-          { label: "\u66f4\u65b0\u65e5\u5fd7", href: "/changelog" },
-        ],
-      },
-      resources: {
-        label: "\u8d44\u6e90",
-        links: [
-          { label: "\u5e38\u89c1\u95ee\u9898", href: "#faq" },
-          { label: "\u5f00\u6e90", href: "#open-source" },
-          { label: "\u5173\u4e8e\u6211\u4eec", href: "/about" },
-        ],
-      },
-      company: {
-        label: "\u5173\u4e8e",
-        links: [
-          { label: "\u5173\u4e8e\u6211\u4eec", href: "/about" },
-          { label: "\u5f00\u6e90", href: "#open-source" },
-        ],
-      },
+      "\u9762\u5411\u7f16\u7801 Agent \u56e2\u961f\u7684\u5f00\u6e90\u63a7\u5236\u5c42\u3002",
+    cta: "\u8fdb\u5165\u5de5\u4f5c\u53f0",
+    links: {
+      about: "\u5173\u4e8e",
+      changelog: "\u66f4\u65b0\u65e5\u5fd7",
+      github: "GitHub",
     },
     copyright: "\u00a9 {year} Agentra. \u4fdd\u7559\u6240\u6709\u6743\u5229\u3002",
   },

@@ -6,6 +6,88 @@ export const en: LandingDict = {
     dashboard: "Dashboard",
   },
 
+  theater: {
+    kicker: "Agent Runtime Theater",
+    headlineLine1: "See one task move",
+    headlineLine2: "from intent to merged work.",
+    description:
+      "Agentra keeps the full execution loop visible. Work lands once, the right runtime picks it up, skills shape the run, and the outcome compounds into the next task.",
+    primaryCta: "Open workspace",
+    secondaryCta: "View GitHub",
+    worksWith: "Runs with",
+    stepLabel: "Workflow loop",
+    liveLabel: "Live state",
+    sceneAriaLabel:
+      "Animated workflow board showing how Agentra moves work through five stages",
+    proofChips: [
+      "One surface for humans and agents",
+      "Local and cloud runtimes",
+      "Reusable skills compound every run",
+    ],
+    steps: [
+      {
+        id: "capture",
+        label: "Capture",
+        title: "Capture real work",
+        description:
+          "Start from an issue, request, or production signal. Context, ownership, and acceptance criteria arrive before the agent run starts.",
+        statusLabel: "Status",
+        statusValue: "Issue triaged",
+        resultLabel: "Payload",
+        resultValue: "Brief, repo, acceptance criteria",
+        meta: "Fresh work lands in a shared queue instead of a private prompt tab.",
+      },
+      {
+        id: "assign",
+        label: "Assign",
+        title: "Route it to the right runtime",
+        description:
+          "Choose the agent, provider, and workspace runtime that fits the task. The same surface handles humans, local daemons, and cloud runners.",
+        statusLabel: "Status",
+        statusValue: "Runtime matched",
+        resultLabel: "Payload",
+        resultValue: "Agent, provider, permissions",
+        meta: "Execution starts with the right machine and the right teammate identity.",
+      },
+      {
+        id: "execute",
+        label: "Execute",
+        title: "Run with streamed execution",
+        description:
+          "The task is claimed, tools fire, and progress stays visible. You can watch the run, inspect blockers, and keep the timeline current without polling.",
+        statusLabel: "Status",
+        statusValue: "Streaming live",
+        resultLabel: "Payload",
+        resultValue: "Logs, tool calls, blocker signals",
+        meta: "Every transition is visible while the runtime stays online.",
+      },
+      {
+        id: "review",
+        label: "Review",
+        title: "Review the outcome in context",
+        description:
+          "Outputs return to the workspace as comments, status changes, and follow-up work. Humans review inside the same operational thread.",
+        statusLabel: "Status",
+        statusValue: "Ready for review",
+        resultLabel: "Payload",
+        resultValue: "Diff, summary, follow-ups",
+        meta: "Review happens where the task lives, not in a disconnected terminal log.",
+      },
+      {
+        id: "compound",
+        label: "Compound",
+        title: "Turn wins into reusable capability",
+        description:
+          "Successful runs become repeatable skills and trusted runtime patterns. Each completed task upgrades how the next one executes.",
+        statusLabel: "Status",
+        statusValue: "Skill captured",
+        resultLabel: "Payload",
+        resultValue: "Reusable workflow, durable memory",
+        meta: "The system gets sharper with use instead of resetting every session.",
+      },
+    ],
+  },
+
   hero: {
     kicker: "AI Workforce Control Plane",
     headlineLine1: "Run humans and agents",
@@ -232,32 +314,12 @@ export const en: LandingDict = {
 
   footer: {
     tagline:
-      "Project management for human + agent teams. Open source, self-hostable, built for the future of work.",
-    cta: "Get started",
-    groups: {
-      product: {
-        label: "Product",
-        links: [
-          { label: "Features", href: "#features" },
-          { label: "How it Works", href: "#how-it-works" },
-          { label: "Changelog", href: "/changelog" },
-        ],
-      },
-      resources: {
-        label: "Resources",
-        links: [
-          { label: "FAQ", href: "#faq" },
-          { label: "Open Source", href: "#open-source" },
-          { label: "About", href: "/about" },
-        ],
-      },
-      company: {
-        label: "Company",
-        links: [
-          { label: "About", href: "/about" },
-          { label: "Open Source", href: "#open-source" },
-        ],
-      },
+      "The open control plane for software teams running coding agents.",
+    cta: "Open workspace",
+    links: {
+      about: "About",
+      changelog: "Changelog",
+      github: "GitHub",
     },
     copyright: "\u00a9 {year} Agentra. All rights reserved.",
   },

@@ -14,13 +14,32 @@ type FeatureSection = {
   cards: { title: string; description: string }[];
 };
 
-type FooterGroup = {
-  label: string;
-  links: { label: string; href: string }[];
-};
-
 export type LandingDict = {
   header: { login: string; dashboard: string };
+  theater: {
+    kicker: string;
+    headlineLine1: string;
+    headlineLine2: string;
+    description: string;
+    primaryCta: string;
+    secondaryCta: string;
+    worksWith: string;
+    stepLabel: string;
+    liveLabel: string;
+    sceneAriaLabel: string;
+    proofChips: string[];
+    steps: {
+      id: string;
+      label: string;
+      title: string;
+      description: string;
+      statusLabel: string;
+      statusValue: string;
+      resultLabel: string;
+      resultValue: string;
+      meta: string;
+    }[];
+  };
   hero: {
     kicker: string;
     headlineLine1: string;
@@ -66,10 +85,10 @@ export type LandingDict = {
   footer: {
     tagline: string;
     cta: string;
-    groups: {
-      product: FooterGroup;
-      resources: FooterGroup;
-      company: FooterGroup;
+    links: {
+      about: string;
+      changelog: string;
+      github: string;
     };
     copyright: string;
   };
