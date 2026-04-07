@@ -179,13 +179,17 @@ func resolveServerURL(cmd *cobra.Command) string {
 	}
 	profile := resolveProfile(cmd)
 	cfg, err := cli.LoadCLIConfigForProfile(profile)
+	defaultServerURL := normalizeAPIBaseURL(daemon.DefaultServerURL)
 	if err != nil {
-		return normalizeAPIBaseURL(daemon.DefaultServerURL)
+		return defaultServerURL
 	}
 	if cfg.ServerURL != "" {
-		return normalizeAPIBaseURL(cfg.ServerURL)
+		normalized := normalizeAPIBaseURL(cfg.ServerURL)
+		if normalized != "https://api.agentra.ai" {
+			return normalized
+		}
 	}
-	return normalizeAPIBaseURL(daemon.DefaultServerURL)
+	return defaultServerURL
 }
 
 func normalizeAPIBaseURL(raw string) string {

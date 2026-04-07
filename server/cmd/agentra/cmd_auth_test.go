@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+
+	"github.com/agentra-ai/agentra/server/internal/cli"
 )
 
 // testCmd returns a minimal cobra.Command with the --profile persistent flag
@@ -44,6 +46,22 @@ func TestResolveAppURL(t *testing.T) {
 			t.Fatalf("resolveAppURL() = %q, want %q", got, "http://web.agentra.orb.local")
 		}
 	})
+
+	t.Run("ignores legacy production config", func(t *testing.T) {
+		t.Setenv("AGENTRA_APP_URL", "")
+		t.Setenv("FRONTEND_ORIGIN", "")
+		t.Setenv("HOME", t.TempDir())
+
+		if err := cli.SaveCLIConfigForProfile(cli.CLIConfig{
+			AppURL: "https://agentra.ai",
+		}, ""); err != nil {
+			t.Fatalf("SaveCLIConfigForProfile() error = %v", err)
+		}
+
+		if got := resolveAppURL(cmd); got != "http://web.agentra.orb.local" {
+			t.Fatalf("resolveAppURL() = %q, want %q", got, "http://web.agentra.orb.local")
+		}
+	})
 }
 
 func TestResolveServerURL(t *testing.T) {
@@ -52,6 +70,21 @@ func TestResolveServerURL(t *testing.T) {
 	t.Run("defaults to local OrbStack server", func(t *testing.T) {
 		t.Setenv("AGENTRA_SERVER_URL", "")
 		t.Setenv("HOME", t.TempDir())
+
+		if got := resolveServerURL(cmd); got != "http://server.agentra.orb.local" {
+			t.Fatalf("resolveServerURL() = %q, want %q", got, "http://server.agentra.orb.local")
+		}
+	})
+
+	t.Run("ignores legacy production config", func(t *testing.T) {
+		t.Setenv("AGENTRA_SERVER_URL", "")
+		t.Setenv("HOME", t.TempDir())
+
+		if err := cli.SaveCLIConfigForProfile(cli.CLIConfig{
+			ServerURL: "https://api.agentra.ai",
+		}, ""); err != nil {
+			t.Fatalf("SaveCLIConfigForProfile() error = %v", err)
+		}
 
 		if got := resolveServerURL(cmd); got != "http://server.agentra.orb.local" {
 			t.Fatalf("resolveServerURL() = %q, want %q", got, "http://server.agentra.orb.local")

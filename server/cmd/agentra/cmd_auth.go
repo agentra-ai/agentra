@@ -70,7 +70,10 @@ func resolveAppURL(cmd *cobra.Command) string {
 	profile := resolveProfile(cmd)
 	cfg, err := cli.LoadCLIConfigForProfile(profile)
 	if err == nil && cfg.AppURL != "" {
-		return strings.TrimRight(cfg.AppURL, "/")
+		normalized := strings.TrimRight(cfg.AppURL, "/")
+		if normalized != "https://agentra.ai" {
+			return normalized
+		}
 	}
 	return "http://web.agentra.orb.local"
 }
