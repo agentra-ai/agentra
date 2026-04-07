@@ -81,7 +81,7 @@ export function LandingTheater() {
       <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.06)_1px,transparent_1px)] [background-size:72px_72px] opacity-30" />
       <div className="absolute inset-x-0 top-0 h-px bg-white/12" />
 
-      <section className="relative mx-auto max-w-[1360px] px-4 pb-[4rem] pt-20 sm:px-6 sm:pb-16 sm:pt-24 lg:px-8 lg:pb-20">
+      <section className="relative mx-auto max-w-[1360px] px-4 pb-14 pt-16 sm:px-6 sm:pb-16 sm:pt-20 lg:px-8 lg:pb-[4.5rem]">
         <div className="grid gap-12 lg:grid-cols-[minmax(0,500px)_1fr] lg:items-center">
           <div className="relative z-10">
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-[12px] font-medium uppercase tracking-[0.12em] text-cyan-100/88 backdrop-blur">
@@ -147,16 +147,16 @@ export function LandingTheater() {
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.12),_transparent_34%)]" />
               <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),transparent)]" />
 
-              <div className="relative border-b border-white/8 px-5 py-4 sm:px-6">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="relative border-b border-white/8 px-5 py-3.5 sm:px-6">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <div className="text-[12px] font-medium uppercase tracking-[0.12em] text-white/38">
                       {t.theater.liveLabel}
                     </div>
-                    <div className="mt-2 text-[22px] font-semibold tracking-[-0.03em] text-white/94">
+                    <div className="mt-2 text-[20px] font-semibold tracking-[-0.03em] text-white/94">
                       {activeStep.title}
                     </div>
-                    <p className="mt-2 max-w-[38rem] text-[14px] leading-[1.7] text-white/58">
+                    <p className="mt-1.5 max-w-[38rem] text-[13px] leading-[1.65] text-white/56">
                       {activeStep.description}
                     </p>
                   </div>
@@ -169,32 +169,32 @@ export function LandingTheater() {
               </div>
 
               <div
-                className="relative grid gap-3 border-b border-white/8 px-5 py-4 sm:px-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_auto]"
+                className="relative grid gap-3 border-b border-white/8 px-5 py-3.5 sm:px-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_auto]"
                 aria-label={t.theater.sceneAriaLabel}
               >
-                <div className="rounded-[22px] border border-white/8 bg-white/[0.045] px-4 py-4 backdrop-blur-md">
+                <div className="rounded-[22px] border border-white/8 bg-white/[0.045] px-4 py-3.5 backdrop-blur-md">
                   <div className="text-[11px] uppercase tracking-[0.12em] text-white/38">
                     {t.theater.panelTaskLabel}
                   </div>
-                  <div className="mt-2 text-[17px] font-medium leading-[1.5] text-white/92">
+                  <div className="mt-2 text-[16px] font-medium leading-[1.45] text-white/92">
                     {t.theater.panelTaskValue}
                   </div>
                 </div>
 
-                <div className="rounded-[22px] border border-white/8 bg-white/[0.045] px-4 py-4 backdrop-blur-md">
+                <div className="rounded-[22px] border border-white/8 bg-white/[0.045] px-4 py-3.5 backdrop-blur-md">
                   <div className="text-[11px] uppercase tracking-[0.12em] text-white/38">
                     {t.theater.panelQueueLabel}
                   </div>
-                  <div className="mt-2 text-[15px] font-medium text-white/88">
+                  <div className="mt-2 text-[14px] font-medium text-white/88">
                     {t.theater.panelQueueValue}
                   </div>
                 </div>
 
-                <div className="rounded-[22px] border border-white/8 bg-white/[0.045] px-4 py-4 backdrop-blur-md">
+                <div className="rounded-[22px] border border-white/8 bg-white/[0.045] px-4 py-3.5 backdrop-blur-md">
                   <div className="text-[11px] uppercase tracking-[0.12em] text-white/38">
                     {t.theater.panelRuntimeLabel}
                   </div>
-                  <div className="mt-3 space-y-2 text-[13px] text-white/78">
+                  <div className="mt-2.5 space-y-1.5 text-[13px] text-white/78">
                     <div className="flex items-center gap-2">
                       <CodexLogo className="size-4 text-cyan-200" />
                       <span>codex</span>
@@ -207,13 +207,13 @@ export function LandingTheater() {
                 </div>
               </div>
 
-              <div className="relative px-5 py-5 sm:px-6 sm:py-6">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="relative px-5 py-4 sm:px-6 sm:py-[1.125rem]">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <div className="text-[12px] font-medium uppercase tracking-[0.12em] text-white/38">
                       {t.theater.cycleLabel}
                     </div>
-                    <p className="mt-2 max-w-[36rem] text-[14px] leading-[1.7] text-white/54">
+                    <p className="mt-1.5 max-w-[36rem] text-[13px] leading-[1.65] text-white/54">
                       {t.theater.cycleHint}
                     </p>
                   </div>
@@ -226,7 +226,7 @@ export function LandingTheater() {
                   </div>
                 </div>
 
-                <div className="relative mt-5 h-[320px] overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(5,10,22,0.86),rgba(4,8,18,0.96))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:h-[360px]">
+                <div className="relative mt-4 h-[260px] overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(5,10,22,0.86),rgba(4,8,18,0.96))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:h-[300px]">
                   <LandingProofScene activeIndex={activeIndex} />
 
                   {steps.map((step, index) => (
@@ -261,28 +261,6 @@ export function LandingTheater() {
                       {activeStep.nextAction}
                     </div>
                   </div>
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {steps.map((step, index) => (
-                    <button
-                      key={step.id}
-                      type="button"
-                      onClick={() => setActiveIndex(index)}
-                      className={cn(
-                        "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[12px] transition-all",
-                        activeIndex === index
-                          ? "border-cyan-300/35 bg-cyan-300/12 text-cyan-100"
-                          : "border-white/8 bg-white/[0.03] text-white/52 hover:border-white/14 hover:text-white/74",
-                      )}
-                      aria-pressed={activeIndex === index}
-                    >
-                      <span className="tabular-nums">
-                        {String(index + 1).padStart(2, "0")}
-                      </span>
-                      <span>{step.label}</span>
-                    </button>
-                  ))}
                 </div>
 
                 <div className="mt-4 grid gap-3 lg:grid-cols-3">
