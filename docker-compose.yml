@@ -1,4 +1,4 @@
-name: agentra-local
+name: agentra
 
 services:
   postgres:
