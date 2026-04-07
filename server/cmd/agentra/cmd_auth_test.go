@@ -40,8 +40,21 @@ func TestResolveAppURL(t *testing.T) {
 		t.Setenv("FRONTEND_ORIGIN", "")
 		t.Setenv("HOME", t.TempDir()) // avoid reading real config
 
-		if got := resolveAppURL(cmd); got != "https://agentra.ai" {
-			t.Fatalf("resolveAppURL() = %q, want %q", got, "https://agentra.ai")
+		if got := resolveAppURL(cmd); got != "http://localhost:3000" {
+			t.Fatalf("resolveAppURL() = %q, want %q", got, "http://localhost:3000")
+		}
+	})
+}
+
+func TestResolveServerURL(t *testing.T) {
+	cmd := testCmd()
+
+	t.Run("defaults to local daemon server", func(t *testing.T) {
+		t.Setenv("AGENTRA_SERVER_URL", "")
+		t.Setenv("HOME", t.TempDir())
+
+		if got := resolveServerURL(cmd); got != "http://localhost:8080" {
+			t.Fatalf("resolveServerURL() = %q, want %q", got, "http://localhost:8080")
 		}
 	})
 }
