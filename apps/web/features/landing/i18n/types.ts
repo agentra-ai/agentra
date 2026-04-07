@@ -26,6 +26,8 @@ export type LandingDict = {
     worksWith: string;
     stepLabel: string;
     liveLabel: string;
+    cycleLabel: string;
+    cycleHint: string;
     sceneAriaLabel: string;
     proofChips: string[];
     steps: {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, CheckCircle2, Orbit, Play } from "lucide-react";
+import { ArrowRight, CheckCircle2, Orbit, Play, Repeat2 } from "lucide-react";
 import { useAuthStore } from "@/features/auth";
 import { cn } from "@/lib/utils";
 import { useLocale } from "../i18n";
@@ -177,6 +177,60 @@ export function LandingTheater() {
                         <span>claude</span>
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                <div className="pointer-events-none absolute inset-x-4 bottom-[10.5rem] sm:inset-x-6 sm:bottom-[11.5rem]">
+                  <div className="rounded-[20px] border border-white/10 bg-black/32 px-4 py-3 backdrop-blur-md">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="inline-flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-white/44">
+                        <Repeat2 className="size-3.5" />
+                        <span>{t.theater.cycleLabel}</span>
+                      </div>
+                      <div className="text-[11px] font-medium tabular-nums text-white/42">
+                        {String(activeIndex + 1).padStart(2, "0")}/
+                        {String(steps.length).padStart(2, "0")}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center gap-1.5 overflow-hidden">
+                      {steps.map((step, index) => {
+                        const isActive = index === activeIndex;
+                        const isCompleted = index < activeIndex;
+
+                        return (
+                          <div
+                            key={step.id}
+                            className="flex min-w-0 flex-1 items-center gap-1.5"
+                          >
+                            <div
+                              className={cn(
+                                "flex min-w-0 flex-1 items-center gap-2 rounded-full border px-2.5 py-2 text-[11px] uppercase tracking-[0.1em] transition-all",
+                                isActive
+                                  ? "border-cyan-300/45 bg-cyan-300/14 text-cyan-100"
+                                  : isCompleted
+                                    ? "border-emerald-300/24 bg-emerald-300/10 text-emerald-100/82"
+                                    : "border-white/8 bg-white/[0.03] text-white/42",
+                              )}
+                            >
+                              <span className="shrink-0 tabular-nums">
+                                {String(index + 1).padStart(2, "0")}
+                              </span>
+                              <span className="truncate">{step.label}</span>
+                            </div>
+                            {index < steps.length - 1 ? (
+                              <ArrowRight className="size-3 shrink-0 text-white/26" />
+                            ) : (
+                              <Repeat2 className="size-3 shrink-0 text-cyan-200/68" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <p className="mt-2 text-[12px] leading-[1.6] text-white/46">
+                      {t.theater.cycleHint}
+                    </p>
                   </div>
                 </div>
 
