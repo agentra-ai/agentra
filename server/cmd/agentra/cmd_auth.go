@@ -72,7 +72,7 @@ func resolveAppURL(cmd *cobra.Command) string {
 	if err == nil && cfg.AppURL != "" {
 		return strings.TrimRight(cfg.AppURL, "/")
 	}
-	return "http://localhost:3000"
+	return "http://web.agentra.orb.local"
 }
 
 func openBrowser(url string) error {
