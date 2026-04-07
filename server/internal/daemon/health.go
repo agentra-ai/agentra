@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/agentra-ai/agentra/server/internal/cli"
 	"github.com/agentra-ai/agentra/server/internal/daemon/repocache"
 )
 
@@ -32,7 +33,7 @@ type healthWorkspace struct {
 // listenHealth binds the health port. Returns the listener or an error if
 // another daemon is already running (port taken).
 func (d *Daemon) listenHealth() (net.Listener, error) {
-	addr := fmt.Sprintf("127.0.0.1:%d", d.cfg.HealthPort)
+	addr := fmt.Sprintf("%s:%d", cli.ResolveLocalBindHost(), d.cfg.HealthPort)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("another daemon is already running on %s: %w", addr, err)

@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
 import { api } from "@/shared/api";
+import { getCliCallbackHosts } from "@/shared/env";
 import {
   Card,
   CardHeader,
@@ -27,7 +28,8 @@ function validateCliCallback(cliCallback: string): boolean {
   try {
     const cbUrl = new URL(cliCallback);
     if (cbUrl.protocol !== "http:") return false;
-    if (cbUrl.hostname !== "localhost" && cbUrl.hostname !== "127.0.0.1")
+    const allowedHosts = getCliCallbackHosts();
+    if (!allowedHosts.includes(cbUrl.hostname))
       return false;
     return true;
   } catch {

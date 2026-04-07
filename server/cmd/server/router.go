@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/agentra-ai/agentra/server/internal/auth"
+	"github.com/agentra-ai/agentra/server/internal/cli"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/handler"
 	"github.com/agentra-ai/agentra/server/internal/middleware"
@@ -28,7 +29,10 @@ func allowedOrigins() []string {
 		raw = strings.TrimSpace(os.Getenv("FRONTEND_ORIGIN"))
 	}
 	if raw == "" {
-		return []string{"http://localhost:3000"}
+		raw = cli.ResolveSiteURLFromEnv()
+	}
+	if raw == "" {
+		return []string{}
 	}
 
 	parts := strings.Split(raw, ",")
@@ -40,7 +44,7 @@ func allowedOrigins() []string {
 		}
 	}
 	if len(origins) == 0 {
-		return []string{"http://localhost:3000"}
+		return []string{}
 	}
 	return origins
 }

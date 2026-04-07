@@ -62,10 +62,8 @@ func resolveToken(cmd *cobra.Command) string {
 }
 
 func resolveAppURL(cmd *cobra.Command) string {
-	for _, key := range []string{"AGENTRA_APP_URL", "FRONTEND_ORIGIN"} {
-		if val := strings.TrimSpace(os.Getenv(key)); val != "" {
-			return strings.TrimRight(val, "/")
-		}
+	if siteURL := cli.ResolveSiteURLFromEnv(); siteURL != "" {
+		return siteURL
 	}
 	profile := resolveProfile(cmd)
 	cfg, err := cli.LoadCLIConfigForProfile(profile)
@@ -75,7 +73,7 @@ func resolveAppURL(cmd *cobra.Command) string {
 			return normalized
 		}
 	}
-	return "http://web.agentra.orb.local"
+	return ""
 }
 
 func openBrowser(url string) error {
@@ -108,16 +106,22 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 func runAuthLoginBrowser(cmd *cobra.Command) error {
 	serverURL := resolveServerURL(cmd)
 	appURL := resolveAppURL(cmd)
+	if serverURL == "" {
+		return fmt.Errorf("server URL not set: use --server-url, AGENTRA_SERVER_URL, or 'agentra config set server_url <url>'")
+	}
+	if appURL == "" {
+		return fmt.Errorf("app URL not set: use AGENTRA_APP_URL, FRONTEND_ORIGIN, NEXT_PUBLIC_SITE_URL, or 'agentra config set app_url <url>'")
+	}
 
 	// Start a local HTTP server on a random port to receive the callback.
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:0", cli.ResolveLocalBindHost()))
 	if err != nil {
 		return fmt.Errorf("failed to start local server: %w", err)
 	}
 	defer listener.Close()
 
 	port := listener.Addr().(*net.TCPAddr).Port
-	callbackURL := fmt.Sprintf("http://localhost:%d/callback", port)
+	callbackURL := fmt.Sprintf("http://%s:%d/callback", cli.ResolveLocalCallbackHost(), port)
 
 	// Generate a random state parameter for CSRF protection.
 	stateBytes := make([]byte, 16)

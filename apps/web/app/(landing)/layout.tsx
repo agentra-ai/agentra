@@ -1,8 +1,9 @@
 import { cookies, headers } from "next/headers";
 import { LocaleProvider } from "@/features/landing/i18n";
 import type { Locale } from "@/features/landing/i18n";
+import { getSiteUrl } from "@/shared/env";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const siteUrl = getSiteUrl();
 
 const jsonLd = {
   "@context": "https://schema.org",

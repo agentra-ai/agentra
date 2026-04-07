@@ -14,13 +14,13 @@ POSTGRES_PASSWORD ?= agentra
 POSTGRES_PORT ?= 5432
 PORT ?= 8080
 FRONTEND_PORT ?= 3000
-FRONTEND_ORIGIN ?= http://web.agentra.orb.local
+FRONTEND_ORIGIN ?=
 AGENTRA_APP_URL ?= $(FRONTEND_ORIGIN)
-DATABASE_URL ?= postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable
-NEXT_PUBLIC_API_URL ?= http://server.agentra.orb.local
-NEXT_PUBLIC_WS_URL ?= ws://server.agentra.orb.local/ws
+DATABASE_URL ?=
+NEXT_PUBLIC_API_URL ?=
+NEXT_PUBLIC_WS_URL ?=
 GOOGLE_REDIRECT_URI ?= $(FRONTEND_ORIGIN)/auth/callback
-AGENTRA_SERVER_URL ?= ws://server.agentra.orb.local/ws
+AGENTRA_SERVER_URL ?=
 
 export
 
@@ -54,8 +54,8 @@ setup:
 start:
 	$(REQUIRE_ENV)
 	@echo "Using env file: $(ENV_FILE)"
-	@echo "Backend: http://localhost:$(PORT)"
-	@echo "Frontend: http://localhost:$(FRONTEND_PORT)"
+	@echo "API: $(NEXT_PUBLIC_API_URL)"
+	@echo "Frontend: $(FRONTEND_ORIGIN)"
 	@bash scripts/ensure-postgres.sh "$(ENV_FILE)"
 	@echo "Starting backend and frontend..."
 	@trap 'kill 0' EXIT; \
@@ -69,7 +69,7 @@ stop:
 	@echo "Stopping services..."
 	@-lsof -ti:$(PORT) | xargs kill -9 2>/dev/null
 	@-lsof -ti:$(FRONTEND_PORT) | xargs kill -9 2>/dev/null
-	@echo "✓ App processes stopped. Shared PostgreSQL is still running on localhost:5432."
+	@echo "✓ App processes stopped. Shared PostgreSQL is still running."
 
 # Full verification: typecheck + unit tests + Go tests + E2E
 check:

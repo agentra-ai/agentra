@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	DefaultServerURL             = "ws://server.agentra.orb.local/ws"
 	DefaultPollInterval          = 3 * time.Second
 	DefaultHeartbeatInterval     = 15 * time.Second
 	DefaultAgentTimeout          = 2 * time.Hour
@@ -60,9 +59,12 @@ type Overrides struct {
 // and optional CLI flag overrides.
 func LoadConfig(overrides Overrides) (Config, error) {
 	// Server URL: override > env > default
-	rawServerURL := envOrDefault("AGENTRA_SERVER_URL", DefaultServerURL)
+	rawServerURL := strings.TrimSpace(os.Getenv("AGENTRA_SERVER_URL"))
 	if overrides.ServerURL != "" {
 		rawServerURL = overrides.ServerURL
+	}
+	if rawServerURL == "" {
+		return Config{}, fmt.Errorf("AGENTRA_SERVER_URL is required")
 	}
 	serverBaseURL, err := NormalizeServerBaseURL(rawServerURL)
 	if err != nil {

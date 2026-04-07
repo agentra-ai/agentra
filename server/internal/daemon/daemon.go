@@ -896,13 +896,14 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 	// Pass the daemon's auth credentials and context so the spawned agent CLI
 	// can call the Agentra API and the local daemon (e.g. `agentra repo checkout`).
 	agentEnv := map[string]string{
-		"AGENTRA_TOKEN":        d.client.Token(),
-		"AGENTRA_SERVER_URL":   d.cfg.ServerBaseURL,
-		"AGENTRA_DAEMON_PORT":  fmt.Sprintf("%d", d.cfg.HealthPort),
-		"AGENTRA_WORKSPACE_ID": task.WorkspaceID,
-		"AGENTRA_AGENT_NAME":   agentName,
-		"AGENTRA_AGENT_ID":     task.AgentID,
-		"AGENTRA_TASK_ID":      task.ID,
+		"AGENTRA_TOKEN":           d.client.Token(),
+		"AGENTRA_SERVER_URL":      d.cfg.ServerBaseURL,
+		"AGENTRA_DAEMON_PORT":     fmt.Sprintf("%d", d.cfg.HealthPort),
+		"AGENTRA_DAEMON_BASE_URL": cli.ResolveLocalDaemonBaseURL(fmt.Sprintf("%d", d.cfg.HealthPort)),
+		"AGENTRA_WORKSPACE_ID":    task.WorkspaceID,
+		"AGENTRA_AGENT_NAME":      agentName,
+		"AGENTRA_AGENT_ID":        task.AgentID,
+		"AGENTRA_TASK_ID":         task.ID,
 	}
 	// Point Codex to the per-task CODEX_HOME so it discovers skills natively
 	// without polluting the system ~/.codex/skills/.

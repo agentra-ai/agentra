@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils";
 import { AuthInitializer } from "@/features/auth";
 import { WSProvider } from "@/features/realtime";
 import { ModalRegistry } from "@/features/modals";
+import { getSiteUrl } from "@/shared/env";
 import "./globals.css";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const siteUrl = getSiteUrl();
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -20,7 +21,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: siteUrl ? new URL(siteUrl) : undefined,
   title: {
     default: "Agentra — AI-Native Task Management",
     template: "%s | Agentra",

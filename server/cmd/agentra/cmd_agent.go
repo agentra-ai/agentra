@@ -179,9 +179,8 @@ func resolveServerURL(cmd *cobra.Command) string {
 	}
 	profile := resolveProfile(cmd)
 	cfg, err := cli.LoadCLIConfigForProfile(profile)
-	defaultServerURL := normalizeAPIBaseURL(daemon.DefaultServerURL)
 	if err != nil {
-		return defaultServerURL
+		return ""
 	}
 	if cfg.ServerURL != "" {
 		normalized := normalizeAPIBaseURL(cfg.ServerURL)
@@ -189,7 +188,7 @@ func resolveServerURL(cmd *cobra.Command) string {
 			return normalized
 		}
 	}
-	return defaultServerURL
+	return ""
 }
 
 func normalizeAPIBaseURL(raw string) string {

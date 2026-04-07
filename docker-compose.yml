@@ -27,8 +27,6 @@ services:
       target: server-runtime
     env_file:
       - .env
-    environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-agentra}:${POSTGRES_PASSWORD:-agentra}@postgres:5432/${POSTGRES_DB:-agentra}?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,17 +42,16 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-agentra}:${POSTGRES_PASSWORD:-agentra}@postgres:5432/${POSTGRES_DB:-agentra}?sslmode=disable
-      PORT: 8080
+      PORT: ${SERVER_INTERNAL_PORT}
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
     ports:
-      - "${PORT:-8080}:8080"
+      - "${PORT}:${SERVER_INTERNAL_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - ${SERVER_HEALTHCHECK_URL} >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -67,15 +64,15 @@ services:
       context: .
       target: web-runtime
       args:
-        REMOTE_API_URL: http://server:8080
+        REMOTE_API_URL: ${REMOTE_API_URL}
     environment:
-      HOSTNAME: 0.0.0.0
-      PORT: 3000
+      HOSTNAME: ${WEB_HOSTNAME}
+      PORT: ${WEB_INTERNAL_PORT}
     depends_on:
       server:
         condition: service_healthy
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_PORT}:${WEB_INTERNAL_PORT}"
     restart: unless-stopped
 
 volumes:

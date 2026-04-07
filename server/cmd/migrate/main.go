@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/agentra-ai/agentra/server/internal/logger"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -29,7 +29,8 @@ func main() {
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://agentra:agentra@localhost:5432/agentra?sslmode=disable"
+		slog.Error("DATABASE_URL is required")
+		os.Exit(1)
 	}
 
 	ctx := context.Background()

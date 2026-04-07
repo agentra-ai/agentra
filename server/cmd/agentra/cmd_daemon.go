@@ -452,7 +452,7 @@ func runDaemonLogs(cmd *cobra.Command, _ []string) error {
 
 // checkDaemonHealthOnPort calls the daemon's local health endpoint on the given port.
 func checkDaemonHealthOnPort(ctx context.Context, port int) map[string]any {
-	addr := fmt.Sprintf("http://127.0.0.1:%d/health", port)
+	addr := fmt.Sprintf("%s/health", cli.ResolveLocalDaemonBaseURL(strconv.Itoa(port)))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, addr, nil)
 	if err != nil {
 		return map[string]any{"status": "stopped"}

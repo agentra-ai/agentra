@@ -19,7 +19,18 @@ func testCmd() *cobra.Command {
 func TestResolveAppURL(t *testing.T) {
 	cmd := testCmd()
 
+	t.Run("prefers NEXT_PUBLIC_SITE_URL", func(t *testing.T) {
+		t.Setenv("NEXT_PUBLIC_SITE_URL", "http://env.example")
+		t.Setenv("AGENTRA_APP_URL", "http://localhost:14000")
+		t.Setenv("FRONTEND_ORIGIN", "http://localhost:13000")
+
+		if got := resolveAppURL(cmd); got != "http://env.example" {
+			t.Fatalf("resolveAppURL() = %q, want %q", got, "http://env.example")
+		}
+	})
+
 	t.Run("prefers AGENTRA_APP_URL", func(t *testing.T) {
+		t.Setenv("NEXT_PUBLIC_SITE_URL", "")
 		t.Setenv("AGENTRA_APP_URL", "http://localhost:14000")
 		t.Setenv("FRONTEND_ORIGIN", "http://localhost:13000")
 
@@ -29,6 +40,7 @@ func TestResolveAppURL(t *testing.T) {
 	})
 
 	t.Run("falls back to FRONTEND_ORIGIN", func(t *testing.T) {
+		t.Setenv("NEXT_PUBLIC_SITE_URL", "")
 		t.Setenv("AGENTRA_APP_URL", "")
 		t.Setenv("FRONTEND_ORIGIN", "http://localhost:13026")
 
@@ -37,17 +49,19 @@ func TestResolveAppURL(t *testing.T) {
 		}
 	})
 
-	t.Run("defaults to local OrbStack web", func(t *testing.T) {
+	t.Run("returns empty when nothing is configured", func(t *testing.T) {
+		t.Setenv("NEXT_PUBLIC_SITE_URL", "")
 		t.Setenv("AGENTRA_APP_URL", "")
 		t.Setenv("FRONTEND_ORIGIN", "")
 		t.Setenv("HOME", t.TempDir()) // avoid reading real config
 
-		if got := resolveAppURL(cmd); got != "http://web.agentra.orb.local" {
-			t.Fatalf("resolveAppURL() = %q, want %q", got, "http://web.agentra.orb.local")
+		if got := resolveAppURL(cmd); got != "" {
+			t.Fatalf("resolveAppURL() = %q, want empty string", got)
 		}
 	})
 
 	t.Run("ignores legacy production config", func(t *testing.T) {
+		t.Setenv("NEXT_PUBLIC_SITE_URL", "")
 		t.Setenv("AGENTRA_APP_URL", "")
 		t.Setenv("FRONTEND_ORIGIN", "")
 		t.Setenv("HOME", t.TempDir())
@@ -58,8 +72,8 @@ func TestResolveAppURL(t *testing.T) {
 			t.Fatalf("SaveCLIConfigForProfile() error = %v", err)
 		}
 
-		if got := resolveAppURL(cmd); got != "http://web.agentra.orb.local" {
-			t.Fatalf("resolveAppURL() = %q, want %q", got, "http://web.agentra.orb.local")
+		if got := resolveAppURL(cmd); got != "" {
+			t.Fatalf("resolveAppURL() = %q, want empty string", got)
 		}
 	})
 }
@@ -67,12 +81,12 @@ func TestResolveAppURL(t *testing.T) {
 func TestResolveServerURL(t *testing.T) {
 	cmd := testCmd()
 
-	t.Run("defaults to local OrbStack server", func(t *testing.T) {
+	t.Run("returns empty when nothing is configured", func(t *testing.T) {
 		t.Setenv("AGENTRA_SERVER_URL", "")
 		t.Setenv("HOME", t.TempDir())
 
-		if got := resolveServerURL(cmd); got != "http://server.agentra.orb.local" {
-			t.Fatalf("resolveServerURL() = %q, want %q", got, "http://server.agentra.orb.local")
+		if got := resolveServerURL(cmd); got != "" {
+			t.Fatalf("resolveServerURL() = %q, want empty string", got)
 		}
 	})
 
@@ -86,8 +100,8 @@ func TestResolveServerURL(t *testing.T) {
 			t.Fatalf("SaveCLIConfigForProfile() error = %v", err)
 		}
 
-		if got := resolveServerURL(cmd); got != "http://server.agentra.orb.local" {
-			t.Fatalf("resolveServerURL() = %q, want %q", got, "http://server.agentra.orb.local")
+		if got := resolveServerURL(cmd); got != "" {
+			t.Fatalf("resolveServerURL() = %q, want empty string", got)
 		}
 	})
 }

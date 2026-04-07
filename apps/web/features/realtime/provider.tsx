@@ -16,11 +16,16 @@ import { useWorkspaceStore } from "@/features/workspace";
 import { createLogger } from "@/shared/logger";
 import { useRealtimeSync } from "./use-realtime-sync";
 
-const WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL ||
-  (typeof window !== "undefined"
-    ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`
-    : "ws://localhost:8080/ws");
+function resolveWsUrl() {
+  const configured = process.env.NEXT_PUBLIC_WS_URL?.trim();
+  if (configured) {
+    return configured;
+  }
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
+}
 
 type EventHandler = (payload: unknown) => void;
 
@@ -43,7 +48,10 @@ export function WSProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem("agentra_token");
     if (!token) return;
 
-    const ws = new WSClient(WS_URL, { logger: createLogger("ws") });
+    const wsUrl = resolveWsUrl();
+    if (!wsUrl) return;
+
+    const ws = new WSClient(wsUrl, { logger: createLogger("ws") });
     ws.setAuth(token, workspace.id);
     wsRef.current = ws;
     setWsClient(ws);

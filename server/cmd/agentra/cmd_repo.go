@@ -7,9 +7,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/agentra-ai/agentra/server/internal/cli"
 )
 
 var repoCmd = &cobra.Command{
@@ -32,9 +35,13 @@ func init() {
 func runRepoCheckout(cmd *cobra.Command, args []string) error {
 	repoURL := args[0]
 
-	daemonPort := os.Getenv("AGENTRA_DAEMON_PORT")
-	if daemonPort == "" {
-		return fmt.Errorf("AGENTRA_DAEMON_PORT not set (this command is intended to be run by an agent inside a daemon task)")
+	daemonBaseURL := strings.TrimSpace(os.Getenv("AGENTRA_DAEMON_BASE_URL"))
+	if daemonBaseURL == "" {
+		daemonPort := os.Getenv("AGENTRA_DAEMON_PORT")
+		if daemonPort == "" {
+			return fmt.Errorf("AGENTRA_DAEMON_BASE_URL or AGENTRA_DAEMON_PORT must be set (this command is intended to be run by an agent inside a daemon task)")
+		}
+		daemonBaseURL = cli.ResolveLocalDaemonBaseURL(daemonPort)
 	}
 
 	workspaceID := os.Getenv("AGENTRA_WORKSPACE_ID")
@@ -62,7 +69,7 @@ func runRepoCheckout(cmd *cobra.Command, args []string) error {
 
 	client := &http.Client{Timeout: 5 * time.Minute}
 	resp, err := client.Post(
-		fmt.Sprintf("http://127.0.0.1:%s/repo/checkout", daemonPort),
+		fmt.Sprintf("%s/repo/checkout", strings.TrimRight(daemonBaseURL, "/")),
 		"application/json",
 		bytes.NewReader(data),
 	)

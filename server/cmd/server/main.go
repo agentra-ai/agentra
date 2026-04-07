@@ -22,12 +22,14 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		slog.Error("PORT is required")
+		os.Exit(1)
 	}
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://agentra:agentra@localhost:5432/agentra?sslmode=disable"
+		slog.Error("DATABASE_URL is required")
+		os.Exit(1)
 	}
 
 	// Connect to database

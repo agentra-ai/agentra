@@ -1,11 +1,12 @@
 import type { NextConfig } from "next";
 import { config } from "dotenv";
 import { resolve } from "path";
+import { getRemoteApiUrl } from "./shared/env";
 
 // Load root .env so REMOTE_API_URL is available to next.config.ts
 config({ path: resolve(__dirname, "../../.env") });
 
-const remoteApiUrl = process.env.REMOTE_API_URL || "http://localhost:8080";
+const remoteApiUrl = getRemoteApiUrl();
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -14,6 +15,9 @@ const nextConfig: NextConfig = {
     qualities: [75, 80, 85],
   },
   async rewrites() {
+    if (!remoteApiUrl) {
+      return [];
+    }
     return [
       {
         source: "/api/:path*",
