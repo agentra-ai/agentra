@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
 const STEP_POINTS = [
@@ -24,6 +24,7 @@ export function LandingFlowScene({
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const activeIndexRef = useRef(activeIndex);
+  const [renderMode, setRenderMode] = useState<"webgl" | "fallback">("webgl");
 
   useEffect(() => {
     activeIndexRef.current = activeIndex;
@@ -35,14 +36,31 @@ export function LandingFlowScene({
       return;
     }
 
+    const probeCanvas = document.createElement("canvas");
+    const probeContext =
+      probeCanvas.getContext("webgl2") ?? probeCanvas.getContext("webgl");
+    if (!probeContext) {
+      setRenderMode("fallback");
+      return;
+    }
+
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x04070c, 10, 22);
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      powerPreference: "high-performance",
-    });
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: "high-performance",
+      });
+    } catch (error) {
+      console.warn("LandingFlowScene fallback:", error);
+      setRenderMode("fallback");
+      return;
+    }
+
+    setRenderMode("webgl");
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     mountNode.appendChild(renderer.domElement);
@@ -302,5 +320,64 @@ export function LandingFlowScene({
     };
   }, []);
 
-  return <div ref={mountRef} className="size-full" aria-hidden="true" />;
+  return (
+    <div ref={mountRef} className="relative size-full" aria-hidden="true">
+      {renderMode === "fallback" ? (
+        <div className="absolute inset-0 overflow-hidden rounded-[24px] bg-[radial-gradient(circle_at_20%_20%,rgba(56,189,248,0.18),transparent_28%),radial-gradient(circle_at_78%_30%,rgba(245,158,11,0.16),transparent_24%),linear-gradient(180deg,rgba(8,16,25,0.92),rgba(3,7,18,0.96))]">
+          <div className="absolute inset-x-[10%] top-[14%] h-[68%] rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02))] shadow-[0_28px_90px_rgba(2,6,23,0.55)] [transform:perspective(1200px)_rotateX(60deg)_rotateZ(-12deg)]" />
+
+          <div className="absolute inset-x-[13%] top-[20%] h-[54%] rounded-[24px] border border-cyan-200/8">
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(125,211,252,0.08)_1px,transparent_1px),linear-gradient(180deg,rgba(125,211,252,0.06)_1px,transparent_1px)] bg-[size:20%_25%]" />
+          </div>
+
+          {[
+            { left: "16%", top: "48%" },
+            { left: "31%", top: "31%" },
+            { left: "49%", top: "44%" },
+            { left: "66%", top: "28%" },
+            { left: "82%", top: "46%" },
+          ].map((point, index) => {
+            const isActive = index === activeIndex;
+            return (
+              <div
+                key={`${point.left}-${point.top}`}
+                className="absolute"
+                style={{ left: point.left, top: point.top }}
+              >
+                <div
+                  className={
+                    isActive
+                      ? "absolute left-1/2 top-1/2 size-12 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-200/25 bg-cyan-300/12 animate-ping"
+                      : "absolute left-1/2 top-1/2 size-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8 bg-white/[0.04]"
+                  }
+                />
+                <div
+                  className={
+                    isActive
+                      ? "relative size-4 rounded-full bg-cyan-200 shadow-[0_0_28px_rgba(103,232,249,0.9)]"
+                      : "relative size-3.5 rounded-full bg-white/65"
+                  }
+                />
+              </div>
+            );
+          })}
+
+          <div className="absolute left-[18%] top-[47%] h-[2px] w-[64%] origin-left bg-[linear-gradient(90deg,rgba(34,211,238,0.55),rgba(245,158,11,0.45))] [transform:rotate(-9deg)]" />
+          <div className="absolute left-[30%] top-[33%] h-[2px] w-[40%] origin-left bg-[linear-gradient(90deg,rgba(34,211,238,0.35),rgba(125,211,252,0.22))] [transform:rotate(12deg)]" />
+
+          <div
+            className="absolute size-14 rounded-[16px] border border-amber-200/25 bg-white/90 shadow-[0_18px_50px_rgba(245,158,11,0.24)] transition-all duration-700"
+            style={{
+              left: ["14%", "28%", "46%", "63%", "78%"][activeIndex] ?? "14%",
+              top: ["54%", "38%", "49%", "35%", "52%"][activeIndex] ?? "54%",
+              transform: "rotate(-12deg)",
+            }}
+          >
+            <div className="mx-auto mt-3 h-1.5 w-8 rounded-full bg-slate-300" />
+            <div className="mx-auto mt-2 h-1.5 w-6 rounded-full bg-slate-200" />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
