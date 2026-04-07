@@ -39,8 +39,9 @@ This Compose stack:
 
 - starts PostgreSQL
 - runs database migrations
-- launches the backend on `http://localhost:8080`
-- launches the frontend on `http://localhost:3000`
+- publishes the backend on `PORT` (default `8080`)
+- publishes the frontend on `FRONTEND_PORT` (default `3000`)
+- serves public URLs from `FRONTEND_ORIGIN`, `NEXT_PUBLIC_API_URL`, and `NEXT_PUBLIC_WS_URL`
 
 Useful follow-up commands:
 
@@ -58,7 +59,7 @@ All configuration is done via environment variables. Copy `.env.example` as a st
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgres://agentra:agentra@localhost:5432/agentra?sslmode=disable` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgres://agentra:agentra@<db-host>:<db-port>/agentra?sslmode=disable` |
 | `JWT_SECRET` | **Must change from default.** Secret key for signing JWT tokens. Use a long random string. | `openssl rand -hex 32` |
 | `FRONTEND_ORIGIN` | URL where the frontend is served (used for CORS) | `https://app.example.com` |
 
@@ -107,8 +108,8 @@ These are configured on each user's machine, not on the server:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AGENTRA_SERVER_URL` | `ws://localhost:8080/ws` | WebSocket URL for daemon → server connection |
-| `AGENTRA_APP_URL` | `http://localhost:3000` | Frontend URL for CLI login flow |
+| `AGENTRA_SERVER_URL` | `wss://api.example.com/ws` | WebSocket URL for daemon → server connection |
+| `AGENTRA_APP_URL` | `https://app.example.com` | Frontend URL for CLI login flow |
 | `AGENTRA_DAEMON_POLL_INTERVAL` | `3s` | How often the daemon polls for tasks |
 | `AGENTRA_DAEMON_HEARTBEAT_INTERVAL` | `15s` | Heartbeat frequency |
 
@@ -161,11 +162,11 @@ In production, put a reverse proxy in front of both the backend and frontend to 
 
 ```
 app.example.com {
-    reverse_proxy localhost:3000
+    reverse_proxy <frontend-upstream>
 }
 
 api.example.com {
-    reverse_proxy localhost:8080
+    reverse_proxy <backend-upstream>
 }
 ```
 
@@ -181,7 +182,7 @@ server {
     ssl_certificate_key /path/to/key.pem;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://<frontend-upstream>;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -198,7 +199,7 @@ server {
     ssl_certificate_key /path/to/key.pem;
 
     location / {
-        proxy_pass http://localhost:8080;
+        proxy_pass http://<backend-upstream>;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -207,7 +208,7 @@ server {
 
     # WebSocket support
     location /ws {
-        proxy_pass http://localhost:8080;
+        proxy_pass http://<backend-upstream>;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";

@@ -49,7 +49,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-这会在容器里启动 PostgreSQL、执行数据库迁移，并拉起后端（`http://localhost:8080`）和前端（`http://localhost:3000`）。
+这会在容器里启动 PostgreSQL、执行数据库迁移，并按 `.env` 里的端口与公开地址启动前后端（`PORT`、`FRONTEND_PORT`、`FRONTEND_ORIGIN`、`NEXT_PUBLIC_API_URL`、`NEXT_PUBLIC_WS_URL`）。
 
 完整部署文档请参阅 [自部署指南](SELF_HOSTING.md)。
 

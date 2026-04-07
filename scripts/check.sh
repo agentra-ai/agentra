@@ -23,7 +23,10 @@ POSTGRES_USER="${POSTGRES_USER:-agentra}"
 POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 PORT="${PORT:-8080}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
-PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-http://localhost:${FRONTEND_PORT}}"
+LOCAL_BIND_HOST="${AGENTRA_LOCAL_BIND_HOST:-127.0.0.1}"
+BACKEND_HEALTHCHECK_URL="${SERVER_HEALTHCHECK_URL:-http://${LOCAL_BIND_HOST}:${PORT}/health}"
+FRONTEND_BASE_URL="${PLAYWRIGHT_BASE_URL:-${FRONTEND_ORIGIN:-http://${LOCAL_BIND_HOST}:${FRONTEND_PORT}}}"
+PLAYWRIGHT_BASE_URL="$FRONTEND_BASE_URL"
 export PLAYWRIGHT_BASE_URL
 
 BACKEND_PID=""
@@ -56,13 +59,13 @@ cleanup() {
 trap cleanup EXIT
 
 # --------------------------------------------------------------------------
-# Utility: wait until a port responds
+# Utility: wait until a URL responds
 # --------------------------------------------------------------------------
-wait_for_port() {
-  local port=$1 name=$2 max_wait=${3:-60} path=${4:-/}
+wait_for_url() {
+  local url=$1 name=$2 max_wait=${3:-60}
   local elapsed=0
-  echo "    Waiting for $name on :$port..."
-  while ! curl -sf "http://localhost:${port}${path}" > /dev/null 2>&1; do
+  echo "    Waiting for $name at $url..."
+  while ! curl -sf "$url" > /dev/null 2>&1; do
     sleep 1
     elapsed=$((elapsed + 1))
     if [ "$elapsed" -ge "$max_wait" ]; then
@@ -108,24 +111,24 @@ echo "==> [3/5] Go tests..."
 echo ""
 echo "==> [4/5] Starting services for E2E..."
 
-if curl -sf "http://localhost:${PORT}/health" > /dev/null 2>&1; then
-  echo "    Backend already running on :$PORT"
+if curl -sf "$BACKEND_HEALTHCHECK_URL" > /dev/null 2>&1; then
+  echo "    Backend already running at $BACKEND_HEALTHCHECK_URL"
 else
   echo "    Starting backend..."
   (cd server && go run ./cmd/server) > /tmp/agentra-check-backend.log 2>&1 &
   BACKEND_PID=$!
   STARTED_BACKEND=true
-  wait_for_port "$PORT" "Backend" 90 "/health"
+  wait_for_url "$BACKEND_HEALTHCHECK_URL" "Backend" 90
 fi
 
-if curl -sf "http://localhost:${FRONTEND_PORT}" > /dev/null 2>&1; then
-  echo "    Frontend already running on :$FRONTEND_PORT"
+if curl -sf "$FRONTEND_BASE_URL" > /dev/null 2>&1; then
+  echo "    Frontend already running at $FRONTEND_BASE_URL"
 else
   echo "    Starting frontend..."
   pnpm dev:web > /tmp/agentra-check-frontend.log 2>&1 &
   FRONTEND_PID=$!
   STARTED_FRONTEND=true
-  wait_for_port "$FRONTEND_PORT" "Frontend" 120 "/"
+  wait_for_url "$FRONTEND_BASE_URL" "Frontend" 120
 fi
 
 # --------------------------------------------------------------------------

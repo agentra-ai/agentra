@@ -17,10 +17,11 @@ set +a
 POSTGRES_DB="${POSTGRES_DB:-agentra}"
 POSTGRES_USER="${POSTGRES_USER:-agentra}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-agentra}"
+POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 
 export PGPASSWORD="$POSTGRES_PASSWORD"
 
-echo "==> Ensuring shared PostgreSQL container is running on localhost:5432..."
+echo "==> Ensuring shared PostgreSQL container is running on configured port ${POSTGRES_PORT}..."
 docker compose up -d postgres
 
 echo "==> Waiting for PostgreSQL to be ready..."

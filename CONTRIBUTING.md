@@ -17,7 +17,7 @@ Local development uses one shared PostgreSQL container and one database per chec
 
 - the main checkout usually uses `.env` and `POSTGRES_DB=agentra`
 - each Git worktree uses its own `.env.worktree`
-- every checkout connects to the same PostgreSQL host: `localhost:5432`
+- every checkout connects to the same PostgreSQL container using the host and port encoded in `DATABASE_URL` (default: `localhost:5432`)
 - isolation happens at the database level, not by starting a separate Docker Compose project
 - backend and frontend ports are still unique per worktree
 
@@ -51,12 +51,12 @@ Create `.env` once:
 cp .env.example .env
 ```
 
-By default, `.env` points to:
+By default, `.env` points to local-development values such as:
 
 ```bash
 POSTGRES_DB=agentra
 POSTGRES_PORT=5432
-DATABASE_URL=postgres://agentra:agentra@localhost:5432/agentra?sslmode=disable
+DATABASE_URL=postgres://agentra:agentra@<postgres-host>:5432/agentra?sslmode=disable
 PORT=8080
 FRONTEND_PORT=3000
 ```
@@ -69,14 +69,14 @@ Generate `.env.worktree` from inside the worktree:
 make worktree-env
 ```
 
-That generates values like:
+That generates environment values like:
 
 ```bash
 POSTGRES_DB=agentra_my_feature_702
 POSTGRES_PORT=5432
 PORT=18782
 FRONTEND_PORT=13702
-DATABASE_URL=postgres://agentra:agentra@localhost:5432/agentra_my_feature_702?sslmode=disable
+DATABASE_URL=postgres://agentra:agentra@<postgres-host>:5432/agentra_my_feature_702?sslmode=disable
 ```
 
 Notes:

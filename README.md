@@ -49,7 +49,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-This starts PostgreSQL, runs migrations, and launches both the backend (`http://localhost:8080`) and frontend (`http://localhost:3000`) in containers.
+This starts PostgreSQL, runs migrations, and launches the backend and frontend using the ports and public origins defined in `.env` (`PORT`, `FRONTEND_PORT`, `FRONTEND_ORIGIN`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`).
 
 See the [Self-Hosting Guide](SELF_HOSTING.md) for full instructions.
 
