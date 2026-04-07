@@ -42,7 +42,7 @@ ENV REMOTE_API_URL=${REMOTE_API_URL}
 RUN pnpm --filter @agentra/web build
 
 # --- Server runtime stage ---
-FROM alpine:3.21 AS server-runtime
+FROM golang:1.26-alpine AS server-runtime
 
 RUN apk add --no-cache ca-certificates tzdata wget
 
