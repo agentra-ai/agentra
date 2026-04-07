@@ -5,7 +5,12 @@ export default defineConfig({
   timeout: 30000,
   retries: 0,
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? process.env.FRONTEND_ORIGIN ?? "http://localhost:3000",
+    baseURL:
+      process.env.PLAYWRIGHT_BASE_URL ??
+      process.env.NEXT_PUBLIC_SITE_URL ??
+      process.env.FRONTEND_ORIGIN ??
+      process.env.AGENTRA_APP_URL ??
+      "http://localhost:3000",
     headless: true,
   },
   projects: [

@@ -6,8 +6,15 @@
 
 import pg from "pg";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? `http://localhost:${process.env.PORT ?? "8080"}`;
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://agentra:agentra@localhost:5432/agentra?sslmode=disable";
+const API_BASE =
+  process.env.E2E_API_BASE ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.API_BASE_URL ??
+  `http://localhost:${process.env.PORT ?? "8080"}`;
+const DATABASE_URL =
+  process.env.E2E_DATABASE_URL ??
+  process.env.DATABASE_URL ??
+  "postgres://agentra:agentra@localhost:5432/agentra?sslmode=disable";
 
 interface TestWorkspace {
   id: string;
