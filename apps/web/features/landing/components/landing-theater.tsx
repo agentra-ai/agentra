@@ -23,20 +23,43 @@ import { LandingProofScene } from "./landing-proof-scene";
 
 const LOOP_INTERVAL_MS = 4800;
 const proofIcons = [Workflow, ShieldCheck, Sparkles];
-const sceneChipPositions = [
-  "left-5 top-5 sm:left-7 sm:top-7",
-  "right-6 top-4 sm:right-8 sm:top-8",
-  "right-4 top-1/2 -translate-y-1/2 sm:right-6",
-  "bottom-6 right-10 sm:bottom-8 sm:right-12",
-  "bottom-5 left-6 sm:bottom-8 sm:left-10",
+const sceneNodePositions = [
+  { left: "9%", top: "20%" },
+  { left: "29%", top: "63%" },
+  { left: "49%", top: "40%" },
+  { left: "70%", top: "60%" },
+  { left: "90%", top: "25%" },
 ];
 
 export function LandingTheater() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const user = useAuthStore((state) => state.user);
   const [activeIndex, setActiveIndex] = useState(0);
   const steps = t.theater.steps;
   const activeStep = steps[activeIndex] ?? steps[0];
+  const fallbackSceneNodePosition = sceneNodePositions[0] ?? {
+    left: "8%",
+    top: "18%",
+  };
+  const headlineWidthClass =
+    locale === "zh"
+      ? "max-w-[13.2ch] sm:max-w-[13.8ch] lg:max-w-[14.4ch]"
+      : "max-w-[11ch]";
+  const headlineSecondaryFontClass =
+    locale === "zh"
+      ? "font-[family-name:var(--font-serif-zh)]"
+      : "font-[family-name:var(--font-serif)]";
+  const headlineSecondaryClass =
+    locale === "zh"
+      ? "text-[0.9em] leading-[1.02] tracking-[-0.06em] text-white/72"
+      : "tracking-[-0.05em] text-white/70";
+  const sceneProgress = `${((activeIndex + 1) / Math.max(steps.length, 1)) * 100}%`;
+  const scenePacketTransform =
+    activeIndex === 0
+      ? "translate(-18%, -176%)"
+      : activeIndex === steps.length - 1
+        ? "translate(-82%, -146%)"
+        : "translate(-50%, -146%)";
 
   useEffect(() => {
     if (steps.length === 0) {
@@ -84,23 +107,40 @@ export function LandingTheater() {
       <section className="relative mx-auto max-w-[1360px] px-4 pb-14 pt-16 sm:px-6 sm:pb-16 sm:pt-20 lg:px-8 lg:pb-[4.5rem]">
         <div className="grid gap-12 lg:grid-cols-[minmax(0,500px)_1fr] lg:items-center">
           <div className="relative z-10">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-[12px] font-medium uppercase tracking-[0.12em] text-cyan-100/88 backdrop-blur">
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/18 bg-cyan-300/[0.08] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-cyan-100/80 backdrop-blur">
               <Workflow className="size-3.5" />
               <span>{t.theater.kicker}</span>
             </div>
 
-            <h1 className="mt-4 max-w-[11ch] text-[2.7rem] font-semibold leading-[0.92] tracking-[-0.07em] text-white sm:text-[3.55rem] lg:text-[4rem]">
-              {t.theater.headlineLine1}
-              <span className="mt-2 block text-white/58">
+            <h1
+              className={cn(
+                "mt-5 text-[2.7rem] font-semibold leading-[0.9] tracking-[-0.08em] text-white sm:text-[3.6rem] lg:text-[4.15rem]",
+                headlineWidthClass,
+              )}
+            >
+              <span className="block">{t.theater.headlineLine1}</span>
+              <span
+                className={cn(
+                  "mt-2 block",
+                  headlineSecondaryFontClass,
+                  headlineSecondaryClass,
+                )}
+              >
                 {t.theater.headlineLine2}
               </span>
             </h1>
 
-            <p className="mt-4 max-w-[32rem] text-[15px] leading-[1.75] text-white/66 sm:text-[16px]">
-              {t.theater.description}
-            </p>
+            <div className="mt-5 max-w-[34rem] rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-5 shadow-[0_18px_48px_rgba(2,8,23,0.16)] backdrop-blur-xl">
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/36">
+                <span className="inline-flex h-px w-6 bg-cyan-200/50" />
+                <span>{t.theater.stepLabel}</span>
+              </div>
+              <p className="mt-3 text-[15px] leading-[1.8] text-white/68 sm:text-[16px]">
+                {t.theater.description}
+              </p>
+            </div>
 
-            <div className="mt-6 flex flex-wrap gap-3">
+            <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
                 href={user ? "/issues" : "/login"}
                 className={headerButtonClassName("solid", "dark")}
@@ -108,18 +148,25 @@ export function LandingTheater() {
                 {user ? t.header.dashboard : t.theater.primaryCta}
                 <ArrowRight className="size-4" />
               </Link>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/54 backdrop-blur-md">
+                <span className="inline-flex size-1.5 rounded-full bg-cyan-300" />
+                <span>{activeStep.signal}</span>
+              </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2.5">
+            <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
               {t.theater.proofChips.map((chip, index) => {
                 const Icon = proofIcons[index] ?? Sparkles;
 
                 return (
                   <div
                     key={chip}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-2 text-[13px] text-white/72 backdrop-blur-md"
+                    className={cn(
+                      "inline-flex items-start gap-2 rounded-[18px] border border-white/10 bg-white/[0.04] px-3.5 py-3 text-[13px] leading-[1.5] text-white/70 backdrop-blur-md",
+                      index === 2 ? "sm:col-span-2" : "",
+                    )}
                   >
-                    <Icon className="size-3.5 text-cyan-200" />
+                    <Icon className="mt-0.5 size-3.5 shrink-0 text-cyan-200" />
                     <span>{chip}</span>
                   </div>
                 );
@@ -140,12 +187,13 @@ export function LandingTheater() {
           </div>
 
           <div className="relative">
-            <div className="absolute -left-12 top-12 h-36 w-36 rounded-full bg-cyan-300/12 blur-3xl" />
-            <div className="absolute -right-10 bottom-10 h-32 w-32 rounded-full bg-emerald-300/10 blur-3xl" />
+            <div className="absolute -left-12 top-12 h-32 w-32 rounded-full bg-cyan-300/10 blur-3xl" />
+            <div className="absolute -right-10 bottom-10 h-28 w-28 rounded-full bg-emerald-300/8 blur-3xl" />
 
-            <div className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.84),rgba(3,7,18,0.96))] shadow-[0_36px_140px_rgba(2,8,23,0.62)]">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.12),_transparent_34%)]" />
-              <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),transparent)]" />
+            <div className="relative overflow-hidden rounded-[32px] border border-white/12 bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(5,10,22,0.94))] shadow-[0_24px_90px_rgba(2,8,23,0.48)] backdrop-blur-xl">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_transparent_26%),radial-gradient(circle_at_78%_22%,_rgba(56,189,248,0.08),_transparent_22%)]" />
+              <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(255,255,255,0.09),transparent)]" />
+              <div className="absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.46),transparent)]" />
 
               <div className="relative border-b border-white/8 px-5 py-3.5 sm:px-6">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -226,40 +274,163 @@ export function LandingTheater() {
                   </div>
                 </div>
 
-                <div className="relative mt-4 h-[260px] overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(5,10,22,0.86),rgba(4,8,18,0.96))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:h-[300px]">
+                <div className="mt-3 h-px w-full overflow-hidden rounded-full bg-white/8">
+                  <div
+                    className="h-full rounded-full bg-[linear-gradient(90deg,rgba(56,189,248,0.45),rgba(224,242,254,0.95),rgba(103,232,249,0.4))] transition-all duration-700 ease-out"
+                    style={{ width: sceneProgress }}
+                  />
+                </div>
+
+                <div className="relative mt-4 h-[320px] overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,28,0.9),rgba(5,9,18,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:h-[360px]">
                   <LandingProofScene activeIndex={activeIndex} />
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_18%,transparent_82%,rgba(255,255,255,0.03))]" />
+                  <div className="absolute inset-[1px] rounded-[27px] border border-white/6" />
 
-                  {steps.map((step, index) => (
-                    <button
-                      key={step.id}
-                      type="button"
-                      onClick={() => setActiveIndex(index)}
-                      className={cn(
-                        "absolute rounded-full border px-3 py-1.5 text-left text-[11px] uppercase tracking-[0.12em] backdrop-blur-md transition-all",
-                        sceneChipPositions[index] ?? sceneChipPositions[0],
-                        activeIndex === index
-                          ? "border-cyan-300/40 bg-cyan-300/14 text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.15)]"
-                          : "border-white/10 bg-black/30 text-white/54 hover:border-white/18 hover:text-white/76",
-                      )}
-                      aria-pressed={activeIndex === index}
-                    >
-                      {step.label}
-                    </button>
-                  ))}
+                  <div
+                    className="pointer-events-none absolute z-[1] h-[190px] w-[190px] rounded-full bg-cyan-300/14 blur-[84px] transition-all duration-700 ease-out"
+                    style={{
+                      left:
+                        sceneNodePositions[activeIndex]?.left ??
+                        fallbackSceneNodePosition.left,
+                      top:
+                        sceneNodePositions[activeIndex]?.top ??
+                        fallbackSceneNodePosition.top,
+                      transform: "translate(-50%, -50%)",
+                    }}
+                  />
+                  <div
+                    className="pointer-events-none absolute z-[1] h-[150px] w-[150px] rounded-full bg-white/7 blur-[72px] transition-all duration-700 ease-out"
+                    style={{
+                      left:
+                        sceneNodePositions[Math.min(activeIndex + 1, steps.length - 1)]
+                          ?.left ?? fallbackSceneNodePosition.left,
+                      top:
+                        sceneNodePositions[Math.min(activeIndex + 1, steps.length - 1)]
+                          ?.top ?? fallbackSceneNodePosition.top,
+                      transform: "translate(-50%, -50%)",
+                    }}
+                  />
 
-                  <div className="pointer-events-none absolute inset-x-4 bottom-4 grid gap-3 sm:inset-x-5 sm:grid-cols-[minmax(0,1fr)_auto]">
-                    <div className="rounded-[20px] border border-white/8 bg-black/34 px-4 py-3 backdrop-blur-md">
-                      <div className="text-[11px] uppercase tracking-[0.12em] text-white/40">
-                        {activeStep.statusLabel}
-                      </div>
-                      <div className="mt-2 text-[17px] font-medium text-white/92">
-                        {activeStep.statusValue}
-                      </div>
+                  <svg
+                    className="pointer-events-none absolute inset-0 z-[2] h-full w-full"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                  >
+                    <defs>
+                      <linearGradient
+                        id="landing-flow-path"
+                        x1="0%"
+                        y1="0%"
+                        x2="100%"
+                        y2="0%"
+                      >
+                        <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.2" />
+                        <stop offset="55%" stopColor="#d6f4ff" stopOpacity="0.96" />
+                        <stop offset="100%" stopColor="#67e8f9" stopOpacity="0.28" />
+                      </linearGradient>
+                    </defs>
+                    <path
+                      d="M 8 18 C 15 18, 19 32, 28 64 S 39 44, 49 38 S 61 44, 71 61 S 84 30, 90 24"
+                      fill="none"
+                      stroke="rgba(14,28,48,0.98)"
+                      strokeWidth="7"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M 8 18 C 15 18, 19 32, 28 64 S 39 44, 49 38 S 61 44, 71 61 S 84 30, 90 24"
+                      fill="none"
+                      stroke="url(#landing-flow-path)"
+                      strokeWidth="2.6"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+
+                  <div
+                    className="pointer-events-none absolute z-[22] transition-all duration-700 ease-out"
+                    style={{
+                      left:
+                        sceneNodePositions[activeIndex]?.left ??
+                        fallbackSceneNodePosition.left,
+                      top:
+                        sceneNodePositions[activeIndex]?.top ??
+                        fallbackSceneNodePosition.top,
+                      transform: scenePacketTransform,
+                    }}
+                  >
+                    <div className="relative flex h-10 items-center gap-2 rounded-full border border-white/22 bg-white/92 px-3.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900 shadow-[0_16px_40px_rgba(2,8,23,0.26)]">
+                      <div className="absolute inset-x-2 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(56,189,248,0.8),transparent)]" />
+                      <span className="inline-flex size-2 rounded-full bg-cyan-500 shadow-[0_0_18px_rgba(34,211,238,0.8)]" />
+                      <span>{t.theater.taskPacketLabel}</span>
                     </div>
+                  </div>
 
-                    <div className="rounded-[20px] border border-emerald-300/18 bg-emerald-300/10 px-4 py-3 text-[13px] text-emerald-50 backdrop-blur-md">
-                      {activeStep.nextAction}
+                  <div className="pointer-events-none absolute left-4 top-4 z-20 max-w-[168px] rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(11,19,33,0.78),rgba(7,12,24,0.62))] px-4 py-3 backdrop-blur-xl shadow-[0_18px_48px_rgba(2,8,23,0.24)]">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-white/38">
+                      {t.theater.activeFocusLabel}
                     </div>
+                    <div className="mt-2 flex items-center gap-2 text-[13px] font-medium text-white/88">
+                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-cyan-300/30 bg-cyan-300/12 px-1 text-[10px] font-semibold text-cyan-100">
+                        {String(activeIndex + 1).padStart(2, "0")}
+                      </span>
+                      <span>{activeStep.label}</span>
+                    </div>
+                    <div className="mt-2 max-w-[180px] text-[12px] leading-[1.55] text-white/52">
+                      {activeStep.resultValue}
+                    </div>
+                  </div>
+
+                  <div className="pointer-events-none absolute bottom-4 left-4 z-20 max-w-[260px] rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,16,30,0.72),rgba(7,12,24,0.56))] px-4 py-3 backdrop-blur-xl shadow-[0_18px_44px_rgba(2,8,23,0.22)]">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-white/36">
+                      {t.theater.stageNoteLabel}
+                    </div>
+                    <div className="mt-2 text-[12px] leading-[1.6] text-white/58">
+                      {activeStep.meta}
+                    </div>
+                  </div>
+
+                  {steps.map((step, index) => {
+                    const nodePosition =
+                      sceneNodePositions[index] ?? fallbackSceneNodePosition;
+
+                    return (
+                      <button
+                        key={step.id}
+                        type="button"
+                        onClick={() => setActiveIndex(index)}
+                        className={cn(
+                          "absolute z-10 flex min-w-[118px] -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border px-3.5 py-2.5 text-left text-[11px] uppercase tracking-[0.12em] backdrop-blur-xl transition-all",
+                          activeIndex === index
+                            ? "border-cyan-200/28 bg-[linear-gradient(180deg,rgba(18,36,58,0.88),rgba(9,18,32,0.8))] text-sky-50 shadow-[0_14px_36px_rgba(15,23,42,0.28)]"
+                            : "border-white/10 bg-[linear-gradient(180deg,rgba(8,16,29,0.72),rgba(6,12,24,0.62))] text-white/58 hover:border-white/18 hover:text-white/78",
+                        )}
+                        style={{
+                          left: nodePosition.left,
+                          top: nodePosition.top,
+                        }}
+                        aria-pressed={activeIndex === index}
+                      >
+                        <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-current/20 bg-black/12 px-1 text-[10px] font-semibold tabular-nums">
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <span>{step.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <div className="rounded-[20px] border border-white/8 bg-black/28 px-4 py-3 backdrop-blur-md">
+                    <div className="text-[11px] uppercase tracking-[0.12em] text-white/40">
+                      {activeStep.statusLabel}
+                    </div>
+                    <div className="mt-2 text-[17px] font-medium text-white/92">
+                      {activeStep.statusValue}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[20px] border border-emerald-300/18 bg-emerald-300/10 px-4 py-3 text-[13px] text-emerald-50 backdrop-blur-md">
+                    {activeStep.nextAction}
                   </div>
                 </div>
 
