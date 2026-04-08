@@ -37,6 +37,9 @@ export const en: LandingDict = {
     panelArtifactLabel: "What the team keeps",
     panelOwnerLabel: "Current handoff",
     panelNextLabel: "Next outcome",
+    taskPacketLabel: "Task packet",
+    activeFocusLabel: "Active focus",
+    stageNoteLabel: "Stage note",
     steps: [
       {
         id: "capture",

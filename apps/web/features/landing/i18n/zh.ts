@@ -38,6 +38,9 @@ export const zh: LandingDict = {
     panelArtifactLabel: "\u56e2\u961f\u4f1a\u7559\u4e0b\u4ec0\u4e48",
     panelOwnerLabel: "\u5f53\u524d\u4ea4\u63a5",
     panelNextLabel: "\u4e0b\u4e00\u4e2a\u7ed3\u679c",
+    taskPacketLabel: "\u4efb\u52a1\u5305",
+    activeFocusLabel: "\u5f53\u524d\u7126\u70b9",
+    stageNoteLabel: "\u9636\u6bb5\u8bf4\u660e",
     steps: [
       {
         id: "capture",

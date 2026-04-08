@@ -40,6 +40,9 @@ export type LandingDict = {
     panelArtifactLabel: string;
     panelOwnerLabel: string;
     panelNextLabel: string;
+    taskPacketLabel: string;
+    activeFocusLabel: string;
+    stageNoteLabel: string;
     steps: {
       id: string;
       label: string;
