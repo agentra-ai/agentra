@@ -47,3 +47,5 @@ _features/
 *.app
 server/server
 .tmp
+.playwright-mcp
+.omx

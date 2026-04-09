@@ -13,8 +13,8 @@ export function LandingFooter() {
 
   return (
     <footer className="border-t border-white/8 bg-[#05070b] text-white">
-      <div className="mx-auto max-w-[1320px] px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-        <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+      <div className="mx-auto max-w-[1320px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
           <div className="max-w-[32rem]">
             <Link href="/" className="flex items-center gap-3">
               <AgentraIcon className="size-5 text-white" noSpin />
@@ -37,7 +37,7 @@ export function LandingFooter() {
           </div>
         </div>
 
-        <div className="mt-8 flex flex-col gap-4 border-t border-white/8 pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-6 flex flex-col gap-4 border-t border-white/8 pt-5 sm:mt-8 sm:flex-row sm:items-center sm:justify-between sm:pt-6">
           <nav className="flex flex-wrap items-center gap-5 text-[14px] text-white/58">
             <Link href="/about" className="transition-colors hover:text-white">
               {t.footer.links.about}

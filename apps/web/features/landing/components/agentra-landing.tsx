@@ -3,6 +3,7 @@
 import { LandingHeader } from "./landing-header";
 import { LandingFooter } from "./landing-footer";
 import { LandingTheater } from "./landing-theater";
+import { LandingValueProps } from "./landing-value-props";
 
 export function AgentraLanding() {
   return (
@@ -11,6 +12,7 @@ export function AgentraLanding() {
         <LandingHeader />
         <LandingTheater />
       </div>
+      <LandingValueProps />
       <LandingFooter />
     </>
   );

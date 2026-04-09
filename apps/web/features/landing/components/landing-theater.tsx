@@ -77,7 +77,7 @@ export function LandingTheater() {
     return null;
   }
 
-  const metrics = [
+  const systemFacts = [
     {
       label: t.theater.panelOwnerLabel,
       value: activeStep.owner,
@@ -100,21 +100,22 @@ export function LandingTheater() {
       id="product"
       className="relative overflow-hidden bg-[#04070d] text-white"
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.18),_transparent_34%),radial-gradient(circle_at_88%_15%,_rgba(15,23,42,0.9),_transparent_24%),radial-gradient(circle_at_74%_72%,_rgba(34,197,94,0.1),_transparent_22%),linear-gradient(180deg,_#08111d_0%,_#04070d_58%,_#02040a_100%)]" />
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.06)_1px,transparent_1px)] [background-size:72px_72px] opacity-30" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.06),_transparent_30%),radial-gradient(circle_at_82%_18%,_rgba(17,24,39,0.62),_transparent_28%),radial-gradient(circle_at_76%_72%,_rgba(255,255,255,0.03),_transparent_18%),linear-gradient(180deg,_#05080d_0%,_#03060b_56%,_#020307_100%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.032)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.032)_1px,transparent_1px)] [background-size:72px_72px] opacity-16" />
       <div className="absolute inset-x-0 top-0 h-px bg-white/12" />
 
       <section className="relative mx-auto max-w-[1360px] px-4 pb-14 pt-16 sm:px-6 sm:pb-16 sm:pt-20 lg:px-8 lg:pb-[4.5rem]">
-        <div className="grid gap-12 lg:grid-cols-[minmax(0,500px)_1fr] lg:items-center">
+        <div className="grid gap-12 lg:grid-cols-[minmax(0,500px)_1fr] lg:items-start">
           <div className="relative z-10">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/18 bg-cyan-300/[0.08] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-cyan-100/80 backdrop-blur">
-              <Workflow className="size-3.5" />
+            <div className="inline-flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.2em] text-white/58">
+              <span className="inline-flex h-px w-10 bg-[linear-gradient(90deg,rgba(255,255,255,0.42),rgba(255,255,255,0))]" />
+              <Workflow className="size-3.5 text-white/62" />
               <span>{t.theater.kicker}</span>
             </div>
 
             <h1
               className={cn(
-                "mt-5 text-[2.7rem] font-semibold leading-[0.9] tracking-[-0.08em] text-white sm:text-[3.6rem] lg:text-[4.15rem]",
+                "mt-5 text-[2.85rem] font-semibold leading-[0.88] tracking-[-0.085em] text-white sm:text-[3.75rem] lg:text-[4.35rem]",
                 headlineWidthClass,
               )}
             >
@@ -130,17 +131,11 @@ export function LandingTheater() {
               </span>
             </h1>
 
-            <div className="mt-5 max-w-[34rem] rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-5 shadow-[0_18px_48px_rgba(2,8,23,0.16)] backdrop-blur-xl">
-              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/36">
-                <span className="inline-flex h-px w-6 bg-cyan-200/50" />
-                <span>{t.theater.stepLabel}</span>
-              </div>
-              <p className="mt-3 text-[15px] leading-[1.8] text-white/68 sm:text-[16px]">
-                {t.theater.description}
-              </p>
-            </div>
+            <p className="mt-6 max-w-[35rem] text-[15px] leading-[1.95] text-white/62 sm:text-[16px]">
+              {t.theater.description}
+            </p>
 
-            <div className="mt-6 flex flex-wrap items-center gap-3">
+            <div className="mt-7 flex flex-wrap items-center gap-3">
               <Link
                 href={user ? "/issues" : "/login"}
                 className={headerButtonClassName("solid", "dark")}
@@ -148,146 +143,152 @@ export function LandingTheater() {
                 {user ? t.header.dashboard : t.theater.primaryCta}
                 <ArrowRight className="size-4" />
               </Link>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/54 backdrop-blur-md">
-                <span className="inline-flex size-1.5 rounded-full bg-cyan-300" />
+              <Link
+                href="https://github.com/agentra-ai/agentra"
+                target="_blank"
+                rel="noreferrer"
+                className={headerButtonClassName("ghost", "dark")}
+              >
+                {t.theater.secondaryCta}
+              </Link>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/50 backdrop-blur-md">
+                <span className="inline-flex size-1.5 rounded-full bg-white/68" />
                 <span>{activeStep.signal}</span>
               </div>
             </div>
 
-            <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
+            <div className="mt-8 flex items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-white/34">
+              <span>{t.theater.stepLabel}</span>
+              <span className="h-px flex-1 bg-white/8" />
+            </div>
+
+            <div className="mt-8 max-w-[34rem] divide-y divide-white/8 border-y border-white/8">
               {t.theater.proofChips.map((chip, index) => {
                 const Icon = proofIcons[index] ?? Sparkles;
 
                 return (
                   <div
                     key={chip}
-                    className={cn(
-                      "inline-flex items-start gap-2 rounded-[18px] border border-white/10 bg-white/[0.04] px-3.5 py-3 text-[13px] leading-[1.5] text-white/70 backdrop-blur-md",
-                      index === 2 ? "sm:col-span-2" : "",
-                    )}
+                    className="grid grid-cols-[auto_auto_1fr] items-start gap-3 px-1 py-3.5 text-[13px] leading-[1.65] text-white/72"
                   >
-                    <Icon className="mt-0.5 size-3.5 shrink-0 text-cyan-200" />
+                    <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-1 text-[10px] font-semibold tabular-nums text-white/48">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <Icon className="mt-1 size-3.5 shrink-0 text-white/68" />
                     <span>{chip}</span>
                   </div>
                 );
               })}
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-[13px] text-white/48">
+            <div className="mt-5 flex flex-wrap items-center gap-3 text-[13px] text-white/48">
               <span>{t.theater.worksWith}</span>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-white/74">
-                <ClaudeCodeLogo className="size-4" />
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-white/70">
+                <ClaudeCodeLogo className="size-4 text-white/72" />
                 <span>Claude Code</span>
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-white/74">
-                <CodexLogo className="size-4" />
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-white/70">
+                <CodexLogo className="size-4 text-white/72" />
                 <span>Codex</span>
               </div>
             </div>
           </div>
 
           <div className="relative">
-            <div className="absolute -left-12 top-12 h-32 w-32 rounded-full bg-cyan-300/10 blur-3xl" />
-            <div className="absolute -right-10 bottom-10 h-28 w-28 rounded-full bg-emerald-300/8 blur-3xl" />
+            <div className="absolute -left-12 top-12 h-32 w-32 rounded-full bg-white/4 blur-3xl" />
+            <div className="absolute -right-10 bottom-10 h-28 w-28 rounded-full bg-white/4 blur-3xl" />
 
-            <div className="relative overflow-hidden rounded-[32px] border border-white/12 bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(5,10,22,0.94))] shadow-[0_24px_90px_rgba(2,8,23,0.48)] backdrop-blur-xl">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_transparent_26%),radial-gradient(circle_at_78%_22%,_rgba(56,189,248,0.08),_transparent_22%)]" />
-              <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(255,255,255,0.09),transparent)]" />
-              <div className="absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.46),transparent)]" />
+            <div className="relative overflow-hidden rounded-[30px] bg-[linear-gradient(180deg,rgba(11,14,20,0.96),rgba(4,6,12,0.99))] shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_18px_48px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-2xl">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.05),_transparent_24%),radial-gradient(circle_at_78%_22%,_rgba(255,255,255,0.035),_transparent_20%)]" />
+              <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent)]" />
+              <div className="absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.34),transparent)]" />
 
-              <div className="relative border-b border-white/8 px-5 py-3.5 sm:px-6">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="relative border-b border-white/8 px-5 py-4 sm:px-6">
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] uppercase tracking-[0.14em] text-white/36">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-white/24" />
+                        <span className="size-2 rounded-full bg-white/14" />
+                        <span className="size-2 rounded-full bg-white/42" />
+                      </div>
+                      <span>{t.theater.liveLabel}</span>
+                    </div>
+                    <div className="inline-flex items-center gap-2 text-white/52">
+                      <span className="tabular-nums">
+                        {String(activeIndex + 1).padStart(2, "0")}/
+                        {String(steps.length).padStart(2, "0")}
+                      </span>
+                      <span className="h-1 w-1 rounded-full bg-white/55" />
+                      <span className="text-white/72">{activeStep.signal}</span>
+                    </div>
+                  </div>
+
                   <div>
-                    <div className="text-[12px] font-medium uppercase tracking-[0.12em] text-white/38">
-                      {t.theater.liveLabel}
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-white/34">
+                      {t.theater.panelTaskLabel}
                     </div>
-                    <div className="mt-2 text-[20px] font-semibold tracking-[-0.03em] text-white/94">
-                      {activeStep.title}
+                    <div className="mt-2 max-w-[38rem] text-[15px] font-medium leading-[1.65] tracking-[-0.02em] text-white/90 sm:text-[16px]">
+                      {t.theater.panelTaskValue}
                     </div>
-                    <p className="mt-1.5 max-w-[38rem] text-[13px] leading-[1.65] text-white/56">
-                      {activeStep.description}
-                    </p>
-                  </div>
 
-                  <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/24 bg-emerald-300/10 px-3 py-1.5 text-[12px] font-medium text-emerald-100">
-                    <CheckCircle2 className="size-3.5" />
-                    <span>{activeStep.signal}</span>
-                  </div>
-                </div>
-              </div>
+                    <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] uppercase tracking-[0.12em] text-white/38">
+                      <div className="inline-flex items-center gap-2">
+                        <span>{t.theater.panelQueueLabel}</span>
+                        <span className="text-white/74">{t.theater.panelQueueValue}</span>
+                      </div>
 
-              <div
-                className="relative grid gap-3 border-b border-white/8 px-5 py-3.5 sm:px-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_auto]"
-                aria-label={t.theater.sceneAriaLabel}
-              >
-                <div className="rounded-[22px] border border-white/8 bg-white/[0.045] px-4 py-3.5 backdrop-blur-md">
-                  <div className="text-[11px] uppercase tracking-[0.12em] text-white/38">
-                    {t.theater.panelTaskLabel}
-                  </div>
-                  <div className="mt-2 text-[16px] font-medium leading-[1.45] text-white/92">
-                    {t.theater.panelTaskValue}
-                  </div>
-                </div>
-
-                <div className="rounded-[22px] border border-white/8 bg-white/[0.045] px-4 py-3.5 backdrop-blur-md">
-                  <div className="text-[11px] uppercase tracking-[0.12em] text-white/38">
-                    {t.theater.panelQueueLabel}
-                  </div>
-                  <div className="mt-2 text-[14px] font-medium text-white/88">
-                    {t.theater.panelQueueValue}
-                  </div>
-                </div>
-
-                <div className="rounded-[22px] border border-white/8 bg-white/[0.045] px-4 py-3.5 backdrop-blur-md">
-                  <div className="text-[11px] uppercase tracking-[0.12em] text-white/38">
-                    {t.theater.panelRuntimeLabel}
-                  </div>
-                  <div className="mt-2.5 space-y-1.5 text-[13px] text-white/78">
-                    <div className="flex items-center gap-2">
-                      <CodexLogo className="size-4 text-cyan-200" />
-                      <span>codex</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <ClaudeCodeLogo className="size-4 text-amber-100" />
-                      <span>claude</span>
+                      <div className="inline-flex items-center gap-2">
+                        <span>{t.theater.panelRuntimeLabel}</span>
+                        <span className="inline-flex items-center gap-1.5 text-white/74">
+                          <CodexLogo className="size-3.5 text-white/72" />
+                          <span>codex</span>
+                        </span>
+                        <span className="text-white/22">/</span>
+                        <span className="inline-flex items-center gap-1.5 text-white/74">
+                          <ClaudeCodeLogo className="size-3.5 text-white/68" />
+                          <span>claude</span>
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="relative px-5 py-4 sm:px-6 sm:py-[1.125rem]">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <div className="text-[12px] font-medium uppercase tracking-[0.12em] text-white/38">
-                      {t.theater.cycleLabel}
-                    </div>
-                    <p className="mt-1.5 max-w-[36rem] text-[13px] leading-[1.65] text-white/54">
-                      {t.theater.cycleHint}
-                    </p>
-                  </div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-[12px] font-medium text-cyan-100/88">
-                    <span className="tabular-nums">
-                      {String(activeIndex + 1).padStart(2, "0")}/
-                      {String(steps.length).padStart(2, "0")}
+              <div className="relative px-5 py-4 sm:px-6 sm:py-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <p
+                    key={`${activeStep.id}-feed`}
+                    className="animate-in fade-in-0 slide-in-from-bottom-1 max-w-[36rem] text-[12px] leading-[1.7] text-white/52 duration-500"
+                  >
+                    {activeStep.statusValue}
+                  </p>
+                  <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-white/42">
+                    <span className="tabular-nums text-white/64">
+                      {String(activeIndex + 1).padStart(2, "0")}
                     </span>
+                    <span className="h-1 w-1 rounded-full bg-white/44" />
                     <span>{activeStep.label}</span>
                   </div>
                 </div>
 
                 <div className="mt-3 h-px w-full overflow-hidden rounded-full bg-white/8">
                   <div
-                    className="h-full rounded-full bg-[linear-gradient(90deg,rgba(56,189,248,0.45),rgba(224,242,254,0.95),rgba(103,232,249,0.4))] transition-all duration-700 ease-out"
+                    className="h-full rounded-full bg-[linear-gradient(90deg,rgba(255,255,255,0.18),rgba(255,255,255,0.94),rgba(255,255,255,0.22))] transition-all duration-700 ease-out"
                     style={{ width: sceneProgress }}
                   />
                 </div>
 
-                <div className="relative mt-4 h-[320px] overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,28,0.9),rgba(5,9,18,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:h-[360px]">
+                <div
+                  className="relative mt-4 h-[360px] overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(7,10,15,0.94),rgba(3,5,10,1))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:h-[420px]"
+                  aria-label={t.theater.sceneAriaLabel}
+                >
                   <LandingProofScene activeIndex={activeIndex} />
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_18%,transparent_82%,rgba(255,255,255,0.03))]" />
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_26%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_18%,transparent_82%,rgba(255,255,255,0.02))]" />
                   <div className="absolute inset-[1px] rounded-[27px] border border-white/6" />
 
                   <div
-                    className="pointer-events-none absolute z-[1] h-[190px] w-[190px] rounded-full bg-cyan-300/14 blur-[84px] transition-all duration-700 ease-out"
+                    className="pointer-events-none absolute z-[1] h-[170px] w-[170px] rounded-full bg-white/8 blur-[92px] transition-all duration-700 ease-out"
                     style={{
                       left:
                         sceneNodePositions[activeIndex]?.left ??
@@ -299,7 +300,7 @@ export function LandingTheater() {
                     }}
                   />
                   <div
-                    className="pointer-events-none absolute z-[1] h-[150px] w-[150px] rounded-full bg-white/7 blur-[72px] transition-all duration-700 ease-out"
+                    className="pointer-events-none absolute z-[1] h-[130px] w-[130px] rounded-full bg-white/5 blur-[76px] transition-all duration-700 ease-out"
                     style={{
                       left:
                         sceneNodePositions[Math.min(activeIndex + 1, steps.length - 1)]
@@ -325,15 +326,15 @@ export function LandingTheater() {
                         x2="100%"
                         y2="0%"
                       >
-                        <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.2" />
-                        <stop offset="55%" stopColor="#d6f4ff" stopOpacity="0.96" />
-                        <stop offset="100%" stopColor="#67e8f9" stopOpacity="0.28" />
+                        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.12" />
+                        <stop offset="55%" stopColor="#ffffff" stopOpacity="0.92" />
+                        <stop offset="100%" stopColor="#ffffff" stopOpacity="0.18" />
                       </linearGradient>
                     </defs>
                     <path
                       d="M 8 18 C 15 18, 19 32, 28 64 S 39 44, 49 38 S 61 44, 71 61 S 84 30, 90 24"
                       fill="none"
-                      stroke="rgba(14,28,48,0.98)"
+                      stroke="rgba(7,10,15,0.96)"
                       strokeWidth="7"
                       strokeLinecap="round"
                     />
@@ -358,34 +359,10 @@ export function LandingTheater() {
                       transform: scenePacketTransform,
                     }}
                   >
-                    <div className="relative flex h-10 items-center gap-2 rounded-full border border-white/22 bg-white/92 px-3.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900 shadow-[0_16px_40px_rgba(2,8,23,0.26)]">
-                      <div className="absolute inset-x-2 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(56,189,248,0.8),transparent)]" />
-                      <span className="inline-flex size-2 rounded-full bg-cyan-500 shadow-[0_0_18px_rgba(34,211,238,0.8)]" />
+                    <div className="relative flex h-10 items-center gap-2 rounded-full border border-white/16 bg-white/88 px-3.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900 shadow-[0_10px_28px_rgba(0,0,0,0.22)]">
+                      <div className="absolute inset-x-2 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.7),transparent)]" />
+                      <span className="inline-flex size-2 rounded-full bg-slate-900/78" />
                       <span>{t.theater.taskPacketLabel}</span>
-                    </div>
-                  </div>
-
-                  <div className="pointer-events-none absolute left-4 top-4 z-20 max-w-[168px] rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(11,19,33,0.78),rgba(7,12,24,0.62))] px-4 py-3 backdrop-blur-xl shadow-[0_18px_48px_rgba(2,8,23,0.24)]">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-white/38">
-                      {t.theater.activeFocusLabel}
-                    </div>
-                    <div className="mt-2 flex items-center gap-2 text-[13px] font-medium text-white/88">
-                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-cyan-300/30 bg-cyan-300/12 px-1 text-[10px] font-semibold text-cyan-100">
-                        {String(activeIndex + 1).padStart(2, "0")}
-                      </span>
-                      <span>{activeStep.label}</span>
-                    </div>
-                    <div className="mt-2 max-w-[180px] text-[12px] leading-[1.55] text-white/52">
-                      {activeStep.resultValue}
-                    </div>
-                  </div>
-
-                  <div className="pointer-events-none absolute bottom-4 left-4 z-20 max-w-[260px] rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,16,30,0.72),rgba(7,12,24,0.56))] px-4 py-3 backdrop-blur-xl shadow-[0_18px_44px_rgba(2,8,23,0.22)]">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-white/36">
-                      {t.theater.stageNoteLabel}
-                    </div>
-                    <div className="mt-2 text-[12px] leading-[1.6] text-white/58">
-                      {activeStep.meta}
                     </div>
                   </div>
 
@@ -399,10 +376,10 @@ export function LandingTheater() {
                         type="button"
                         onClick={() => setActiveIndex(index)}
                         className={cn(
-                          "absolute z-10 flex min-w-[118px] -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border px-3.5 py-2.5 text-left text-[11px] uppercase tracking-[0.12em] backdrop-blur-xl transition-all",
+                          "absolute z-10 flex min-w-[112px] -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border px-3.5 py-2.5 text-left text-[11px] uppercase tracking-[0.12em] backdrop-blur-xl transition-all",
                           activeIndex === index
-                            ? "border-cyan-200/28 bg-[linear-gradient(180deg,rgba(18,36,58,0.88),rgba(9,18,32,0.8))] text-sky-50 shadow-[0_14px_36px_rgba(15,23,42,0.28)]"
-                            : "border-white/10 bg-[linear-gradient(180deg,rgba(8,16,29,0.72),rgba(6,12,24,0.62))] text-white/58 hover:border-white/18 hover:text-white/78",
+                            ? "border-white/16 bg-[linear-gradient(180deg,rgba(37,43,54,0.94),rgba(18,23,31,0.9))] text-white shadow-[0_10px_24px_rgba(0,0,0,0.2)]"
+                            : "border-white/8 bg-[linear-gradient(180deg,rgba(13,18,26,0.78),rgba(8,11,18,0.68))] text-white/50 hover:border-white/14 hover:text-white/72",
                         )}
                         style={{
                           left: nodePosition.left,
@@ -419,40 +396,73 @@ export function LandingTheater() {
                   })}
                 </div>
 
-                <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                  <div className="rounded-[20px] border border-white/8 bg-black/28 px-4 py-3 backdrop-blur-md">
-                    <div className="text-[11px] uppercase tracking-[0.12em] text-white/40">
-                      {activeStep.statusLabel}
-                    </div>
-                    <div className="mt-2 text-[17px] font-medium text-white/92">
-                      {activeStep.statusValue}
-                    </div>
-                  </div>
+                <div
+                  key={`${activeStep.id}-detail`}
+                  className="mt-4 animate-in fade-in-0 slide-in-from-bottom-2 rounded-[24px] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-4 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.06)] duration-500 backdrop-blur-xl sm:px-5"
+                >
+                  <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-[0.12em] text-white/36">
+                        {t.theater.activeFocusLabel}
+                      </div>
+                      <div className="mt-3 text-[22px] font-semibold tracking-[-0.045em] text-white/94">
+                        {activeStep.title}
+                      </div>
+                      <p className="mt-2 max-w-[36rem] text-[14px] leading-[1.72] text-white/58">
+                        {activeStep.description}
+                      </p>
 
-                  <div className="rounded-[20px] border border-emerald-300/18 bg-emerald-300/10 px-4 py-3 text-[13px] text-emerald-50 backdrop-blur-md">
-                    {activeStep.nextAction}
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-3 lg:grid-cols-3">
-                  {metrics.map((metric) => {
-                    const Icon = metric.icon;
-
-                    return (
-                      <div
-                        key={metric.label}
-                        className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-4 backdrop-blur-md"
-                      >
-                        <div className="flex items-center gap-2 text-[12px] font-medium uppercase tracking-[0.12em] text-white/40">
-                          <Icon className="size-3.5" />
-                          <span>{metric.label}</span>
+                      <div className="mt-5 border-t border-white/8 pt-4">
+                        <div className="text-[11px] uppercase tracking-[0.12em] text-white/34">
+                          {t.theater.stageNoteLabel}
                         </div>
-                        <div className="mt-3 text-[14px] leading-[1.7] text-white/86">
-                          {metric.value}
+                        <div className="mt-2 text-[13px] leading-[1.72] text-white/56">
+                          {activeStep.meta}
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-[0.12em] text-white/34">
+                          {activeStep.resultLabel}
+                        </div>
+                        <div className="mt-2 text-[14px] leading-[1.72] text-white/88">
+                          {activeStep.resultValue}
+                        </div>
+                      </div>
+
+                      <div className="divide-y divide-white/8 border-y border-white/8">
+                        {systemFacts.map((fact) => {
+                          const Icon = fact.icon;
+
+                          return (
+                            <div
+                              key={fact.label}
+                              className="flex items-start justify-between gap-4 py-3"
+                            >
+                              <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-white/36">
+                                <Icon className="mt-0.5 size-3.5 shrink-0" />
+                                <span>{fact.label}</span>
+                              </div>
+                              <div className="max-w-[15rem] text-right text-[13px] leading-[1.62] text-white/76">
+                                {fact.value}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div>
+                        <div className="text-[11px] uppercase tracking-[0.12em] text-emerald-100/68">
+                          {t.theater.panelNextLabel}
+                        </div>
+                        <div className="mt-2 text-[14px] leading-[1.72] text-emerald-50">
+                          {activeStep.nextAction}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
