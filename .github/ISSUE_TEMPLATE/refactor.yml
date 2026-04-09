@@ -1,0 +1,71 @@
+name: Refactor
+description: Submit a code refactoring task
+labels: ["refactor"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Refactoring Request
+
+        Describe the code change that improves structure or quality without changing behavior.
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current state
+      description: What does the code look like now? Why is it problematic?
+      placeholder: "Describe the current implementation and its issues."
+    validations:
+      required: true
+
+  - type: textarea
+    id: target
+    attributes:
+      label: Target state
+      description: What should the code look like after the refactor?
+      placeholder: "Describe the improved structure or approach."
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this refactor necessary or beneficial?
+      placeholder: |
+        - Reduces complexity
+        - Fixes a architectural debt
+        - Enables a planned feature
+        - Improves maintainability
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Which files, packages, or modules are affected?
+      placeholder: "List affected files or directories."
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      options:
+        - label: Must maintain backward compatibility
+          required: false
+        - label: Must not change public API
+          required: false
+        - label: Must preserve existing behavior (no feature changes)
+          required: false
+        - label: DB migration required
+          required: false
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Potential risks
+      description: What could go wrong? What's the rollback plan?
+      placeholder: "Describe risks and how to mitigate them."

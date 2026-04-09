@@ -1,0 +1,80 @@
+name: Bug
+description: Report a bug or regression
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Bug Report
+
+        Describe what's broken and how to reproduce it.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug description
+      description: Summarize the bug in a sentence or two.
+      placeholder: "When [action], [expected] but [actual]."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps to reproduce the bug.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should happen instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happens?
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, OS, backend version, etc.
+      placeholder: |
+        - Browser:
+        - OS:
+        - Backend:
+        - Frontend:
+        - Agentra CLI version (if applicable):
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Console errors, server logs, etc.
+      placeholder: "Paste relevant error output here."
+
+  - type: checkboxes
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - label: "Critical: blocks all users"
+          required: false
+        - label: "High: blocks most users or causes data loss"
+          required: false
+        - label: "Medium: partial impact, workaround exists"
+          required: false
+        - label: "Low: minor inconvenience"
+          required: false

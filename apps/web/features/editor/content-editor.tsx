@@ -60,6 +60,7 @@ interface ContentEditorRef {
   clearContent: () => void;
   focus: () => void;
   uploadFile: (file: File) => void;
+  setMarkdown: (markdown: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -186,6 +187,15 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
         if (!editor || !onUploadFileRef.current) return;
         const endPos = editor.state.doc.content.size;
         uploadAndInsertFile(editor, file, onUploadFileRef.current, endPos);
+      },
+      setMarkdown: (markdown: string) => {
+        if (!editor) return;
+        const processed = markdown ? preprocessMarkdown(markdown) : "";
+        if (processed) {
+          editor.commands.setContent(processed, { contentType: "markdown" });
+        } else {
+          editor.commands.clearContent();
+        }
       },
     }));
 

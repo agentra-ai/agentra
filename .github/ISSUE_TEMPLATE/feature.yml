@@ -1,0 +1,58 @@
+name: Feature
+description: Submit a new feature or enhancement
+labels: ["feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Feature Request
+
+        Describe the feature you want to add. Be specific about the problem it solves and the expected behavior.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem it solves
+      description: What user problem does this feature address?
+      placeholder: "As a [user type], I want [goal] so that [benefit]."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How do you envision solving this?
+      placeholder: "Describe the approach, API surface, or UX flow."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any other approaches you evaluated?
+      placeholder: "Describe alternatives and why this approach was chosen."
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: Frontend (Next.js)
+          required: false
+        - label: Backend (Go)
+          required: false
+        - label: Database / migrations
+          required: false
+        - label: Documentation
+          required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How do we know when this is done?
+      placeholder: |
+        - [ ] ...
+        - [ ] ...

@@ -29,6 +29,7 @@ import { ContentEditor, type ContentEditorRef } from "@/features/editor";
 import { TitleEditor } from "@/features/editor";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
+import { ISSUE_TEMPLATES, type IssueTemplate } from "@/features/issues/config/templates";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useIssueStore } from "@/features/issues";
 import { useIssueDraftStore } from "@/features/issues/stores/draft-store";
@@ -85,6 +86,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
   const [assigneeId, setAssigneeId] = useState<string | undefined>(draft.assigneeId);
   const [dueDate, setDueDate] = useState<string | null>(draft.dueDate);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<IssueTemplate | null>(null);
 
   // Assignee popover
   const [assigneeOpen, setAssigneeOpen] = useState(false);
@@ -110,6 +112,19 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
 
   // Sync field changes to draft store
   const updateTitle = (v: string) => { setTitle(v); setDraft({ title: v }); };
+
+  const applyTemplate = (template: IssueTemplate) => {
+    setSelectedTemplate(template);
+    setPriority(template.defaultPriority);
+    if (template.defaultTitle) {
+      setTitle(template.defaultTitle);
+      setDraft({ title: template.defaultTitle });
+    }
+    if (template.defaultDescription) {
+      descEditorRef.current?.setMarkdown(template.defaultDescription);
+      setDraft({ description: template.defaultDescription });
+    }
+  };
   const updateStatus = (v: IssueStatus) => { setStatus(v); setDraft({ status: v }); };
   const updatePriority = (v: IssuePriority) => { setPriority(v); setDraft({ priority: v }); };
   const updateAssignee = (type?: IssueAssigneeType, id?: string) => {
@@ -186,6 +201,12 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
             <span className="text-muted-foreground">{workspaceName}</span>
             <ChevronRight className="size-3 text-muted-foreground/50" />
             <span className="font-medium">New issue</span>
+            {selectedTemplate && (
+              <>
+                <ChevronRight className="size-3 text-muted-foreground/50" />
+                <span className="text-primary font-medium">{selectedTemplate.label}</span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <Tooltip>
@@ -214,6 +235,27 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
               />
               <TooltipContent side="bottom">Close</TooltipContent>
             </Tooltip>
+          </div>
+        </div>
+
+        {/* Template selector */}
+        <div className="px-5 pb-2 shrink-0">
+          <div className="flex items-center gap-1.5">
+            {ISSUE_TEMPLATES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => applyTemplate(t)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors cursor-pointer",
+                  selectedTemplate?.id === t.id
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border hover:bg-accent/60 text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <span className="font-medium">{t.label}</span>
+              </button>
+            ))}
           </div>
         </div>
 

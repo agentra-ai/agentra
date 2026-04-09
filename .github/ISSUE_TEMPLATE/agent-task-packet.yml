@@ -1,0 +1,85 @@
+name: Agent Task Packet
+description: Create a task for an AI agent to execute (assignable like a teammate)
+labels: ["agent-task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Agent Task Packet
+
+        Assign this issue to an AI agent like you would a teammate. Fill in the context below so the agent has everything it needs to execute independently.
+
+        Agents can be assigned via the Agentra workspace. The agent will receive this issue as a task packet with full context attached.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What is the single, concrete outcome this task produces?
+      placeholder: "Implement X that does Y."
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Background, motivation, and any relevant constraints.
+      placeholder: |
+        Why does this need to be done? What led to this decision?
+        Are there related issues, PRs, or documentation?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Concrete conditions that mark this task as complete.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: files
+    attributes:
+      label: Relevant files
+      description: Files to read first, or files that will be modified.
+      placeholder: |
+        - Read first:
+        - Will modify:
+        - Must not break:
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Non-negotiable requirements or boundaries.
+      placeholder: |
+        - Must use existing patterns from [file]
+        - Must not change public API
+        - Must pass `make check`
+        - ...
+
+  - type: textarea
+    id: quality
+    attributes:
+      label: Quality bar
+      description: Standards this work must meet.
+      placeholder: |
+        - TypeScript: `pnpm typecheck` passes
+        - Tests: `pnpm test` passes
+        - No new lint errors
+        - ...
+
+  - type: textarea
+    id: agent-hints
+    attributes:
+      label: Hints for the agent
+      description: Any guidance, tips, or gotchas for executing this task.
+      placeholder: |
+        - Start by reading [file] to understand the pattern
+        - The tricky part is X — approach it by Y
+        - ...
