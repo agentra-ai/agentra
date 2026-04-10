@@ -1,6 +1,16 @@
 import { preprocessLinks } from "@/components/markdown/linkify";
 import { preprocessMentionShortcodes } from "@/components/markdown/mentions";
 
+const LEGACY_UPLOAD_URL_PATTERNS = [
+  /https?:\/\/minio(?::\d+)?\/([^)\s"'<>]+)/g,
+];
+
+function normalizeLegacyUploadUrls(markdown: string): string {
+  return LEGACY_UPLOAD_URL_PATTERNS.reduce((acc, pattern) => {
+    return acc.replace(pattern, (_match, key: string) => `/api/files/${key}`);
+  }, markdown);
+}
+
 /**
  * Preprocess a markdown string before loading into Tiptap via contentType: 'markdown'.
  *
@@ -18,7 +28,8 @@ import { preprocessMentionShortcodes } from "@/components/markdown/mentions";
  */
 export function preprocessMarkdown(markdown: string): string {
   if (!markdown) return "";
-  const step1 = preprocessMentionShortcodes(markdown);
-  const step2 = preprocessLinks(step1);
-  return step2;
+  const step1 = normalizeLegacyUploadUrls(markdown);
+  const step2 = preprocessMentionShortcodes(step1);
+  const step3 = preprocessLinks(step2);
+  return step3;
 }

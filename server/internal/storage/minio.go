@@ -106,6 +106,7 @@ func (s *MinIOStorage) EnsureBucket(ctx context.Context) error {
 // KeyFromURL extracts the object key from a CDN or endpoint URL.
 func (s *MinIOStorage) KeyFromURL(rawURL string) string {
 	for _, prefix := range []string{
+		"/api/files/",
 		"https://" + s.cdnDomain + "/",
 		"https://" + s.endpoint + "/",
 		"http://" + s.endpoint + "/",
@@ -166,7 +167,7 @@ func (s *MinIOStorage) Upload(ctx context.Context, key string, data []byte, cont
 	return link, nil
 }
 
-// Download retrieves an object. Used internally; not part of FileStorage interface.
+// Download retrieves an object from the bucket.
 func (s *MinIOStorage) Download(ctx context.Context, key string) ([]byte, string, error) {
 	obj, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
 	if err != nil {

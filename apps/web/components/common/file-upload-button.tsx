@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useId } from "react";
 import { Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,7 @@ function FileUploadButton({
   className,
   size = "default",
 }: FileUploadButtonProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputId = useId();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -32,22 +32,25 @@ function FileUploadButton({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        disabled={disabled}
+      <label
+        htmlFor={inputId}
+        aria-disabled={disabled || undefined}
         className={cn(
-          "inline-flex items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-50 disabled:pointer-events-none",
+          "inline-flex cursor-pointer items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-50 disabled:pointer-events-none",
+          disabled && "pointer-events-none opacity-50",
           btnSize,
           className,
         )}
       >
         <Paperclip className={iconSize} />
-      </button>
+      </label>
       <input
-        ref={inputRef}
+        id={inputId}
         type="file"
-        className="hidden"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
+        disabled={disabled}
         onChange={handleChange}
       />
     </>

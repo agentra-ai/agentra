@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Camera, Loader2, Save } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +18,7 @@ export function AccountTab() {
   const [profileName, setProfileName] = useState(user?.name ?? "");
   const [profileSaving, setProfileSaving] = useState(false);
   const { upload, uploading } = useFileUpload();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputId = useId();
 
   useEffect(() => {
     setProfileName(user?.name ?? "");
@@ -69,11 +69,10 @@ export function AccountTab() {
           <CardContent className="space-y-4">
             {/* Avatar upload */}
             <div className="flex items-center gap-4">
-              <button
-                type="button"
-                className="group relative h-16 w-16 shrink-0 rounded-full bg-muted overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
+              <label
+                htmlFor={avatarInputId}
+                aria-disabled={uploading || undefined}
+                className={`group relative h-16 w-16 shrink-0 cursor-pointer rounded-full bg-muted overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${uploading ? "pointer-events-none opacity-60" : ""}`}
               >
                 {user?.avatar_url ? (
                   <img
@@ -93,12 +92,15 @@ export function AccountTab() {
                     <Camera className="h-5 w-5 text-white" />
                   )}
                 </div>
-              </button>
+              </label>
               <input
-                ref={fileInputRef}
+                id={avatarInputId}
                 type="file"
                 accept="image/*"
-                className="hidden"
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden="true"
+                disabled={uploading}
                 onChange={handleAvatarUpload}
               />
               <div className="text-xs text-muted-foreground">

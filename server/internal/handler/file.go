@@ -11,9 +11,9 @@ import (
 	"path"
 	"time"
 
+	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
 
 const maxUploadSize = 100 << 20 // 100 MB
@@ -37,20 +37,41 @@ type AttachmentResponse struct {
 	CreatedAt    string  `json:"created_at"`
 }
 
+func publicFilePath(key string) string {
+	if key == "" {
+		return ""
+	}
+	return "/api/files/" + key
+}
+
+func (h *Handler) publicFileURL(rawURL string) string {
+	if rawURL == "" || h.Storage == nil {
+		return rawURL
+	}
+
+	key := h.Storage.KeyFromURL(rawURL)
+	if key == "" {
+		return rawURL
+	}
+
+	return publicFilePath(key)
+}
+
 func (h *Handler) attachmentToResponse(a db.Attachment) AttachmentResponse {
+	publicURL := h.publicFileURL(a.Url)
 	resp := AttachmentResponse{
 		ID:           uuidToString(a.ID),
 		WorkspaceID:  uuidToString(a.WorkspaceID),
 		UploaderType: a.UploaderType,
 		UploaderID:   uuidToString(a.UploaderID),
 		Filename:     a.Filename,
-		URL:          a.Url,
-		DownloadURL:  a.Url,
+		URL:          publicURL,
+		DownloadURL:  publicURL,
 		ContentType:  a.ContentType,
 		SizeBytes:    a.SizeBytes,
 		CreatedAt:    a.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
-	if h.CFSigner != nil {
+	if h.CFSigner != nil && publicURL == a.Url {
 		resp.DownloadURL = h.CFSigner.SignedURL(a.Url, time.Now().Add(30*time.Minute))
 	}
 	if a.IssueID.Valid {
@@ -142,12 +163,13 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	key := hex.EncodeToString(b) + path.Ext(header.Filename)
 
-	link, err := h.Storage.Upload(r.Context(), key, data, contentType, header.Filename)
-	if err != nil {
+	if _, err := h.Storage.Upload(r.Context(), key, data, contentType, header.Filename); err != nil {
 		slog.Error("file upload failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "upload failed")
 		return
 	}
+
+	link := publicFilePath(key)
 
 	// If workspace context is available, create an attachment record.
 	if workspaceID != "" {
@@ -174,7 +196,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		att, err := h.Queries.CreateAttachment(r.Context(), params)
 		if err != nil {
 			slog.Error("failed to create attachment record", "error", err)
-			// S3 upload succeeded but DB record failed — still return the link
+			// Upload succeeded but DB record failed — still return the link
 			// so the file is usable. Log the error for investigation.
 		} else {
 			writeJSON(w, http.StatusOK, h.attachmentToResponse(att))
@@ -187,6 +209,35 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		"filename": header.Filename,
 		"link":     link,
 	})
+}
+
+// ---------------------------------------------------------------------------
+// GetPublicFile — GET /api/files/{key}
+// ---------------------------------------------------------------------------
+
+func (h *Handler) GetPublicFile(w http.ResponseWriter, r *http.Request) {
+	if h.Storage == nil {
+		writeError(w, http.StatusNotFound, "file storage not configured")
+		return
+	}
+
+	key := chi.URLParam(r, "key")
+	if key == "" {
+		writeError(w, http.StatusBadRequest, "missing file key")
+		return
+	}
+
+	data, contentType, err := h.Storage.Download(r.Context(), key)
+	if err != nil {
+		slog.Error("failed to fetch uploaded file", "key", key, "error", err)
+		writeError(w, http.StatusNotFound, "file not found")
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=432000, immutable")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useId, useRef, useMemo } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import {
   Bot,
@@ -1195,7 +1195,7 @@ function SettingsTab({
   const [maxTasks, setMaxTasks] = useState(agent.max_concurrent_tasks);
   const [saving, setSaving] = useState(false);
   const { upload, uploading } = useFileUpload();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputId = useId();
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1240,11 +1240,10 @@ function SettingsTab({
       <div>
         <Label className="text-xs text-muted-foreground">Avatar</Label>
         <div className="mt-1.5 flex items-center gap-4">
-          <button
-            type="button"
-            className="group relative h-16 w-16 shrink-0 rounded-full bg-muted overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
+          <label
+            htmlFor={avatarInputId}
+            aria-disabled={uploading || undefined}
+            className={`group relative h-16 w-16 shrink-0 cursor-pointer rounded-full bg-muted overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${uploading ? "pointer-events-none opacity-60" : ""}`}
           >
             <ActorAvatar actorType="agent" actorId={agent.id} size={64} className="rounded-none" />
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
@@ -1254,12 +1253,15 @@ function SettingsTab({
                 <Camera className="h-5 w-5 text-white" />
               )}
             </div>
-          </button>
+          </label>
           <input
-            ref={fileInputRef}
+            id={avatarInputId}
             type="file"
             accept="image/*"
-            className="hidden"
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden="true"
+            disabled={uploading}
             onChange={handleAvatarUpload}
           />
           <div className="text-xs text-muted-foreground">

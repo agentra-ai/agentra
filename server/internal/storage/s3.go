@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -88,6 +89,7 @@ func sanitizeFilename(name string) string {
 func (s *S3Storage) KeyFromURL(rawURL string) string {
 	// Strip the "https://domain/" prefix.
 	for _, prefix := range []string{
+		"/api/files/",
 		"https://" + s.cdnDomain + "/",
 		"https://" + s.bucket + "/",
 	} {
@@ -144,4 +146,27 @@ func (s *S3Storage) Upload(ctx context.Context, key string, data []byte, content
 	}
 	link := fmt.Sprintf("https://%s/%s", domain, key)
 	return link, nil
+}
+
+func (s *S3Storage) Download(ctx context.Context, key string) ([]byte, string, error) {
+	obj, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("s3 GetObject: %w", err)
+	}
+	defer obj.Body.Close()
+
+	data, err := io.ReadAll(obj.Body)
+	if err != nil {
+		return nil, "", fmt.Errorf("s3 ReadAll: %w", err)
+	}
+
+	contentType := "application/octet-stream"
+	if obj.ContentType != nil && *obj.ContentType != "" {
+		contentType = *obj.ContentType
+	}
+
+	return data, contentType, nil
 }
