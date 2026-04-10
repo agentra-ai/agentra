@@ -68,6 +68,32 @@ The technical guidelines should include the following hard requirements.
 - use the repo's standard Make-based setup and start flow
 - treat local deployment as part of development completion, not optional follow-up
 
+**Docker Deployment Workflow (Mandatory for containerized deployments):**
+
+When deploying to Docker, you MUST follow this exact sequence:
+
+1. **Build the image with `--no-cache`**
+   ```bash
+   docker compose build --no-cache <service>
+   ```
+   Use `--no-cache` to ensure a fresh build, not cached layers.
+
+2. **Start the service**
+   ```bash
+   docker compose up -d
+   ```
+
+3. **Verify the service is running**
+   - Check container health: `docker compose ps`
+   - Check logs for errors: `docker compose logs <service>`
+   - Verify the service is listening on the expected port
+   - For web services: curl or visit the frontend URL to confirm it's responding
+
+**Common Mistakes to Avoid:**
+- Do NOT run `docker compose up -d` without building first when code has changed
+- Do NOT skip the verification step — always confirm the service is actually running
+- Do NOT use `docker compose up` (without `-d`) in automation — use detached mode
+
 #### Security
 
 - validate external input at boundaries
@@ -116,6 +142,45 @@ The code review checklist should explicitly include:
 - pagination or bounded data-size review for list/search changes
 - concurrency and duplicate-side-effect review for retryable flows
 - security and authorization boundary review
+
+#### Pull Request Workflow (Mandatory)
+
+**All code changes must go through a Pull Request. Direct pushes to main are prohibited.**
+
+The PR workflow must strictly follow these steps:
+
+1. **Branch Creation**
+   - Branch name MUST follow the format: `feat/<ISSUE_ID>-<short-description>`
+   - Examples: `feat/APP-123-user-auth`, `fix/APP-456-login-timeout`
+   - Issue ID must be from the actual issue you are working on
+
+2. **PR Creation**
+   - Create a PR against `main` immediately after pushing your first commit
+   - PR title MUST include the issue ID: e.g., `feat(APP-123): implement user authentication`
+   - Fill in the PR description with: what changed, why it changed, and how to test
+   - Set appropriate labels based on issue type
+
+3. **CI Requirements**
+   - Wait for all CI checks to pass (tests, linting, type checking)
+   - If CI fails, fix the issues before requesting review
+   - Do NOT merge while CI is failing
+
+4. **Code Review**
+   - Request review from the designated QA agent or team members
+   - Address all review comments
+   - Do NOT merge until you have explicit approval
+
+5. **Merge**
+   - Use "Squash and merge" for feature branches to keep main history clean
+   - Or use "Merge pull request" if you need to preserve all commit messages
+   - Delete the feature branch after successful merge
+   - Update the issue status to `done` after merge
+
+**Forbidden Actions:**
+- Never push directly to `main` or `origin/main`
+- Never merge your own PR without review
+- Never skip CI checks
+- Never merge with failing tests
 
 ---
 
