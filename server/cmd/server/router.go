@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -53,9 +54,44 @@ func allowedOrigins() []string {
 func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Router {
 	queries := db.New(pool)
 	emailSvc := service.NewEmailService()
-	s3 := storage.NewS3StorageFromEnv()
+
+	// STORAGE_DRIVER controls which backend to use: "minio" (default) or "s3".
+	// Both backends satisfy the storage.FileStorage interface.
+	var fileStorage storage.FileStorage
+	driver := os.Getenv("STORAGE_DRIVER")
+	if driver == "" {
+		driver = "minio" // MinIO is the default for self-hosted deployments
+	}
+	switch driver {
+	case "minio":
+		if minio := storage.NewMinIOStorageFromEnv(); minio != nil {
+			fileStorage = minio
+		} else {
+			slog.Warn("MinIO driver selected but not configured, falling back to S3")
+			if s3 := storage.NewS3StorageFromEnv(); s3 != nil {
+				fileStorage = s3
+			}
+		}
+	case "s3":
+		if s3 := storage.NewS3StorageFromEnv(); s3 != nil {
+			fileStorage = s3
+		} else {
+			slog.Warn("S3 driver selected but not configured")
+		}
+	default:
+		slog.Warn("unknown STORAGE_DRIVER, trying MinIO then S3", "driver", driver)
+		if minio := storage.NewMinIOStorageFromEnv(); minio != nil {
+			fileStorage = minio
+		} else if s3 := storage.NewS3StorageFromEnv(); s3 != nil {
+			fileStorage = s3
+		}
+	}
+	if fileStorage == nil {
+		slog.Info("no file storage configured, uploads disabled")
+	}
+
 	cfSigner := auth.NewCloudFrontSignerFromEnv()
-	h := handler.New(queries, pool, hub, bus, emailSvc, s3, cfSigner)
+	h := handler.New(queries, pool, hub, bus, emailSvc, fileStorage, cfSigner)
 
 	r := chi.NewRouter()
 
