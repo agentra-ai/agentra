@@ -856,6 +856,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 	// via `agentra repo checkout <url>`.
 	taskCtx := execenv.TaskContextForEnv{
 		IssueID:           task.IssueID,
+		IssueTitle:        task.IssueTitle,
 		TriggerCommentID:  task.TriggerCommentID,
 		AgentName:         agentName,
 		AgentInstructions: instructions,
