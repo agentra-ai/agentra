@@ -1,0 +1,138 @@
+{
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "edit": "编辑",
+    "close": "关闭",
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "confirm": "确认",
+    "search": "搜索",
+    "noResults": "未找到结果",
+    "retry": "重试",
+    "back": "返回",
+    "next": "下一步",
+    "previous": "上一步",
+    "submit": "提交",
+    "reset": "重置"
+  },
+  "auth": {
+    "login": "登录",
+    "logout": "退出登录",
+    "signUp": "注册",
+    "email": "邮箱",
+    "password": "密码",
+    "forgotPassword": "忘记密码？",
+    "loginButton": "登录",
+    "loggingIn": "登录中...",
+    "loginError": "邮箱或密码错误",
+    "createAccount": "创建账号",
+    "alreadyHaveAccount": "已有账号？"
+  },
+  "issues": {
+    "title": "问题",
+    "newIssue": "新建问题",
+    "issueTitle": "标题",
+    "issueDescription": "描述",
+    "status": {
+      "open": "待处理",
+      "in_progress": "进行中",
+      "in_review": "审核中",
+      "done": "已完成",
+      "completed": "已完成",
+      "canceled": "已取消"
+    },
+    "priority": {
+      "urgent": "紧急",
+      "high": "高",
+      "medium": "中",
+      "low": "低",
+      "no_priority": "无优先级"
+    },
+    "assignee": "负责人",
+    "reporter": "报告人",
+    "labels": "标签",
+    "dueDate": "截止日期",
+    "createdAt": "创建于",
+    "updatedAt": "更新于",
+    "noIssues": "暂无问题",
+    "createFirst": "创建你的第一个问题",
+    "filterIssues": "筛选问题",
+    "allIssues": "所有问题",
+    "myIssues": "我的问题",
+    "board": "看板"
+  },
+  "workspace": {
+    "title": "工作空间",
+    "settings": "工作空间设置",
+    "members": "成员",
+    "agents": "代理",
+    "name": "工作空间名称",
+    "createWorkspace": "创建工作空间",
+    "joinWorkspace": "加入工作空间",
+    "memberCount": "{count, plural, =1 {1 位成员} other {# 位成员}}",
+    "role": {
+      "owner": "所有者",
+      "admin": "管理员",
+      "member": "成员"
+    }
+  },
+  "settings": {
+    "title": "设置",
+    "profile": "个人资料",
+    "appearance": "外观",
+    "tokens": "API 令牌",
+    "general": "通用",
+    "repositories": "仓库",
+    "language": "语言",
+    "languageDescription": "选择您的首选语言",
+    "theme": "主题",
+    "themeDescription": "选择您喜欢的主题",
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统"
+  },
+  "navigation": {
+    "dashboard": "仪表盘",
+    "issues": "问题",
+    "board": "看板",
+    "inbox": "收件箱",
+    "runtimes": "运行时",
+    "skills": "技能",
+    "settings": "设置"
+  },
+  "runtimes": {
+    "title": "运行时",
+    "local": "本地",
+    "cloud": "云端",
+    "status": {
+      "online": "在线",
+      "offline": "离线",
+      "busy": "忙碌"
+    },
+    "noRuntimes": "暂无配置的运行时"
+  },
+  "inbox": {
+    "title": "收件箱",
+    "notifications": "通知",
+    "markAllRead": "全部标记为已读",
+    "noNotifications": "暂无新通知"
+  },
+  "modals": {
+    "createIssue": "创建问题",
+    "editIssue": "编辑问题",
+    "deleteIssue": "删除问题",
+    "deleteConfirm": "确定要删除这个问题吗？",
+    "deleteWarning": "此操作无法撤销。"
+  },
+  "time": {
+    "justNow": "刚刚",
+    "minutesAgo": "{count, plural, =1 {1 分钟前} other {# 分钟前}}",
+    "hoursAgo": "{count, plural, =1 {1 小时前} other {# 小时前}}",
+    "daysAgo": "{count, plural, =1 {1 天前} other {# 天前}}",
+    "today": "今天",
+    "yesterday": "昨天"
+  }
+}
