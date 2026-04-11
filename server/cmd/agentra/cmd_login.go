@@ -35,7 +35,11 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "\n→ Run 'agentra daemon start' to start your local agent runtime.\n")
+	fmt.Fprintln(os.Stderr, "\n✅ 登录成功！")
+	fmt.Fprintln(os.Stderr, "下一步:")
+	fmt.Fprintln(os.Stderr, "  - 运行 'agentra daemon start' 启动本地 Agent 守护进程")
+	fmt.Fprintln(os.Stderr, "  - 运行 'agentra workspace list' 查看工作区")
+	fmt.Fprintln(os.Stderr, "  - 运行 'agentra issue list' 查看 Issue 列表")
 	return nil
 }
 

@@ -32,6 +32,9 @@ func init() {
 }
 
 func runAttachmentDownload(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err

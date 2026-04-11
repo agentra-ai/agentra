@@ -152,6 +152,17 @@ func resolveProfile(cmd *cobra.Command) string {
 	return val
 }
 
+// requireAuth checks if the user is authenticated and returns a friendly error if not.
+func requireAuth(cmd *cobra.Command) error {
+	token := resolveToken(cmd)
+	if token == "" {
+		fmt.Fprintln(os.Stderr, "❌ 未登录或认证已过期")
+		fmt.Fprintln(os.Stderr, "\n请先运行 'agentra login' 登录到 Agentra")
+		return fmt.Errorf("not authenticated")
+	}
+	return nil
+}
+
 func newAPIClient(cmd *cobra.Command) (*cli.APIClient, error) {
 	serverURL := resolveServerURL(cmd)
 	workspaceID := resolveWorkspaceID(cmd)
@@ -214,6 +225,9 @@ func resolveWorkspaceID(cmd *cobra.Command) string {
 // ---------------------------------------------------------------------------
 
 func runAgentList(cmd *cobra.Command, _ []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -263,6 +277,9 @@ func runAgentList(cmd *cobra.Command, _ []string) error {
 }
 
 func runAgentGet(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -295,6 +312,9 @@ func runAgentGet(cmd *cobra.Command, args []string) error {
 }
 
 func runAgentCreate(cmd *cobra.Command, _ []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -354,6 +374,9 @@ func runAgentCreate(cmd *cobra.Command, _ []string) error {
 }
 
 func runAgentUpdate(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -419,6 +442,9 @@ func runAgentUpdate(cmd *cobra.Command, args []string) error {
 }
 
 func runAgentArchive(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -442,6 +468,9 @@ func runAgentArchive(cmd *cobra.Command, args []string) error {
 }
 
 func runAgentRestore(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -465,6 +494,9 @@ func runAgentRestore(cmd *cobra.Command, args []string) error {
 }
 
 func runAgentTasks(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -502,6 +534,9 @@ func runAgentTasks(cmd *cobra.Command, args []string) error {
 // ---------------------------------------------------------------------------
 
 func runAgentSkillsList(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -534,6 +569,9 @@ func runAgentSkillsList(cmd *cobra.Command, args []string) error {
 }
 
 func runAgentSkillsSet(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err

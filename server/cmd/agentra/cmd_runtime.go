@@ -82,6 +82,9 @@ func init() {
 // ---------------------------------------------------------------------------
 
 func runRuntimeList(cmd *cobra.Command, _ []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -117,6 +120,9 @@ func runRuntimeList(cmd *cobra.Command, _ []string) error {
 }
 
 func runRuntimeUsage(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -159,6 +165,9 @@ func runRuntimeUsage(cmd *cobra.Command, args []string) error {
 }
 
 func runRuntimeActivity(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -190,6 +199,9 @@ func runRuntimeActivity(cmd *cobra.Command, args []string) error {
 }
 
 func runRuntimePing(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -244,6 +256,9 @@ func runRuntimePing(cmd *cobra.Command, args []string) error {
 }
 
 func runRuntimeUpdate(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err

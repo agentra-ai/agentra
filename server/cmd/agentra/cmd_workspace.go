@@ -64,11 +64,12 @@ func init() {
 }
 
 func runWorkspaceList(cmd *cobra.Command, _ []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
+
 	serverURL := resolveServerURL(cmd)
 	token := resolveToken(cmd)
-	if token == "" {
-		return fmt.Errorf("not authenticated: run 'agentra login' first")
-	}
 
 	client := cli.NewAPIClient(serverURL, "", token)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -115,6 +116,9 @@ func workspaceIDFromArgs(cmd *cobra.Command, args []string) string {
 }
 
 func runWorkspaceGet(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	wsID := workspaceIDFromArgs(cmd, args)
 	if wsID == "" {
 		return fmt.Errorf("workspace ID is required: pass as argument or set AGENTRA_WORKSPACE_ID")
@@ -161,6 +165,9 @@ func runWorkspaceGet(cmd *cobra.Command, args []string) error {
 }
 
 func runWorkspaceMembers(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	wsID := workspaceIDFromArgs(cmd, args)
 	if wsID == "" {
 		return fmt.Errorf("workspace ID is required: pass as argument or set AGENTRA_WORKSPACE_ID")
@@ -199,13 +206,13 @@ func runWorkspaceMembers(cmd *cobra.Command, args []string) error {
 }
 
 func runWatch(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	workspaceID := args[0]
 
 	serverURL := resolveServerURL(cmd)
 	token := resolveToken(cmd)
-	if token == "" {
-		return fmt.Errorf("not authenticated: run 'agentra login' first")
-	}
 
 	client := cli.NewAPIClient(serverURL, "", token)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
