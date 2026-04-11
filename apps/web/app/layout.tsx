@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { cookies } from "next/headers";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getTranslations } from "next-intl/server";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
@@ -54,24 +55,25 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies();
-  const locale = cookieStore.get("agentra-locale")?.value;
-  const lang = locale === "zh" ? "zh" : "en";
+  const locale = await getLocale();
+  const t = await getTranslations();
 
   return (
     <html
-      lang={lang}
+      lang={locale}
       suppressHydrationWarning
       className={cn("antialiased font-sans h-full")}
     >
       <body className="h-full overflow-hidden">
-        <ThemeProvider>
-          <AuthInitializer>
-            <WSProvider>{children}</WSProvider>
-          </AuthInitializer>
-          <ModalRegistry />
-          <Toaster />
-        </ThemeProvider>
+        <NextIntlClientProvider>
+          <ThemeProvider>
+            <AuthInitializer>
+              <WSProvider>{children}</WSProvider>
+            </AuthInitializer>
+            <ModalRegistry />
+            <Toaster />
+          </ThemeProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );
