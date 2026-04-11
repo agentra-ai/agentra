@@ -78,12 +78,14 @@ interface UpdateSectionProps {
   runtimeId: string;
   currentVersion: string | null;
   isOnline: boolean;
+  onUpdateComplete?: () => void;
 }
 
 export function UpdateSection({
   runtimeId,
   currentVersion,
   isOnline,
+  onUpdateComplete,
 }: UpdateSectionProps) {
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const [status, setStatus] = useState<RuntimeUpdateStatus | null>(null);
@@ -126,8 +128,9 @@ export function UpdateSection({
             setOutput(result.output ?? "");
             setUpdating(false);
             cleanup();
-            // Auto-clear status after a few seconds so the UI
-            // refreshes to show the new version from the re-fetched runtime data.
+            // Refetch runtimes to get the updated daemon version.
+            // Also auto-clear status after a few seconds.
+            onUpdateComplete?.();
             setTimeout(() => setStatus(null), 5000);
           } else if (
             result.status === "failed" ||

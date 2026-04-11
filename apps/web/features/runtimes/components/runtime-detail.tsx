@@ -4,6 +4,7 @@ import { RuntimeModeIcon, StatusBadge, InfoField } from "./shared";
 import { PingSection } from "./ping-section";
 import { UpdateSection } from "./update-section";
 import { UsageSection } from "./usage-section";
+import { useRuntimeStore } from "../store";
 
 function getCliVersion(metadata: Record<string, unknown>): string | null {
   if (
@@ -19,6 +20,14 @@ function getCliVersion(metadata: Record<string, unknown>): string | null {
 export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
   const cliVersion =
     runtime.runtime_mode === "local" ? getCliVersion(runtime.metadata) : null;
+  const fetchRuntimes = useRuntimeStore((s) => s.fetchRuntimes);
+
+  const handleUpdateComplete = () => {
+    // Refetch runtimes after daemon restarts with new version.
+    // The daemon:register event should handle this, but being explicit
+    // ensures the UI reflects the new version promptly.
+    fetchRuntimes();
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -68,6 +77,7 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
               runtimeId={runtime.id}
               currentVersion={cliVersion}
               isOnline={runtime.status === "online"}
+              onUpdateComplete={handleUpdateComplete}
             />
           </div>
         )}
