@@ -182,6 +182,9 @@ func init() {
 // ---------------------------------------------------------------------------
 
 func runIssueList(cmd *cobra.Command, _ []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -254,6 +257,9 @@ func runIssueList(cmd *cobra.Command, _ []string) error {
 }
 
 func runIssueGet(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -292,6 +298,9 @@ func runIssueGet(cmd *cobra.Command, args []string) error {
 }
 
 func runIssueCreate(cmd *cobra.Command, _ []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	title, _ := cmd.Flags().GetString("title")
 	if title == "" {
 		return fmt.Errorf("--title is required")
@@ -371,6 +380,9 @@ func runIssueCreate(cmd *cobra.Command, _ []string) error {
 }
 
 func runIssueUpdate(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -436,6 +448,9 @@ func runIssueUpdate(cmd *cobra.Command, args []string) error {
 }
 
 func runIssueAssign(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	toName, _ := cmd.Flags().GetString("to")
 	unassign, _ := cmd.Flags().GetBool("unassign")
 
@@ -486,6 +501,9 @@ func runIssueAssign(cmd *cobra.Command, args []string) error {
 }
 
 func runIssueStatus(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	id := args[0]
 	status := args[1]
 
@@ -528,6 +546,9 @@ func runIssueStatus(cmd *cobra.Command, args []string) error {
 // ---------------------------------------------------------------------------
 
 func runIssueCommentList(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -576,6 +597,9 @@ func runIssueCommentList(cmd *cobra.Command, args []string) error {
 }
 
 func runIssueCommentAdd(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	content, _ := cmd.Flags().GetString("content")
 	if content == "" {
 		return fmt.Errorf("--content is required")
@@ -634,6 +658,9 @@ func runIssueCommentAdd(cmd *cobra.Command, args []string) error {
 }
 
 func runIssueCommentDelete(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -655,6 +682,9 @@ func runIssueCommentDelete(cmd *cobra.Command, args []string) error {
 // ---------------------------------------------------------------------------
 
 func runIssueRuns(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -703,6 +733,9 @@ func runIssueRuns(cmd *cobra.Command, args []string) error {
 }
 
 func runIssueRunMessages(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err

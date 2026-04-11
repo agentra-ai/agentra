@@ -140,6 +140,9 @@ func init() {
 // ---------------------------------------------------------------------------
 
 func runSkillList(cmd *cobra.Command, _ []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -173,6 +176,9 @@ func runSkillList(cmd *cobra.Command, _ []string) error {
 }
 
 func runSkillGet(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -203,6 +209,9 @@ func runSkillGet(cmd *cobra.Command, args []string) error {
 }
 
 func runSkillCreate(cmd *cobra.Command, _ []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -249,6 +258,9 @@ func runSkillCreate(cmd *cobra.Command, _ []string) error {
 }
 
 func runSkillUpdate(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -298,6 +310,9 @@ func runSkillUpdate(cmd *cobra.Command, args []string) error {
 }
 
 func runSkillDelete(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	yes, _ := cmd.Flags().GetBool("yes")
 	if !yes {
 		fmt.Printf("Are you sure you want to delete skill %s? This cannot be undone. [y/N] ", args[0])
@@ -327,6 +342,9 @@ func runSkillDelete(cmd *cobra.Command, args []string) error {
 }
 
 func runSkillImport(cmd *cobra.Command, _ []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -363,6 +381,9 @@ func runSkillImport(cmd *cobra.Command, _ []string) error {
 // ---------------------------------------------------------------------------
 
 func runSkillFilesList(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -396,6 +417,9 @@ func runSkillFilesList(cmd *cobra.Command, args []string) error {
 }
 
 func runSkillFilesUpsert(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
@@ -433,6 +457,9 @@ func runSkillFilesUpsert(cmd *cobra.Command, args []string) error {
 }
 
 func runSkillFilesDelete(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err
