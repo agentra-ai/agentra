@@ -26,7 +26,7 @@ type MinIOStorage struct {
 // Returns nil if MINIO_ENDPOINT is not set.
 //
 // Environment variables:
-//   - MINIO_ENDPOINT (required, e.g. "localhost:9000")
+//   - MINIO_ENDPOINT (required, e.g. "minio:9000" or "minio.agentra.orb.local:9000")
 //   - MINIO_ACCESS_KEY / MINIO_SECRET_KEY (required)
 //   - MINIO_BUCKET (required, e.g. "agentra-uploads")
 //   - MINIO_USE_SSL (default: "false")

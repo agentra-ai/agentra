@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -18,6 +19,41 @@ import (
 // ---------------------------------------------------------------------------
 // Daemon Registration & Heartbeat
 // ---------------------------------------------------------------------------
+
+// reconcileAgentsForWorkspace reconciles the status of all agents in a workspace
+// after daemon registration. This ensures agents aren't left in stale "working"
+// status when the daemon restarts without any task state changes.
+func (h *Handler) reconcileAgentsForWorkspace(workspaceID string) {
+	ctx := context.Background()
+	agents, err := h.Queries.ListAgents(ctx, parseUUID(workspaceID))
+	if err != nil {
+		return
+	}
+	for _, agent := range agents {
+		running, err := h.Queries.CountRunningTasks(ctx, agent.ID)
+		if err != nil {
+			continue
+		}
+		newStatus := "idle"
+		if running > 0 {
+			newStatus = "working"
+		}
+		if string(agent.Status) == newStatus {
+			continue
+		}
+		updated, err := h.Queries.UpdateAgentStatus(ctx, db.UpdateAgentStatusParams{
+			ID:     agent.ID,
+			Status: newStatus,
+		})
+		if err != nil {
+			continue
+		}
+		h.publish(protocol.EventAgentStatus, workspaceID, "system", "", map[string]any{
+			"agent_id": uuidToString(updated.ID),
+			"status":   updated.Status,
+		})
+	}
+}
 
 type DaemonRegisterRequest struct {
 	WorkspaceID string `json:"workspace_id"`
@@ -117,6 +153,10 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 	h.publish(protocol.EventDaemonRegister, req.WorkspaceID, "system", "", map[string]any{
 		"runtimes": resp,
 	})
+
+	// Reconcile agent statuses after daemon registration to handle the case
+	// where the daemon restarted and left agents in stale "working" status.
+	h.reconcileAgentsForWorkspace(req.WorkspaceID)
 
 	// Include workspace repos so the daemon can cache them locally.
 	var repos []RepoData
