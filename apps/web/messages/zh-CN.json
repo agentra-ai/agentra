@@ -29,7 +29,24 @@
     "loggingIn": "登录中...",
     "loginError": "邮箱或密码错误",
     "createAccount": "创建账号",
-    "alreadyHaveAccount": "已有账号？"
+    "alreadyHaveAccount": "已有账号？",
+    "authorizeCli": "授权 CLI",
+    "authorizeCliDescription": "允许 CLI 以 {email} 身份访问 Agentra？",
+    "authorize": "授权",
+    "authorizing": "授权中...",
+    "useDifferentAccount": "使用其他账号",
+    "enterVerificationCode": "输入验证码",
+    "checkYourEmail": "查收邮件",
+    "emailNotConfigured": "服务器未配置邮件发送。请使用开发验证码登录 {email}。",
+    "sentVerificationCode": "我们已向 {email} 发送验证码",
+    "developmentCode": "开发验证码",
+    "resendIn": "{count}秒后重发",
+    "resendCode": "重发验证码",
+    "emailRequired": "请输入邮箱",
+    "invalidCallback": "无效的回调地址",
+    "invalidOrExpiredCode": "验证码无效或已过期",
+    "failedToSendCode": "发送验证码失败，请确保服务器正在运行。",
+    "tagline": "将编码代理变成真正的团队成员"
   },
   "issues": {
     "title": "问题",
@@ -60,6 +77,7 @@
     "noIssues": "暂无问题",
     "createFirst": "创建你的第一个问题",
     "filterIssues": "筛选问题",
+    "all": "全部",
     "allIssues": "所有问题",
     "myIssues": "我的问题",
     "board": "看板"

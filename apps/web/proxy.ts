@@ -1,23 +1,39 @@
-import createMiddleware from "next-intl/middleware";
-import { locales, defaultLocale } from "./i18n/request";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export default createMiddleware({
-  locales,
-  defaultLocale,
-  localePrefix: "as-needed",
-  localeCookie: {
-    name: "agentra-locale",
-  },
-});
+const LOCALES = ["en", "zh-CN", "zh"];
+const DEFAULT_LOCALE = "en";
+const LOCALE_COOKIE = "agentra-locale";
+
+export function proxy(request: NextRequest) {
+  const response = NextResponse.next();
+
+  // Check if locale cookie already exists
+  const localeCookie = request.cookies.get(LOCALE_COOKIE)?.value;
+
+  if (!localeCookie) {
+    // Detect locale from Accept-Language header
+    const acceptLang = request.headers.get("accept-language") ?? "";
+    let detectedLocale = DEFAULT_LOCALE;
+
+    if (acceptLang.includes("zh")) {
+      detectedLocale = "zh-CN";
+    }
+
+    // Set the cookie
+    response.cookies.set(LOCALE_COOKIE, detectedLocale, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+    });
+  }
+
+  return response;
+}
 
 export const config = {
   matcher: [
-    // Match all pathnames except for
-    // - API routes (/api/*)
-    // - Auth routes (/auth/* - server-side auth endpoints)
-    // - Static files
-    // - Favicon
-    // - Root page (landing page handles its own locale)
-    "/((?!api|auth|_next/static|_next/image|favicon.ico|.*\\..*).*)",
+    // Apply to all app routes
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)",
   ],
 };

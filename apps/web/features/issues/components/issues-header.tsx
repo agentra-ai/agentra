@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ArrowDown,
   ArrowUp,
@@ -273,6 +274,8 @@ function ActorSubContent({
 // ---------------------------------------------------------------------------
 
 export function IssuesHeader({ scopedIssues }: { scopedIssues: Issue[] }) {
+  const t = useTranslations("issues");
+  const tNav = useTranslations("navigation");
   const scope = useIssuesScopeStore((s) => s.scope);
   const setScope = useIssuesScopeStore((s) => s.setScope);
 
@@ -301,11 +304,17 @@ export function IssuesHeader({ scopedIssues }: { scopedIssues: Issue[] }) {
   const sortLabel =
     SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? "Manual";
 
+  const scopes = [
+    { value: "all" as const, label: t("all"), description: "All issues in this workspace" },
+    { value: "members" as const, label: "Members", description: "Issues assigned to team members" },
+    { value: "agents" as const, label: "Agents", description: "Issues assigned to AI agents" },
+  ];
+
   return (
     <div className="flex h-12 shrink-0 items-center justify-between px-4">
       {/* Left: scope buttons */}
       <div className="flex items-center gap-1">
-        {SCOPES.map((s) => (
+        {scopes.map((s) => (
           <Tooltip key={s.value}>
             <TooltipTrigger
               render={

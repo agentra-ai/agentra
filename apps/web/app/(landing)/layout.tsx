@@ -33,7 +33,10 @@ async function getInitialLocale(): Promise<Locale> {
   // 1. User's explicit preference (cookie set when they switch language)
   const cookieStore = await cookies();
   const stored = cookieStore.get("agentra-locale")?.value;
-  if (stored === "en" || stored === "zh") return stored;
+  if (stored === "en" || stored === "zh" || stored === "zh-CN") {
+    // Normalize zh-CN to zh for landing page
+    return stored === "zh-CN" ? "zh" : stored;
+  }
 
   // 2. Detect from Accept-Language header
   const headersList = await headers();

@@ -1,8 +1,7 @@
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
-import { DashboardLayoutClient } from "./layout-client";
 
-export default async function DashboardLayout({
+export default async function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -12,7 +11,7 @@ export default async function DashboardLayout({
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
-      <DashboardLayoutClient>{children}</DashboardLayoutClient>
+      {children}
     </NextIntlClientProvider>
   );
 }

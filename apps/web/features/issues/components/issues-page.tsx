@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { ChevronRight, ListTodo } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { IssueStatus } from "@/shared/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIssueStore } from "@/features/issues/store";
@@ -21,6 +22,7 @@ import { ListView } from "./list-view";
 import { BatchActionToolbar } from "./batch-action-toolbar";
 
 export function IssuesPage() {
+  const t = useTranslations("issues");
   const allIssues = useIssueStore((s) => s.issues);
   const loading = useIssueStore((s) => s.loading);
   const workspace = useWorkspaceStore((s) => s.workspace);
@@ -81,7 +83,7 @@ export function IssuesPage() {
       useIssueStore.getState().updateIssue(issueId, updates);
 
       api.updateIssue(issueId, updates).catch(() => {
-        toast.error("Failed to move issue");
+        toast.error(t("error"));
         api.listIssues({ limit: 200 }).then((res) => {
           useIssueStore.getState().setIssues(res.issues);
         }).catch(console.error);
@@ -123,7 +125,7 @@ export function IssuesPage() {
           {workspace?.name ?? "Workspace"}
         </span>
         <ChevronRight className="h-3 w-3 text-muted-foreground" />
-        <span className="text-sm font-medium">Issues</span>
+        <span className="text-sm font-medium">{t("title")}</span>
       </div>
 
       {/* Header 2: Scope tabs + filters */}
@@ -134,8 +136,8 @@ export function IssuesPage() {
         {scopedIssues.length === 0 ? (
           <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-2 text-muted-foreground">
             <ListTodo className="h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm">No issues yet</p>
-            <p className="text-xs">Create an issue to get started.</p>
+            <p className="text-sm">{t("noIssues")}</p>
+            <p className="text-xs">{t("createFirst")}</p>
           </div>
         ) : (
           <div className="flex flex-col flex-1 min-h-0">

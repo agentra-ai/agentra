@@ -1,7 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { NextIntlClientProvider } from "next-intl";
+import { messages } from "@/i18n";
+import type { Message } from "@/i18n";
 import type { Issue } from "@/shared/types";
+
+const renderWithI18n = (component: React.ReactElement) => {
+  return render(
+    <NextIntlClientProvider locale="en" messages={messages.en as Message}>
+      {component}
+    </NextIntlClientProvider>
+  );
+};
 
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
@@ -302,7 +313,7 @@ describe("IssuesPage", () => {
   it("shows loading state initially", () => {
     mockStoreState.loading = true;
     mockStoreState.issues = [];
-    render(<IssuesPage />);
+    renderWithI18n(<IssuesPage />);
     expect(screen.getAllByRole("generic").some(el => el.getAttribute("data-slot") === "skeleton")).toBe(true);
   });
 
@@ -310,7 +321,7 @@ describe("IssuesPage", () => {
     mockStoreState.loading = false;
     mockStoreState.issues = mockIssues;
 
-    render(<IssuesPage />);
+    renderWithI18n(<IssuesPage />);
 
     expect(screen.getByText("Implement auth")).toBeInTheDocument();
     expect(screen.getByText("Design landing page")).toBeInTheDocument();
@@ -321,7 +332,7 @@ describe("IssuesPage", () => {
     mockStoreState.loading = false;
     mockStoreState.issues = mockIssues;
 
-    render(<IssuesPage />);
+    renderWithI18n(<IssuesPage />);
 
     expect(screen.getAllByText("Backlog").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Todo").length).toBeGreaterThanOrEqual(1);
@@ -334,7 +345,7 @@ describe("IssuesPage", () => {
     mockStoreState.loading = false;
     mockStoreState.issues = [];
 
-    render(<IssuesPage />);
+    renderWithI18n(<IssuesPage />);
 
     expect(screen.getByText("Issues")).toBeInTheDocument();
   });
@@ -343,7 +354,7 @@ describe("IssuesPage", () => {
     mockStoreState.loading = false;
     mockStoreState.issues = [];
 
-    render(<IssuesPage />);
+    renderWithI18n(<IssuesPage />);
 
     expect(screen.getByText("All")).toBeInTheDocument();
     expect(screen.getByText("Members")).toBeInTheDocument();
@@ -354,7 +365,7 @@ describe("IssuesPage", () => {
     mockStoreState.loading = false;
     mockStoreState.issues = mockIssues;
 
-    render(<IssuesPage />);
+    renderWithI18n(<IssuesPage />);
 
     // Filter and Display are now icon-only buttons, verify they render as buttons
     const buttons = screen.getAllByRole("button");
@@ -365,7 +376,7 @@ describe("IssuesPage", () => {
     mockStoreState.loading = false;
     mockStoreState.issues = [];
 
-    render(<IssuesPage />);
+    renderWithI18n(<IssuesPage />);
 
     // Should still render the board/list view, not a "no issues" message
     expect(screen.queryByText("No matching issues")).not.toBeInTheDocument();

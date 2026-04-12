@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
 import { api } from "@/shared/api";
@@ -47,6 +48,7 @@ function redirectToCliCallback(
 }
 
 function LoginPageContent() {
+  const t = useTranslations("auth");
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const isLoading = useAuthStore((s) => s.isLoading);
@@ -114,7 +116,7 @@ function LoginPageContent() {
   const handleSendCode = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!email) {
-      setError("Email is required");
+      setError(t("emailRequired"));
       return;
     }
     setError("");
@@ -129,7 +131,7 @@ function LoginPageContent() {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to send code. Make sure the server is running."
+          : t("failedToSendCode")
       );
     } finally {
       setSubmitting(false);
@@ -145,7 +147,7 @@ function LoginPageContent() {
         const cliCallback = searchParams.get("cli_callback");
         if (cliCallback) {
           if (!validateCliCallback(cliCallback)) {
-            setError("Invalid callback URL");
+            setError(t("invalidCallback"));
             setSubmitting(false);
             return;
           }
@@ -161,13 +163,13 @@ function LoginPageContent() {
         router.push(searchParams.get("next") || "/issues");
       } catch (err) {
         setError(
-          err instanceof Error ? err.message : "Invalid or expired code"
+          err instanceof Error ? err.message : t("invalidOrExpiredCode")
         );
         setCode("");
         setSubmitting(false);
       }
     },
-    [email, verifyCode, hydrateWorkspace, router, searchParams]
+    [email, verifyCode, hydrateWorkspace, router, searchParams, t]
   );
 
   const handleResend = async () => {
@@ -190,13 +192,9 @@ function LoginPageContent() {
       <div className="flex min-h-screen items-center justify-center">
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Authorize CLI</CardTitle>
+            <CardTitle className="text-2xl">{t("authorizeCli")}</CardTitle>
             <CardDescription>
-              Allow the CLI to access Agentra as{" "}
-              <span className="font-medium text-foreground">
-                {existingUser.email}
-              </span>
-              ?
+              {t("authorizeCliDescription", { email: existingUser.email })}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
@@ -206,7 +204,7 @@ function LoginPageContent() {
               className="w-full"
               size="lg"
             >
-              {submitting ? "Authorizing..." : "Authorize"}
+              {submitting ? t("authorizing") : t("authorize")}
             </Button>
             <Button
               variant="ghost"
@@ -216,7 +214,7 @@ function LoginPageContent() {
                 setStep("email");
               }}
             >
-              Use a different account
+              {t("useDifferentAccount")}
             </Button>
           </CardContent>
         </Card>
@@ -230,20 +228,16 @@ function LoginPageContent() {
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">
-              {devCode ? "Enter your verification code" : "Check your email"}
+              {devCode ? t("enterVerificationCode") : t("checkYourEmail")}
             </CardTitle>
             <CardDescription>
               {devCode ? (
                 <>
-                  Email delivery is not configured on this server. Use the
-                  development code for{" "}
-                  <span className="font-medium text-foreground">{email}</span>
-                  .
+                  {t("emailNotConfigured", { email })}
                 </>
               ) : (
                 <>
-                  We sent a verification code to{" "}
-                  <span className="font-medium text-foreground">{email}</span>
+                  {t("sentVerificationCode", { email })}
                 </>
               )}
             </CardDescription>
@@ -273,7 +267,7 @@ function LoginPageContent() {
             {devCode && (
               <div className="w-full rounded-md border border-border bg-muted/50 px-4 py-3 text-center">
                 <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                  Development Code
+                  {t("developmentCode")}
                 </p>
                 <p className="mt-2 font-mono text-2xl font-semibold tracking-[0.35em] text-foreground">
                   {devCode}
@@ -287,7 +281,7 @@ function LoginPageContent() {
                 disabled={cooldown > 0}
                 className="text-primary underline-offset-4 hover:underline disabled:text-muted-foreground disabled:no-underline disabled:cursor-not-allowed"
               >
-                {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
+                {cooldown > 0 ? t("resendIn", { count: cooldown }) : t("resendCode")}
               </button>
             </div>
           </CardContent>
@@ -302,7 +296,7 @@ function LoginPageContent() {
                 setError("");
               }}
             >
-              Back
+              {t("back")}
             </Button>
           </CardFooter>
         </Card>
@@ -315,12 +309,12 @@ function LoginPageContent() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Agentra</CardTitle>
-          <CardDescription>Turn coding agents into real teammates</CardDescription>
+          <CardDescription>{t("tagline")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form id="login-form" onSubmit={handleSendCode} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t("email")}</Label>
               <Input
                 id="email"
                 type="email"
@@ -343,7 +337,7 @@ function LoginPageContent() {
             className="w-full"
             size="lg"
           >
-            {submitting ? "Sending code..." : "Continue"}
+            {submitting ? t("loggingIn") : t("loginButton")}
           </Button>
         </CardFooter>
       </Card>

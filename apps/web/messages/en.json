@@ -29,7 +29,24 @@
     "loggingIn": "Signing in...",
     "loginError": "Invalid email or password",
     "createAccount": "Create Account",
-    "alreadyHaveAccount": "Already have an account?"
+    "alreadyHaveAccount": "Already have an account?",
+    "authorizeCli": "Authorize CLI",
+    "authorizeCliDescription": "Allow the CLI to access Agentra as {email}?",
+    "authorize": "Authorize",
+    "authorizing": "Authorizing...",
+    "useDifferentAccount": "Use a different account",
+    "enterVerificationCode": "Enter your verification code",
+    "checkYourEmail": "Check your email",
+    "emailNotConfigured": "Email delivery is not configured on this server. Use the development code for {email}.",
+    "sentVerificationCode": "We sent a verification code to {email}",
+    "developmentCode": "Development Code",
+    "resendIn": "Resend in {count}s",
+    "resendCode": "Resend code",
+    "emailRequired": "Email is required",
+    "invalidCallback": "Invalid callback URL",
+    "invalidOrExpiredCode": "Invalid or expired code",
+    "failedToSendCode": "Failed to send code. Make sure the server is running.",
+    "tagline": "Turn coding agents into real teammates"
   },
   "issues": {
     "title": "Issues",
@@ -60,6 +77,7 @@
     "noIssues": "No issues found",
     "createFirst": "Create your first issue",
     "filterIssues": "Filter issues",
+    "all": "All",
     "allIssues": "All Issues",
     "myIssues": "My Issues",
     "board": "Board"
