@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
-import { getLocale, getTranslations } from "next-intl/server";
+import { getLocale, getMessages } from "next-intl/server";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
@@ -56,7 +56,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const locale = await getLocale();
-  const t = await getTranslations();
+  const messages = await getMessages();
 
   return (
     <html
@@ -65,7 +65,7 @@ export default async function RootLayout({
       className={cn("antialiased font-sans h-full")}
     >
       <body className="h-full overflow-hidden">
-        <NextIntlClientProvider>
+        <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider>
             <AuthInitializer>
               <WSProvider>{children}</WSProvider>
