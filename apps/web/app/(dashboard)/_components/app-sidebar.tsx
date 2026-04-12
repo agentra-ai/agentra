@@ -16,6 +16,7 @@ import {
   SquarePen,
   CircleUser,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { WorkspaceAvatar } from "@/features/workspace";
 import { useIssueDraftStore } from "@/features/issues/stores/draft-store";
 import {
@@ -45,19 +46,6 @@ import { useWorkspaceStore } from "@/features/workspace";
 import { useInboxStore } from "@/features/inbox";
 import { useModalStore } from "@/features/modals";
 
-const primaryNav = [
-  { href: "/inbox", label: "Inbox", icon: Inbox },
-  { href: "/my-issues", label: "My Issues", icon: CircleUser },
-  { href: "/issues", label: "Issues", icon: ListTodo },
-];
-
-const workspaceNav = [
-  { href: "/agents", label: "Agents", icon: Bot },
-  { href: "/runtimes", label: "Runtimes", icon: Monitor },
-  { href: "/skills", label: "Skills", icon: BookOpenText },
-  { href: "/settings", label: "Settings", icon: Settings },
-];
-
 function DraftDot() {
   const hasDraft = useIssueDraftStore((s) => !!(s.draft.title || s.draft.description));
   if (!hasDraft) return null;
@@ -65,6 +53,8 @@ function DraftDot() {
 }
 
 export function AppSidebar() {
+  const tNav = useTranslations("navigation");
+  const tAuth = useTranslations("auth");
   const pathname = usePathname();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -74,6 +64,19 @@ export function AppSidebar() {
   const switchWorkspace = useWorkspaceStore((s) => s.switchWorkspace);
 
   const unreadCount = useInboxStore((s) => s.unreadCount());
+
+  const primaryNav = [
+    { href: "/inbox", label: tNav("inbox"), icon: Inbox },
+    { href: "/my-issues", label: tNav("myIssues"), icon: CircleUser },
+    { href: "/issues", label: tNav("issues"), icon: ListTodo },
+  ];
+
+  const workspaceNav = [
+    { href: "/agents", label: tNav("agents"), icon: Bot },
+    { href: "/runtimes", label: tNav("runtimes"), icon: Monitor },
+    { href: "/skills", label: tNav("skills"), icon: BookOpenText },
+    { href: "/settings", label: tNav("settings"), icon: Settings },
+  ];
 
   const logout = () => {
     router.push("/");
@@ -114,7 +117,7 @@ export function AppSidebar() {
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup className="group/ws-section">
                     <DropdownMenuLabel className="flex items-center text-xs text-muted-foreground">
-                      Workspaces
+                      {tNav("dashboard")}
                       <Tooltip>
                         <TooltipTrigger
                           className="ml-auto opacity-0 group-hover/ws-section:opacity-100 transition-opacity rounded hover:bg-accent p-0.5"
@@ -123,7 +126,7 @@ export function AppSidebar() {
                           <Plus className="h-3.5 w-3.5" />
                         </TooltipTrigger>
                         <TooltipContent side="right">
-                          Create workspace
+                          {tNav("settings")}
                         </TooltipContent>
                       </Tooltip>
                     </DropdownMenuLabel>
@@ -148,7 +151,7 @@ export function AppSidebar() {
                   <DropdownMenuGroup>
                     <DropdownMenuItem variant="destructive" onClick={logout}>
                       <LogOut className="h-3.5 w-3.5" />
-                      Log out
+                      {tAuth("logout")}
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
@@ -163,7 +166,7 @@ export function AppSidebar() {
                 <SquarePen className="size-3.5" />
                 <DraftDot />
               </TooltipTrigger>
-              <TooltipContent side="bottom">New issue</TooltipContent>
+              <TooltipContent side="bottom">{tNav("settings")}</TooltipContent>
             </Tooltip>
           </div>
         </SidebarHeader>
@@ -172,7 +175,7 @@ export function AppSidebar() {
         <SidebarContent>
           <SidebarGroup>
             <SidebarGroupContent>
-              <SidebarMenu className="gap-0.5">
+              <SidebarMenu className="gap-0.1">
                 {primaryNav.map((item) => {
                   const isActive = pathname === item.href;
                   return (
@@ -184,7 +187,7 @@ export function AppSidebar() {
                       >
                         <item.icon />
                         <span>{item.label}</span>
-                        {item.label === "Inbox" && unreadCount > 0 && (
+                        {item.label === tNav("inbox") && unreadCount > 0 && (
                           <span className="ml-auto text-xs">
                             {unreadCount > 99 ? "99+" : unreadCount}
                           </span>
@@ -199,7 +202,7 @@ export function AppSidebar() {
 
           <SidebarGroup>
             <SidebarGroupContent>
-              <SidebarMenu className="gap-0.5">
+              <SidebarMenu className="gap-0.1">
                 {workspaceNav.map((item) => {
                   const isActive = pathname === item.href;
                   return (

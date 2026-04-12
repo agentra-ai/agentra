@@ -119,7 +119,8 @@
     "inbox": "收件箱",
     "runtimes": "运行时",
     "skills": "技能",
-    "settings": "设置"
+    "settings": "设置",
+    "myIssues": "我的问题"
   },
   "runtimes": {
     "title": "运行时",

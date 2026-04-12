@@ -119,7 +119,8 @@
     "inbox": "Inbox",
     "runtimes": "Runtimes",
     "skills": "Skills",
-    "settings": "Settings"
+    "settings": "Settings",
+    "myIssues": "My Issues"
   },
   "runtimes": {
     "title": "Runtimes",
