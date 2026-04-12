@@ -16,6 +16,7 @@ export const config = {
     // - API routes
     // - Static files
     // - Favicon
+    // - Root page (landing page handles its own locale)
     "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)",
   ],
 };
