@@ -13,10 +13,11 @@ export default createMiddleware({
 export const config = {
   matcher: [
     // Match all pathnames except for
-    // - API routes
+    // - API routes (/api/*)
+    // - Auth routes (/auth/* - server-side auth endpoints)
     // - Static files
     // - Favicon
     // - Root page (landing page handles its own locale)
-    "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)",
+    "/((?!api|auth|_next/static|_next/image|favicon.ico|.*\\..*).*)",
   ],
 };
