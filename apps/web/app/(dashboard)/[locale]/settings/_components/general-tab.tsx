@@ -1,9 +1,8 @@
 "use client";
 
 import { useTheme } from "next-themes";
-import { useLocale } from "next-intl";
 import { cn } from "@/lib/utils";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useParams } from "next/navigation";
 
 const LIGHT_COLORS = {
   titleBar: "#e8e8e8",
@@ -93,11 +92,15 @@ const languageOptions = [
 
 export function AppearanceTab() {
   const { theme, setTheme } = useTheme();
-  const locale = useLocale();
+  const params = useParams();
+  const locale = params.locale as string;
   const router = useRouter();
   const pathname = usePathname();
 
   const handleLanguageChange = async (newLocale: string) => {
+    // Skip if already on the same locale
+    if (newLocale === locale) return;
+
     // Set cookie for server-side locale detection
     document.cookie = `agentra-locale=${newLocale};path=/;max-age=31536000`;
 
