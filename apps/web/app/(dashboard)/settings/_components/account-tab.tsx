@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { Camera, Loader2, Save } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,8 @@ import { api } from "@/shared/api";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
 
 export function AccountTab() {
+  const t = useTranslations("settings");
+  const tCommon = useTranslations("common");
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
 
@@ -63,7 +66,7 @@ export function AccountTab() {
   return (
     <div className="space-y-8">
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold">Profile</h2>
+        <h2 className="text-sm font-semibold">{t("profile")}</h2>
 
         <Card>
           <CardContent className="space-y-4">
@@ -124,7 +127,7 @@ export function AccountTab() {
                 disabled={profileSaving || !profileName.trim()}
               >
                 <Save className="h-3 w-3" />
-                {profileSaving ? "Updating..." : "Update Profile"}
+                {profileSaving ? tCommon("loading") : "Update Profile"}
               </Button>
             </div>
           </CardContent>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import type { Issue, UpdateIssueRequest } from "@/shared/types";
 import { CalendarDays } from "lucide-react";
 import { ActorAvatar } from "@/components/common/actor-avatar";
@@ -43,6 +44,7 @@ export const BoardCardContent = memo(function BoardCardContent({
   issue: Issue;
   editable?: boolean;
 }) {
+  const t = useTranslations("issues");
   const storeProperties = useViewStore((s) => s.cardProperties);
   const priorityCfg = PRIORITY_CONFIG[issue.priority];
 
@@ -116,7 +118,7 @@ export const BoardCardContent = memo(function BoardCardContent({
                   trigger={
                     <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${priorityCfg.badgeBg} ${priorityCfg.badgeText}`}>
                       <PriorityIcon priority={issue.priority} className="h-3 w-3" inheritColor />
-                      {priorityCfg.label}
+                      {t(`priority.${issue.priority}`)}
                     </span>
                   }
                 />
@@ -124,7 +126,7 @@ export const BoardCardContent = memo(function BoardCardContent({
             ) : (
               <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${priorityCfg.badgeBg} ${priorityCfg.badgeText}`}>
                 <PriorityIcon priority={issue.priority} className="h-3 w-3" inheritColor />
-                {priorityCfg.label}
+                {t(`priority.${issue.priority}`)}
               </span>
             ))}
           {showDueDate && (

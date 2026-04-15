@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Markdown } from "@/components/markdown/Markdown";
+import { useTranslations } from "next-intl";
 
 function isMarkdown(path: string) {
   return path.endsWith(".md") || path.endsWith(".mdx");
@@ -87,6 +88,7 @@ export function FileViewer({
   content: string;
   onChange: (content: string) => void;
 }) {
+  const t = useTranslations("common");
   const [editing, setEditing] = useState(false);
   const isMd = isMarkdown(path);
 
@@ -122,7 +124,7 @@ export function FileViewer({
                 }
               />
               <TooltipContent>
-                {editing ? "Preview" : "Edit"}
+                {editing ? t("edit") : t("edit")}
               </TooltipContent>
             </Tooltip>
           )}
@@ -135,18 +137,14 @@ export function FileViewer({
           <div className="p-6">
             {frontmatter && <FrontmatterCard data={frontmatter} />}
             <Markdown mode="full">
-              {body || "*No content yet*"}
+              {body || `*${t("noResults")}*`}
             </Markdown>
           </div>
         ) : (
           <Textarea
             value={content}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={
-              isMd
-                ? "Write markdown content..."
-                : "File content..."
-            }
+            placeholder={t("loading")}
             className="h-full min-h-full resize-none rounded-none border-0 font-mono text-sm leading-relaxed focus-visible:ring-0"
           />
         )}

@@ -55,10 +55,13 @@
     "issueDescription": "Description",
     "status": {
       "open": "Open",
+      "backlog": "Backlog",
+      "todo": "Todo",
       "in_progress": "In Progress",
       "in_review": "In Review",
       "done": "Done",
       "completed": "Completed",
+      "blocked": "Blocked",
       "canceled": "Canceled"
     },
     "priority": {
@@ -104,6 +107,7 @@
     "tokens": "API Tokens",
     "general": "General",
     "repositories": "Repositories",
+    "members": "Members",
     "language": "Language",
     "languageDescription": "Select your preferred language",
     "theme": "Theme",
@@ -119,6 +123,7 @@
     "inbox": "Inbox",
     "runtimes": "Runtimes",
     "skills": "Skills",
+    "agents": "Agents",
     "settings": "Settings",
     "myIssues": "My Issues"
   },

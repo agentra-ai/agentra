@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -29,6 +30,8 @@ import { PriorityIcon } from "./priority-icon";
 import { AssigneePicker } from "./pickers";
 
 export function BatchActionToolbar() {
+  const t = useTranslations("issues");
+  const tc = useTranslations("common");
   const selectedIds = useIssueSelectionStore((s) => s.selectedIds);
   const clear = useIssueSelectionStore((s) => s.clear);
   const count = selectedIds.size;
@@ -50,9 +53,9 @@ export function BatchActionToolbar() {
       for (const id of ids) {
         useIssueStore.getState().updateIssue(id, updates);
       }
-      toast.success(`Updated ${count} issue${count > 1 ? "s" : ""}`);
+      toast.success(tc("success"));
     } catch {
-      toast.error("Failed to update issues");
+      toast.error(tc("error"));
       api.listIssues({ limit: 200 }).then((res) => {
         useIssueStore.getState().setIssues(res.issues);
       }).catch(console.error);
@@ -69,9 +72,9 @@ export function BatchActionToolbar() {
         useIssueStore.getState().removeIssue(id);
       }
       clear();
-      toast.success(`Deleted ${count} issue${count > 1 ? "s" : ""}`);
+      toast.success(tc("success"));
     } catch {
-      toast.error("Failed to delete issues");
+      toast.error(tc("error"));
       api.listIssues({ limit: 200 }).then((res) => {
         useIssueStore.getState().setIssues(res.issues);
       }).catch(console.error);
@@ -180,7 +183,7 @@ export function BatchActionToolbar() {
           className="text-destructive hover:text-destructive"
         >
           <Trash2 className="size-3.5 mr-1" />
-          Delete
+          {tc("delete")}
         </Button>
       </div>
 
@@ -196,12 +199,12 @@ export function BatchActionToolbar() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tc("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleBatchDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {tc("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

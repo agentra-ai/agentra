@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import type { AgentRuntime } from "@/shared/types";
 import { formatLastSeen } from "../utils";
 import { RuntimeModeIcon, StatusBadge, InfoField } from "./shared";

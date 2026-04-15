@@ -9,6 +9,7 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTranslations } from "next-intl";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
 import { useWSEvent } from "@/features/realtime";
@@ -17,6 +18,7 @@ import { RuntimeList } from "./runtime-list";
 import { RuntimeDetail } from "./runtime-detail";
 
 export default function RuntimesPage() {
+  const t = useTranslations("runtimes");
   const isLoading = useAuthStore((s) => s.isLoading);
   const workspace = useWorkspaceStore((s) => s.workspace);
   const runtimes = useRuntimeStore((s) => s.runtimes);

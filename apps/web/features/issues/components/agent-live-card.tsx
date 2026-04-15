@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Bot, ChevronRight, ChevronUp, Loader2, ArrowDown, Brain, AlertCircle, Clock, CheckCircle2, XCircle, Square } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { api } from "@/shared/api";
 import { useWSEvent } from "@/features/realtime";
 import type { TaskMessagePayload, TaskCompletedPayload, TaskFailedPayload, TaskCancelledPayload } from "@/shared/types/events";
@@ -105,6 +106,8 @@ interface AgentLiveCardProps {
 }
 
 export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentLiveCardProps) {
+  const t = useTranslations("issues");
+  const tc = useTranslations("common");
   const { getActorName } = useActorName();
   const [activeTask, setActiveTask] = useState<AgentTask | null>(null);
   const [items, setItems] = useState<TimelineItem[]>([]);
@@ -269,7 +272,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
     try {
       await api.cancelTask(issueId, activeTask.id);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to cancel task");
+      toast.error(e instanceof Error ? e.message : tc("error"));
       setCancelling(false);
     }
   }, [activeTask, issueId, cancelling]);
@@ -443,6 +446,7 @@ export function TaskRunHistory({ issueId }: TaskRunHistoryProps) {
 }
 
 function TaskRunEntry({ task }: { task: AgentTask }) {
+  const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<TimelineItem[] | null>(null);
 
@@ -486,7 +490,7 @@ function TaskRunEntry({ task }: { task: AgentTask }) {
           {items === null ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Loading...
+              {tc("loading")}
             </div>
           ) : items.length === 0 ? (
             <p className="text-xs text-muted-foreground py-2">No execution data recorded.</p>

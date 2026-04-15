@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import Link from "next/link";
@@ -203,6 +204,8 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   // Single source of truth: read issue directly from global store
   const issue = useIssueStore((s) => s.issues.find((i) => i.id === id)) ?? null;
   const [issueLoading, setIssueLoading] = useState(!issue);
+  const t = useTranslations("issues");
+  const tCommon = useTranslations("common");
 
   // If issue isn't in the store yet, fetch and upsert it
   useEffect(() => {
@@ -493,7 +496,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
                     <UserMinus className="h-3.5 w-3.5" />
-                    Assignee
+                    {t("assignee")}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent>
                     <DropdownMenuItem
@@ -614,13 +617,13 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={handleDelete}
                     disabled={deleting}
                     className="bg-destructive text-white hover:bg-destructive/90"
                   >
-                    {deleting ? "Deleting..." : "Delete"}
+                    {deleting ? `${tCommon("loading")}...` : tCommon("delete")}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -721,7 +724,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                     <Command>
                       <CommandInput placeholder="Change subscribers..." />
                       <CommandList className="max-h-64">
-                        <CommandEmpty>No results found</CommandEmpty>
+                        <CommandEmpty>{tCommon("noResults")}</CommandEmpty>
                         {members.length > 0 && (
                           <CommandGroup heading="Members">
                             {members.filter((m, i, arr) => arr.findIndex((x) => x.user_id === m.user_id) === i).map((m) => {
@@ -1011,7 +1014,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
               </PropRow>
 
               {/* Due date */}
-              <PropRow label="Due date">
+              <PropRow label={t("dueDate")}>
                 <DueDatePicker
                   dueDate={issue.due_date}
                   onUpdate={handleUpdateField}
@@ -1031,7 +1034,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             </button>
 
             {detailsOpen && <div className="space-y-0.5 pl-2">
-              <PropRow label="Created by">
+              <PropRow label={t("reporter")}>
                 <ActorAvatar
                   actorType={issue.creator_type}
                   actorId={issue.creator_id}
@@ -1039,10 +1042,10 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                 />
                 <span className="truncate">{getActorName(issue.creator_type, issue.creator_id)}</span>
               </PropRow>
-              <PropRow label="Created">
+              <PropRow label={t("createdAt")}>
                 <span className="text-muted-foreground">{shortDate(issue.created_at)}</span>
               </PropRow>
-              <PropRow label="Updated">
+              <PropRow label={t("updatedAt")}>
                 <span className="text-muted-foreground">{shortDate(issue.updated_at)}</span>
               </PropRow>
             </div>}

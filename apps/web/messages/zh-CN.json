@@ -55,10 +55,13 @@
     "issueDescription": "描述",
     "status": {
       "open": "待处理",
+      "backlog": "待办",
+      "todo": "待处理",
       "in_progress": "进行中",
       "in_review": "审核中",
       "done": "已完成",
       "completed": "已完成",
+      "blocked": "已阻塞",
       "canceled": "已取消"
     },
     "priority": {
@@ -104,6 +107,7 @@
     "tokens": "API 令牌",
     "general": "通用",
     "repositories": "仓库",
+    "members": "成员",
     "language": "语言",
     "languageDescription": "选择您的首选语言",
     "theme": "主题",
@@ -119,6 +123,7 @@
     "inbox": "收件箱",
     "runtimes": "运行时",
     "skills": "技能",
+    "agents": "代理",
     "settings": "设置",
     "myIssues": "我的问题"
   },

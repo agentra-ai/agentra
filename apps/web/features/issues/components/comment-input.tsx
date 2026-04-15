@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 import { ArrowUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,8 @@ interface CommentInputProps {
 }
 
 function CommentInput({ issueId, onSubmit }: CommentInputProps) {
+  const t = useTranslations("issues");
+  const tCommon = useTranslations("common");
   const editorRef = useRef<ContentEditorRef>(null);
   const [isEmpty, setIsEmpty] = useState(true);
   const [submitting, setSubmitting] = useState(false);

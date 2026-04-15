@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, Check, ChevronRight, Maximize2, Minimize2, UserMinus, X as XIcon } from "lucide-react";
@@ -67,6 +68,9 @@ function PillButton({
 // ---------------------------------------------------------------------------
 
 export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?: Record<string, unknown> | null }) {
+  const t = useTranslations("issues");
+  const tCommon = useTranslations("common");
+  const tModals = useTranslations("modals");
   const router = useRouter();
   const workspaceName = useWorkspaceStore((s) => s.workspace?.name);
   const members = useWorkspaceStore((s) => s.members);
@@ -106,7 +110,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
   const assigneeLabel =
     assigneeType && assigneeId
       ? getActorName(assigneeType, assigneeId)
-      : "Assignee";
+      : t("assignee");
 
   const dueDateObj = dueDate ? new Date(dueDate) : undefined;
 
@@ -193,14 +197,14 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
             : "!max-w-2xl !w-full !h-96 !-translate-y-1/2",
         )}
       >
-        <DialogTitle className="sr-only">New Issue</DialogTitle>
+        <DialogTitle className="sr-only">{tModals("createIssue")}</DialogTitle>
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-3 pb-2 shrink-0">
           <div className="flex items-center gap-1.5 text-xs">
             <span className="text-muted-foreground">{workspaceName}</span>
             <ChevronRight className="size-3 text-muted-foreground/50" />
-            <span className="font-medium">New issue</span>
+            <span className="font-medium">{t("newIssue")}</span>
             {selectedTemplate && (
               <>
                 <ChevronRight className="size-3 text-muted-foreground/50" />
@@ -233,7 +237,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                   </button>
                 }
               />
-              <TooltipContent side="bottom">Close</TooltipContent>
+              <TooltipContent side="bottom">{tCommon("close")}</TooltipContent>
             </Tooltip>
           </div>
         </div>
@@ -338,7 +342,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                       <span>{assigneeLabel}</span>
                     </>
                   ) : (
-                    <span className="text-muted-foreground">Assignee</span>
+                    <span className="text-muted-foreground">{t("assignee")}</span>
                   )}
                 </PillButton>
               }

@@ -5,6 +5,7 @@ import { EyeOff, MoreHorizontal, Plus } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { useTranslations } from "next-intl";
 import type { Issue, IssueStatus } from "@/shared/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +28,7 @@ export function BoardColumn({
   status: IssueStatus;
   issues: Issue[];
 }) {
+  const t = useTranslations("issues");
   const cfg = STATUS_CONFIG[status];
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const viewStoreApi = useViewStoreApi();
@@ -50,7 +52,7 @@ export function BoardColumn({
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-semibold ${cfg.badgeBg} ${cfg.badgeText}`}>
             <StatusIcon status={status} className="h-3 w-3" inheritColor />
-            {cfg.label}
+            {t(`status.${status}`)}
           </span>
           <span className="text-xs text-muted-foreground">
             {issues.length}

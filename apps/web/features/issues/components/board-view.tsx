@@ -14,6 +14,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { Eye, MoreHorizontal } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { Issue, IssueStatus } from "@/shared/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -205,6 +206,7 @@ function HiddenColumnsPanel({
   hiddenStatuses: IssueStatus[];
   issues: Issue[];
 }) {
+  const t = useTranslations("issues");
   const viewStoreApi = useViewStoreApi();
   return (
     <div className="flex w-[240px] shrink-0 flex-col">
@@ -224,7 +226,7 @@ function HiddenColumnsPanel({
             >
               <div className="flex items-center gap-2">
                 <StatusIcon status={status} className="h-3.5 w-3.5" />
-                <span className="text-sm">{cfg.label}</span>
+                <span className="text-sm">{t(`status.${status}`)}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-muted-foreground">{count}</span>

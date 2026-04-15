@@ -2,6 +2,7 @@
 
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 const LIGHT_COLORS = {
   titleBar: "#e8e8e8",
@@ -79,19 +80,20 @@ function WindowMockup({
 }
 
 const themeOptions = [
-  { value: "light" as const, label: "Light" },
-  { value: "dark" as const, label: "Dark" },
-  { value: "system" as const, label: "System" },
+  { value: "light" as const, labelKey: "light" },
+  { value: "dark" as const, labelKey: "dark" },
+  { value: "system" as const, labelKey: "system" },
 ];
 
 export function AppearanceTab() {
+  const t = useTranslations("settings");
   const { theme, setTheme } = useTheme();
 
   return (
     <div className="space-y-8">
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold">Theme</h2>
-        <div className="flex gap-6" role="radiogroup" aria-label="Theme">
+        <h2 className="text-sm font-semibold">{t("theme")}</h2>
+        <div className="flex gap-6" role="radiogroup" aria-label={t("theme")}>
           {themeOptions.map((opt) => {
             const active = theme === opt.value;
             return (
@@ -99,7 +101,7 @@ export function AppearanceTab() {
                 key={opt.value}
                 role="radio"
                 aria-checked={active}
-                aria-label={`Select ${opt.label} theme`}
+                aria-label={`${t("theme")} ${t(opt.labelKey)}`}
                 onClick={() => setTheme(opt.value)}
                 className="group flex flex-col items-center gap-2"
               >
@@ -134,7 +136,7 @@ export function AppearanceTab() {
                       : "text-muted-foreground"
                   )}
                 >
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </span>
               </button>
             );

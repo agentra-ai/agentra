@@ -35,6 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
+import { useTranslations } from "next-intl";
 
 import { FileTree } from "./file-tree";
 import { FileViewer } from "./file-viewer";
@@ -52,6 +53,7 @@ function CreateSkillDialog({
   onCreate: (data: CreateSkillRequest) => Promise<void>;
   onImport: (url: string) => Promise<void>;
 }) {
+  const t = useTranslations("common");
   const [tab, setTab] = useState<"create" | "import">("create");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -85,7 +87,7 @@ function CreateSkillDialog({
       await onImport(importUrl.trim());
       onClose();
     } catch (err) {
-      setImportError(err instanceof Error ? err.message : "Import failed");
+      setImportError(err instanceof Error ? err.message : t("error"));
       setLoading(false);
     }
   };
@@ -188,10 +190,10 @@ function CreateSkillDialog({
         </Tabs>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="ghost" onClick={onClose}>{t("cancel")}</Button>
           {tab === "create" ? (
             <Button onClick={handleCreate} disabled={loading || !name.trim()}>
-              {loading ? "Creating..." : "Create"}
+              {loading ? t("loading") : "Create"}
             </Button>
           ) : (
             <Button onClick={handleImport} disabled={loading || !importUrl.trim()}>
@@ -200,7 +202,7 @@ function CreateSkillDialog({
                   ? "Importing from ClawHub..."
                   : detectedSource === "skills.sh"
                     ? "Importing from Skills.sh..."
-                    : "Importing..."
+                    : t("loading")
               ) : (
                 <>
                   <Download className="mr-1.5 h-3 w-3" />
@@ -287,6 +289,7 @@ function AddFileDialog({
   onClose: () => void;
   onAdd: (path: string) => void;
 }) {
+  const t = useTranslations("common");
   const [path, setPath] = useState("");
   const duplicate = existingPaths.includes(path.trim());
 
@@ -320,7 +323,7 @@ function AddFileDialog({
           )}
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="ghost" onClick={onClose}>{t("cancel")}</Button>
           <Button
             disabled={!path.trim() || duplicate}
             onClick={() => { onAdd(path.trim()); onClose(); }}
@@ -346,6 +349,7 @@ function SkillDetail({
   onUpdate: (id: string, data: UpdateSkillRequest) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
+  const t = useTranslations("common");
   const [name, setName] = useState(skill.name);
   const [description, setDescription] = useState(skill.description);
   const [content, setContent] = useState(skill.content);
@@ -373,7 +377,7 @@ function SkillDetail({
       useWorkspaceStore.getState().upsertSkill(full);
       setFiles((full.files ?? []).map((f) => ({ path: f.path, content: f.content })));
     }).catch((e) => {
-      toast.error(e instanceof Error ? e.message : "Failed to load skill files");
+      toast.error(e instanceof Error ? e.message : t("error"));
     }).finally(() => setLoadingFiles(false));
   }, [skill.id]);
 
@@ -457,7 +461,7 @@ function SkillDetail({
           {isDirty && (
             <Button onClick={handleSave} disabled={saving || !name.trim()} size="xs">
               <Save className="h-3 w-3" />
-              {saving ? "Saving..." : "Save"}
+              {saving ? t("loading") : t("save")}
             </Button>
           )}
           <Tooltip>
@@ -473,7 +477,7 @@ function SkillDetail({
                 </Button>
               }
             />
-            <TooltipContent>Delete skill</TooltipContent>
+            <TooltipContent>{t("delete")}</TooltipContent>
           </Tooltip>
         </div>
       </div>
@@ -585,7 +589,7 @@ function SkillDetail({
             </div>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 variant="destructive"
@@ -594,7 +598,7 @@ function SkillDetail({
                   onDelete(skill.id);
                 }}
               >
-                Delete
+                {t("delete")}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -609,6 +613,7 @@ function SkillDetail({
 // ---------------------------------------------------------------------------
 
 export default function SkillsPage() {
+  const t = useTranslations("common");
   const isLoading = useAuthStore((s) => s.isLoading);
   const skills = useWorkspaceStore((s) => s.skills);
   const refreshSkills = useWorkspaceStore((s) => s.refreshSkills);
@@ -646,7 +651,7 @@ export default function SkillsPage() {
       upsertSkill(updated);
       toast.success("Skill saved");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to save skill");
+      toast.error(e instanceof Error ? e.message : t("error"));
       throw e;
     }
   };
@@ -661,7 +666,7 @@ export default function SkillsPage() {
       removeSkill(id);
       toast.success("Skill deleted");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to delete skill");
+      toast.error(e instanceof Error ? e.message : t("error"));
     }
   };
 

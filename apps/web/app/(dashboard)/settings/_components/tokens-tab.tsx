@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Key, Trash2, Copy, Check } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import type { PersonalAccessToken } from "@/shared/types";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,8 @@ import { toast } from "sonner";
 import { api } from "@/shared/api";
 
 export function TokensTab() {
+  const t = useTranslations("settings");
+  const tCommon = useTranslations("common");
   const [tokens, setTokens] = useState<PersonalAccessToken[]>([]);
   const [tokenName, setTokenName] = useState("");
   const [tokenExpiry, setTokenExpiry] = useState("90");
@@ -101,7 +104,7 @@ export function TokensTab() {
       <section className="space-y-4">
         <div className="flex items-center gap-2">
           <Key className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold">API Tokens</h2>
+          <h2 className="text-sm font-semibold">{t("tokens")}</h2>
         </div>
 
         <Card>
@@ -190,7 +193,7 @@ export function TokensTab() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               onClick={async () => {

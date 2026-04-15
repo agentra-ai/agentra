@@ -1,4 +1,5 @@
 import { Server } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { AgentRuntime } from "@/shared/types";
 import { RuntimeModeIcon } from "./shared";
 
@@ -49,20 +50,22 @@ export function RuntimeList({
   selectedId: string;
   onSelect: (id: string) => void;
 }) {
+  const t = useTranslations("runtimes");
+
   return (
     <div className="overflow-y-auto h-full border-r">
       <div className="flex h-12 items-center justify-between border-b px-4">
-        <h1 className="text-sm font-semibold">Runtimes</h1>
+        <h1 className="text-sm font-semibold">{t("title")}</h1>
         <span className="text-xs text-muted-foreground">
           {runtimes.filter((r) => r.status === "online").length}/
-          {runtimes.length} online
+          {runtimes.length} {t("status.online")}
         </span>
       </div>
       {runtimes.length === 0 ? (
         <div className="flex flex-col items-center justify-center px-4 py-12">
           <Server className="h-8 w-8 text-muted-foreground/40" />
           <p className="mt-3 text-sm text-muted-foreground">
-            No runtimes registered
+            {t("noRuntimes")}
           </p>
           <p className="mt-1 text-xs text-muted-foreground text-center">
             Run{" "}
