@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useId, useRef, useMemo } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
+import { useTranslations } from "next-intl";
 import {
   Bot,
   Cloud,
@@ -124,6 +125,7 @@ function CreateAgentDialog({
   onClose: () => void;
   onCreate: (data: CreateAgentRequest) => Promise<void>;
 }) {
+  const t = useTranslations("agents");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [selectedRuntimeId, setSelectedRuntimeId] = useState(runtimes[0]?.id ?? "");
@@ -155,7 +157,7 @@ function CreateAgentDialog({
       });
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create agent");
+      toast.error(err instanceof Error ? err.message : t("failedToCreateAgent"));
       setCreating(false);
     }
   };
@@ -164,39 +166,39 @@ function CreateAgentDialog({
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Create Agent</DialogTitle>
+          <DialogTitle>{t("create")}</DialogTitle>
           <DialogDescription>
-            Create a new AI agent for your workspace.
+            {t("createNew")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div>
-            <Label className="text-xs text-muted-foreground">Name</Label>
+            <Label className="text-xs text-muted-foreground">{t("name")}</Label>
             <Input
               autoFocus
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Deep Research Agent"
+              placeholder={t("placeholder")}
               className="mt-1"
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             />
           </div>
 
           <div>
-            <Label className="text-xs text-muted-foreground">Description</Label>
+            <Label className="text-xs text-muted-foreground">{t("description")}</Label>
             <Input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does this agent do?"
+              placeholder={t("whatDoesItDo")}
               className="mt-1"
             />
           </div>
 
           <div>
-            <Label className="text-xs text-muted-foreground">Visibility</Label>
+            <Label className="text-xs text-muted-foreground">{t("visibility")}</Label>
             <div className="mt-1.5 flex gap-2">
               <button
                 type="button"
@@ -209,8 +211,8 @@ function CreateAgentDialog({
               >
                 <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="text-left">
-                  <div className="font-medium">Workspace</div>
-                  <div className="text-xs text-muted-foreground">All members can assign</div>
+                  <div className="font-medium">{t("workspace")}</div>
+                  <div className="text-xs text-muted-foreground">{t("workspaceDescription")}</div>
                 </div>
               </button>
               <button
@@ -224,15 +226,15 @@ function CreateAgentDialog({
               >
                 <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="text-left">
-                  <div className="font-medium">Private</div>
-                  <div className="text-xs text-muted-foreground">Only you can assign</div>
+                  <div className="font-medium">{t("private")}</div>
+                  <div className="text-xs text-muted-foreground">{t("privateDescription")}</div>
                 </div>
               </button>
             </div>
           </div>
 
           <div>
-            <Label className="text-xs text-muted-foreground">Runtime</Label>
+            <Label className="text-xs text-muted-foreground">{t("runtime")}</Label>
             <Popover open={runtimeOpen} onOpenChange={setRuntimeOpen}>
               <PopoverTrigger
                 disabled={runtimes.length === 0}
@@ -246,16 +248,16 @@ function CreateAgentDialog({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate font-medium">
-                      {selectedRuntime?.name ?? "No runtime available"}
+                      {selectedRuntime?.name ?? t("noRuntimeAvailable")}
                     </span>
                     {selectedRuntime?.runtime_mode === "cloud" && (
                       <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-xs font-medium text-info">
-                        Cloud
+                        {t("cloud")}
                       </span>
                     )}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
-                    {selectedRuntime?.device_info ?? "Register a runtime before creating an agent"}
+                    {selectedRuntime?.device_info ?? t("registerRuntimeFirst")}
                   </div>
                 </div>
                 <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${runtimeOpen ? "rotate-180" : ""}`} />
@@ -282,7 +284,7 @@ function CreateAgentDialog({
                         <span className="truncate font-medium">{device.name}</span>
                         {device.runtime_mode === "cloud" && (
                           <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-xs font-medium text-info">
-                            Cloud
+                            {t("cloud")}
                           </span>
                         )}
                       </div>
@@ -302,13 +304,13 @@ function CreateAgentDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={creating || !name.trim() || !selectedRuntime}
           >
-            {creating ? "Creating..." : "Create"}
+            {creating ? t("creating") : t("create")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -329,6 +331,7 @@ function AgentListItem({
   isSelected: boolean;
   onClick: () => void;
 }) {
+  const t = useTranslations("agents");
   const st = statusConfig[agent.status];
   const isArchived = !!agent.archived_at;
 
@@ -352,7 +355,7 @@ function AgentListItem({
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           {isArchived ? (
-            <span className="text-xs text-muted-foreground">Archived</span>
+            <span className="text-xs text-muted-foreground">{t("archived")}</span>
           ) : (
             <>
               <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
@@ -376,6 +379,7 @@ function InstructionsTab({
   agent: Agent;
   onSave: (instructions: string) => Promise<void>;
 }) {
+  const t = useTranslations("agents");
   const [value, setValue] = useState(agent.instructions ?? "");
   const [saving, setSaving] = useState(false);
   const isDirty = value !== (agent.instructions ?? "");
@@ -399,10 +403,9 @@ function InstructionsTab({
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-semibold">Agent Instructions</h3>
+        <h3 className="text-sm font-semibold">{t("instructions")}</h3>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Define this agent&apos;s identity and working style. These instructions are
-          injected into the agent&apos;s context for every task.
+          {t("instructionsDescription")}
         </p>
       </div>
 
@@ -415,7 +418,7 @@ function InstructionsTab({
 
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">
-          {value.length > 0 ? `${value.length} characters` : "No instructions set"}
+          {value.length > 0 ? `${value.length} ${t("characters")}` : t("noInstructionsSet")}
         </span>
         <Button
           size="xs"
@@ -427,7 +430,7 @@ function InstructionsTab({
           ) : (
             <Save className="h-3 w-3" />
           )}
-          Save
+          {t("save")}
         </Button>
       </div>
     </div>
@@ -443,6 +446,7 @@ function SkillsTab({
 }: {
   agent: Agent;
 }) {
+  const t = useTranslations("agents");
   const workspaceSkills = useWorkspaceStore((s) => s.skills);
   const refreshAgents = useWorkspaceStore((s) => s.refreshAgents);
   const [saving, setSaving] = useState(false);
@@ -458,7 +462,7 @@ function SkillsTab({
       await api.setAgentSkills(agent.id, { skill_ids: newIds });
       await refreshAgents();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to add skill");
+      toast.error(e instanceof Error ? e.message : t("addSkillError"));
     } finally {
       setSaving(false);
       setShowPicker(false);
@@ -472,7 +476,7 @@ function SkillsTab({
       await api.setAgentSkills(agent.id, { skill_ids: newIds });
       await refreshAgents();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to remove skill");
+      toast.error(e instanceof Error ? e.message : t("removeSkillError"));
     } finally {
       setSaving(false);
     }
@@ -482,9 +486,9 @@ function SkillsTab({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold">Skills</h3>
+          <h3 className="text-sm font-semibold">{t("skills")}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Reusable skills assigned to this agent. Manage skills on the Skills page.
+            {t("manageSkillsOnSkillsPage")}
           </p>
         </div>
         <Button
@@ -494,16 +498,16 @@ function SkillsTab({
           disabled={saving || availableSkills.length === 0}
         >
           <Plus className="h-3 w-3" />
-          Add Skill
+          {t("addSkill")}
         </Button>
       </div>
 
       {agent.skills.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12">
           <FileText className="h-8 w-8 text-muted-foreground/40" />
-          <p className="mt-3 text-sm text-muted-foreground">No skills assigned</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t("noSkillsAssigned")}</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Add skills from the workspace to this agent.
+            {t("addSkillsFromWorkspace")}
           </p>
           {availableSkills.length > 0 && (
             <Button
@@ -513,7 +517,7 @@ function SkillsTab({
               disabled={saving}
             >
               <Plus className="h-3 w-3" />
-              Add Skill
+              {t("addSkill")}
             </Button>
           )}
         </div>
@@ -554,9 +558,9 @@ function SkillsTab({
         <Dialog open onOpenChange={(v) => { if (!v) setShowPicker(false); }}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-sm">Add Skill</DialogTitle>
+              <DialogTitle className="text-sm">{t("addSkill")}</DialogTitle>
               <DialogDescription className="text-xs">
-                Select a skill to assign to this agent.
+                {t("selectSkillToAssign")}
               </DialogDescription>
             </DialogHeader>
             <div className="max-h-64 overflow-y-auto space-y-1">
@@ -580,13 +584,13 @@ function SkillsTab({
               ))}
               {availableSkills.length === 0 && (
                 <p className="py-6 text-center text-xs text-muted-foreground">
-                  All workspace skills are already assigned.
+                  {t("allSkillsAssigned")}
                 </p>
               )}
             </div>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setShowPicker(false)}>
-                Cancel
+                {t("cancel")}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -607,6 +611,7 @@ function AddToolDialog({
   onClose: () => void;
   onAdd: (tool: AgentTool) => void;
 }) {
+  const t = useTranslations("agents");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [authType, setAuthType] = useState<"oauth" | "api_key" | "none">("api_key");
@@ -628,15 +633,15 @@ function AddToolDialog({
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-sm">Add Tool</DialogTitle>
+          <DialogTitle className="text-sm">{t("addTool")}</DialogTitle>
           <DialogDescription className="text-xs">
-            Connect an external tool for this agent to use.
+            {t("connectTool")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div>
-            <Label className="text-xs text-muted-foreground">Tool Name</Label>
+            <Label className="text-xs text-muted-foreground">{t("toolName")}</Label>
             <Input
               autoFocus
               type="text"
@@ -648,17 +653,17 @@ function AddToolDialog({
             />
           </div>
           <div>
-            <Label className="text-xs text-muted-foreground">Description</Label>
+            <Label className="text-xs text-muted-foreground">{t("description")}</Label>
             <Input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does this tool do?"
+              placeholder={t("whatDoesToolDo")}
               className="mt-1"
             />
           </div>
           <div>
-            <Label className="text-xs text-muted-foreground">Authentication</Label>
+            <Label className="text-xs text-muted-foreground">{t("authentication")}</Label>
             <div className="mt-1.5 flex gap-2">
               {(["api_key", "oauth", "none"] as const).map((type) => (
                 <Button
@@ -672,7 +677,7 @@ function AddToolDialog({
                       : ""
                   }`}
                 >
-                  {type === "api_key" ? "API Key" : type === "oauth" ? "OAuth" : "None"}
+                  {type === "api_key" ? t("apiKey") : type === "oauth" ? t("oauth") : t("none")}
                 </Button>
               ))}
             </div>
@@ -681,13 +686,13 @@ function AddToolDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button
             onClick={handleAdd}
             disabled={!name.trim()}
           >
-            Add
+            {t("addTool")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -702,6 +707,7 @@ function ToolsTab({
   agent: Agent;
   onSave: (tools: AgentTool[]) => Promise<void>;
 }) {
+  const t = useTranslations("agents");
   const [tools, setTools] = useState<AgentTool[]>(agent.tools ?? []);
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -737,9 +743,9 @@ function ToolsTab({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold">Tools</h3>
+          <h3 className="text-sm font-semibold">{t("tools")}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            External tools and APIs this agent can use during task execution.
+            {t("externalToolsDescription")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -750,7 +756,7 @@ function ToolsTab({
               size="xs"
             >
               <Save className="h-3 w-3" />
-              {saving ? "Saving..." : "Save"}
+              {saving ? t("saving") : t("save")}
             </Button>
           )}
           <Button
@@ -759,7 +765,7 @@ function ToolsTab({
             onClick={() => setShowAdd(true)}
           >
             <Plus className="h-3 w-3" />
-            Add Tool
+            {t("addTool")}
           </Button>
         </div>
       </div>
@@ -767,14 +773,14 @@ function ToolsTab({
       {tools.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12">
           <Wrench className="h-8 w-8 text-muted-foreground/40" />
-          <p className="mt-3 text-sm text-muted-foreground">No tools configured</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t("noToolsConfigured")}</p>
           <Button
             onClick={() => setShowAdd(true)}
             size="xs"
             className="mt-3"
           >
             <Plus className="h-3 w-3" />
-            Add Tool
+            {t("addTool")}
           </Button>
         </div>
       ) : (
@@ -812,7 +818,7 @@ function ToolsTab({
                       : "bg-muted text-muted-foreground hover:bg-accent"
                   }
                 >
-                  {tool.connected ? "Connected" : "Connect"}
+                  {tool.connected ? t("connected") : t("connect")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -849,6 +855,7 @@ function TriggersTab({
   agent: Agent;
   onSave: (triggers: AgentTrigger[]) => Promise<void>;
 }) {
+  const t = useTranslations("agents");
   const [triggers, setTriggers] = useState<AgentTrigger[]>(agent.triggers ?? []);
   const [saving, setSaving] = useState(false);
 
@@ -899,9 +906,9 @@ function TriggersTab({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold">Triggers</h3>
+          <h3 className="text-sm font-semibold">{t("triggers")}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Configure when this agent should start working.
+            {t("triggersDescription")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -912,7 +919,7 @@ function TriggersTab({
               size="xs"
             >
               <Save className="h-3 w-3" />
-              {saving ? "Saving..." : "Save"}
+              {saving ? t("saving") : t("save")}
             </Button>
           )}
         </div>
@@ -937,17 +944,17 @@ function TriggersTab({
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium">
                   {trigger.type === "on_assign"
-                    ? "On Issue Assign"
+                    ? t("onIssueAssign")
                     : trigger.type === "on_comment"
-                      ? "On Comment"
-                      : "Scheduled"}
+                      ? t("onComment")
+                      : t("scheduled")}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {trigger.type === "on_assign"
-                    ? "Runs when an issue is assigned to this agent"
+                    ? t("runsWhenAssigned")
                     : trigger.type === "on_comment"
-                      ? "Runs when a member comments on the agent's issue"
-                      : `Cron: ${(trigger.config as { cron?: string }).cron ?? "Not set"}`}
+                      ? t("runsWhenCommented")
+                      : `Cron: ${(trigger.config as { cron?: string }).cron ?? t("cronNotSet")}`}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -978,7 +985,7 @@ function TriggersTab({
               <div className="mt-3 grid grid-cols-2 gap-3 pl-12">
                 <div>
                   <Label className="text-xs text-muted-foreground">
-                    Cron Expression
+                    {t("cronExpression")}
                   </Label>
                   <Input
                     type="text"
@@ -995,7 +1002,7 @@ function TriggersTab({
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">
-                    Timezone
+                    {t("timezone")}
                   </Label>
                   <Input
                     type="text"
@@ -1024,7 +1031,7 @@ function TriggersTab({
           className="border-dashed text-muted-foreground hover:text-foreground"
         >
           <Bot className="h-3 w-3" />
-          Add On Assign
+          {t("addOnAssign")}
         </Button>
         <Button
           variant="outline"
@@ -1033,7 +1040,7 @@ function TriggersTab({
           className="border-dashed text-muted-foreground hover:text-foreground"
         >
           <MessageSquare className="h-3 w-3" />
-          Add On Comment
+          {t("addOnComment")}
         </Button>
         <Button
           variant="outline"
@@ -1042,7 +1049,7 @@ function TriggersTab({
           className="border-dashed text-muted-foreground hover:text-foreground"
         >
           <Timer className="h-3 w-3" />
-          Add Scheduled
+          {t("addScheduled")}
         </Button>
       </div>
     </div>
@@ -1054,6 +1061,7 @@ function TriggersTab({
 // ---------------------------------------------------------------------------
 
 function TasksTab({ agent }: { agent: Agent }) {
+  const t = useTranslations("agents");
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [loading, setLoading] = useState(true);
   const issues = useIssueStore((s) => s.issues);
@@ -1102,18 +1110,18 @@ function TasksTab({ agent }: { agent: Agent }) {
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-semibold">Task Queue</h3>
+        <h3 className="text-sm font-semibold">{t("taskQueue")}</h3>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Issues assigned to this agent and their execution status.
+          {t("taskQueueDescription")}
         </p>
       </div>
 
       {tasks.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12">
           <ListTodo className="h-8 w-8 text-muted-foreground/40" />
-          <p className="mt-3 text-sm text-muted-foreground">No tasks in queue</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t("noTasksInQueue")}</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Assign an issue to this agent to get started.
+            {t("assignIssueToStart")}
           </p>
         </div>
       ) : (
@@ -1189,6 +1197,7 @@ function SettingsTab({
   runtimes: RuntimeDevice[];
   onSave: (updates: Partial<Agent>) => Promise<void>;
 }) {
+  const t = useTranslations("agents");
   const [name, setName] = useState(agent.name);
   const [description, setDescription] = useState(agent.description ?? "");
   const [visibility, setVisibility] = useState<AgentVisibility>(agent.visibility);
@@ -1205,9 +1214,9 @@ function SettingsTab({
       const result = await upload(file);
       if (!result) return;
       await onSave({ avatar_url: result.link });
-      toast.success("Avatar updated");
+      toast.success(t("avatarUpdated"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to upload avatar");
+      toast.error(err instanceof Error ? err.message : t("failedToUploadAvatar"));
     }
   };
 
@@ -1219,15 +1228,15 @@ function SettingsTab({
 
   const handleSave = async () => {
     if (!name.trim()) {
-      toast.error("Name is required");
+      toast.error(t("nameIsRequired"));
       return;
     }
     setSaving(true);
     try {
       await onSave({ name: name.trim(), description, visibility, max_concurrent_tasks: maxTasks });
-      toast.success("Settings saved");
+      toast.success(t("settingsSaved"));
     } catch {
-      toast.error("Failed to save settings");
+      toast.error(t("failedToSaveSettings"));
     } finally {
       setSaving(false);
     }
@@ -1238,7 +1247,7 @@ function SettingsTab({
   return (
     <div className="max-w-lg space-y-6">
       <div>
-        <Label className="text-xs text-muted-foreground">Avatar</Label>
+        <Label className="text-xs text-muted-foreground">{t("avatar")}</Label>
         <div className="mt-1.5 flex items-center gap-4">
           <label
             htmlFor={avatarInputId}
@@ -1265,13 +1274,13 @@ function SettingsTab({
             onChange={handleAvatarUpload}
           />
           <div className="text-xs text-muted-foreground">
-            Click to upload avatar
+            {t("clickToUploadAvatar")}
           </div>
         </div>
       </div>
 
       <div>
-        <Label className="text-xs text-muted-foreground">Name</Label>
+        <Label className="text-xs text-muted-foreground">{t("name")}</Label>
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -1280,17 +1289,17 @@ function SettingsTab({
       </div>
 
       <div>
-        <Label className="text-xs text-muted-foreground">Description</Label>
+        <Label className="text-xs text-muted-foreground">{t("description")}</Label>
         <Input
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="What does this agent do?"
+          placeholder={t("whatDoesItDo")}
           className="mt-1"
         />
       </div>
 
       <div>
-        <Label className="text-xs text-muted-foreground">Visibility</Label>
+        <Label className="text-xs text-muted-foreground">{t("visibility")}</Label>
         <div className="mt-1.5 flex gap-2">
           <button
             type="button"
@@ -1303,8 +1312,8 @@ function SettingsTab({
           >
             <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
             <div className="text-left">
-              <div className="font-medium">Workspace</div>
-              <div className="text-xs text-muted-foreground">All members can assign</div>
+              <div className="font-medium">{t("workspace")}</div>
+              <div className="text-xs text-muted-foreground">{t("workspaceDescription")}</div>
             </div>
           </button>
           <button
@@ -1318,15 +1327,15 @@ function SettingsTab({
           >
             <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
             <div className="text-left">
-              <div className="font-medium">Private</div>
-              <div className="text-xs text-muted-foreground">Only you can assign</div>
+              <div className="font-medium">{t("private")}</div>
+              <div className="text-xs text-muted-foreground">{t("privateDescription")}</div>
             </div>
           </button>
         </div>
       </div>
 
       <div>
-        <Label className="text-xs text-muted-foreground">Max Concurrent Tasks</Label>
+        <Label className="text-xs text-muted-foreground">{t("maxConcurrentTasks")}</Label>
         <Input
           type="number"
           min={1}
@@ -1338,20 +1347,20 @@ function SettingsTab({
       </div>
 
       <div>
-        <Label className="text-xs text-muted-foreground">Runtime</Label>
+        <Label className="text-xs text-muted-foreground">{t("runtime")}</Label>
         <div className="mt-1 flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm text-muted-foreground">
           {agent.runtime_mode === "cloud" ? (
             <Cloud className="h-4 w-4" />
           ) : (
             <Monitor className="h-4 w-4" />
           )}
-          {runtimeDevice?.name ?? (agent.runtime_mode === "cloud" ? "Cloud" : "Local")}
+          {runtimeDevice?.name ?? (agent.runtime_mode === "cloud" ? t("cloud") : t("local"))}
         </div>
       </div>
 
       <Button onClick={handleSave} disabled={!dirty || saving} size="sm">
         {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
-        Save Changes
+        {t("saveChanges")}
       </Button>
     </div>
   );
@@ -1363,14 +1372,16 @@ function SettingsTab({
 
 type DetailTab = "instructions" | "skills" | "tools" | "triggers" | "tasks" | "settings";
 
-const detailTabs: { id: DetailTab; label: string; icon: typeof FileText }[] = [
-  { id: "instructions", label: "Instructions", icon: FileText },
-  { id: "skills", label: "Skills", icon: BookOpenText },
-  { id: "tools", label: "Tools", icon: Wrench },
-  { id: "triggers", label: "Triggers", icon: Timer },
-  { id: "tasks", label: "Tasks", icon: ListTodo },
-  { id: "settings", label: "Settings", icon: Settings },
-];
+function getDetailTabs(t: ReturnType<typeof useTranslations>): { id: DetailTab; label: string; icon: typeof FileText }[] {
+  return [
+    { id: "instructions", label: t("instructions"), icon: FileText },
+    { id: "skills", label: t("skills"), icon: BookOpenText },
+    { id: "tools", label: t("tools"), icon: Wrench },
+    { id: "triggers", label: t("triggers"), icon: Timer },
+    { id: "tasks", label: t("tasks"), icon: ListTodo },
+    { id: "settings", label: t("settings"), icon: Settings },
+  ];
+}
 
 function AgentDetail({
   agent,
@@ -1385,6 +1396,7 @@ function AgentDetail({
   onArchive: (id: string) => Promise<void>;
   onRestore: (id: string) => Promise<void>;
 }) {
+  const t = useTranslations("agents");
   const st = statusConfig[agent.status];
   const runtimeDevice = getRuntimeDevice(agent, runtimes);
   const [activeTab, setActiveTab] = useState<DetailTab>("instructions");
@@ -1397,9 +1409,9 @@ function AgentDetail({
       {isArchived && (
         <div className="flex items-center gap-2 bg-muted/50 px-4 py-2 text-xs text-muted-foreground border-b">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-          <span className="flex-1">This agent is archived. It cannot be assigned or mentioned.</span>
+          <span className="flex-1">{t("archived")}</span>
           <Button variant="outline" size="sm" className="h-6 text-xs" onClick={() => onRestore(agent.id)}>
-            Restore
+            {t("restore")}
           </Button>
         </div>
       )}
@@ -1412,7 +1424,7 @@ function AgentDetail({
             <h2 className={`text-sm font-semibold truncate ${isArchived ? "text-muted-foreground" : ""}`}>{agent.name}</h2>
             {isArchived ? (
               <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
-                Archived
+                {t("archived")}
               </span>
             ) : (
               <span className={`flex items-center gap-1.5 text-xs ${st.color}`}>
@@ -1426,7 +1438,7 @@ function AgentDetail({
               ) : (
                 <Monitor className="h-3 w-3" />
               )}
-              {runtimeDevice?.name ?? (agent.runtime_mode === "cloud" ? "Cloud" : "Local")}
+              {runtimeDevice?.name ?? (agent.runtime_mode === "cloud" ? t("cloud") : t("local"))}
             </span>
           </div>
         </div>
@@ -1445,7 +1457,7 @@ function AgentDetail({
                 onClick={() => setConfirmArchive(true)}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                Archive Agent
+                {t("archiveAgent")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1454,7 +1466,7 @@ function AgentDetail({
 
       {/* Tabs */}
       <div className="flex border-b px-6">
-        {detailTabs.map((tab) => (
+        {getDetailTabs(t).map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -1512,15 +1524,15 @@ function AgentDetail({
                 <AlertCircle className="h-5 w-5 text-destructive" />
               </div>
               <DialogHeader className="flex-1 gap-1">
-                <DialogTitle className="text-sm font-semibold">Archive agent?</DialogTitle>
+                <DialogTitle className="text-sm font-semibold">{t("archiveAgentConfirm")}</DialogTitle>
                 <DialogDescription className="text-xs">
-                  &quot;{agent.name}&quot; will be archived. It won&apos;t be assignable or mentionable, but all history is preserved. You can restore it later.
+                  {t("archiveAgentDescription").replace("${name}", agent.name)}
                 </DialogDescription>
               </DialogHeader>
             </div>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setConfirmArchive(false)}>
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 variant="destructive"
@@ -1529,7 +1541,7 @@ function AgentDetail({
                   onArchive(agent.id);
                 }}
               >
-                Archive
+                {t("archive")}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1544,6 +1556,7 @@ function AgentDetail({
 // ---------------------------------------------------------------------------
 
 export default function AgentsPage() {
+  const t = useTranslations("agents");
   const isLoading = useAuthStore((s) => s.isLoading);
   const workspace = useWorkspaceStore((s) => s.workspace);
   const agents = useWorkspaceStore((s) => s.agents);
@@ -1585,9 +1598,9 @@ export default function AgentsPage() {
     try {
       await api.updateAgent(id, data as UpdateAgentRequest);
       await refreshAgents();
-      toast.success("Agent updated");
+      toast.success(t("agentUpdated"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to update agent");
+      toast.error(e instanceof Error ? e.message : t("failedToUpdateAgent"));
       throw e;
     }
   };
@@ -1596,9 +1609,9 @@ export default function AgentsPage() {
     try {
       await api.archiveAgent(id);
       await refreshAgents();
-      toast.success("Agent archived");
+      toast.success(t("agentArchived"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to archive agent");
+      toast.error(e instanceof Error ? e.message : t("failedToArchiveAgent"));
     }
   };
 
@@ -1606,9 +1619,9 @@ export default function AgentsPage() {
     try {
       await api.restoreAgent(id);
       await refreshAgents();
-      toast.success("Agent restored");
+      toast.success(t("agentRestored"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to restore agent");
+      toast.error(e instanceof Error ? e.message : t("failedToRestoreAgent"));
     }
   };
 
@@ -1665,14 +1678,14 @@ export default function AgentsPage() {
         {/* Left column — agent list */}
         <div className="overflow-y-auto h-full border-r">
           <div className="flex h-12 items-center justify-between border-b px-4">
-            <h1 className="text-sm font-semibold">Agents</h1>
+            <h1 className="text-sm font-semibold">{t("title")}</h1>
             <div className="flex items-center gap-1">
               {archivedCount > 0 && (
                 <Button
                   variant={showArchived ? "secondary" : "ghost"}
                   size="icon-xs"
                   onClick={() => setShowArchived(!showArchived)}
-                  title={showArchived ? "Show active agents" : "Show archived agents"}
+                  title={showArchived ? t("showActiveAgents") : t("showArchivedAgents")}
                 >
                   <Archive className="h-4 w-4 text-muted-foreground" />
                 </Button>
@@ -1690,7 +1703,7 @@ export default function AgentsPage() {
             <div className="flex flex-col items-center justify-center px-4 py-12">
               <Bot className="h-8 w-8 text-muted-foreground/40" />
               <p className="mt-3 text-sm text-muted-foreground">
-                {showArchived ? "No archived agents" : archivedCount > 0 ? "No active agents" : "No agents yet"}
+                {showArchived ? t("noArchivedAgents") : archivedCount > 0 ? t("noActiveAgents") : t("noAgentsYet")}
               </p>
               {!showArchived && (
                 <Button
@@ -1699,7 +1712,7 @@ export default function AgentsPage() {
                   className="mt-3"
                 >
                   <Plus className="h-3 w-3" />
-                  Create Agent
+                  {t("create")}
                 </Button>
               )}
             </div>
@@ -1734,14 +1747,14 @@ export default function AgentsPage() {
         ) : (
           <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
             <Bot className="h-10 w-10 text-muted-foreground/30" />
-            <p className="mt-3 text-sm">Select an agent to view details</p>
+            <p className="mt-3 text-sm">{t("selectAgentToViewDetails")}</p>
             <Button
               onClick={() => setShowCreate(true)}
               size="xs"
               className="mt-3"
             >
               <Plus className="h-3 w-3" />
-              Create Agent
+              {t("create")}
             </Button>
           </div>
         )}
