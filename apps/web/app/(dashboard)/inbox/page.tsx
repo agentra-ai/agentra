@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { useDefaultLayout } from "react-resizable-panels";
+import { useTranslations } from "next-intl";
 import { useInboxStore } from "@/features/inbox";
 import { IssueDetail, StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { STATUS_CONFIG, PRIORITY_CONFIG } from "@/features/issues/config";
@@ -221,6 +222,7 @@ function InboxListItem({
 export default function InboxPage() {
   const searchParams = useSearchParams();
   const urlIssue = searchParams.get("issue") ?? "";
+  const t = useTranslations("inbox");
 
   const [selectedKey, setSelectedKeyState] = useState(() => urlIssue);
 
@@ -255,7 +257,7 @@ export default function InboxPage() {
       } catch {
         // Rollback: refetch to get server truth
         useInboxStore.getState().fetch();
-        toast.error("Failed to mark as read");
+        toast.error(t("failedToMarkRead"));
       }
     }
   };
@@ -267,7 +269,7 @@ export default function InboxPage() {
       const archived = items.find((i) => i.id === id);
       if (archived && (archived.issue_id ?? archived.id) === selectedKey) setSelectedKey("");
     } catch {
-      toast.error("Failed to archive");
+      toast.error(t("failedToArchive"));
     }
   };
 
@@ -277,7 +279,7 @@ export default function InboxPage() {
       useInboxStore.getState().markAllRead();
       await api.markAllInboxRead();
     } catch {
-      toast.error("Failed to mark all as read");
+      toast.error(t("failedToMarkAllRead"));
       useInboxStore.getState().fetch();
     }
   };
@@ -288,7 +290,7 @@ export default function InboxPage() {
       setSelectedKey("");
       await api.archiveAllInbox();
     } catch {
-      toast.error("Failed to archive all");
+      toast.error(t("failedToArchiveAll"));
       useInboxStore.getState().fetch();
     }
   };
@@ -300,7 +302,7 @@ export default function InboxPage() {
       if (readKeys.includes(selectedKey)) setSelectedKey("");
       await api.archiveAllReadInbox();
     } catch {
-      toast.error("Failed to archive read items");
+      toast.error(t("failedToArchiveRead"));
       useInboxStore.getState().fetch();
     }
   };
@@ -311,7 +313,7 @@ export default function InboxPage() {
       setSelectedKey("");
       await useInboxStore.getState().fetch();
     } catch {
-      toast.error("Failed to archive completed");
+      toast.error(t("failedToArchiveCompleted"));
     }
   };
 
@@ -354,7 +356,7 @@ export default function InboxPage() {
       <div className="flex flex-col border-r h-full">
         <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
           <div className="flex items-center gap-2">
-            <h1 className="text-sm font-semibold">Inbox</h1>
+            <h1 className="text-sm font-semibold">{t("title")}</h1>
             {unreadCount > 0 && (
               <span className="text-xs text-muted-foreground">
                 {unreadCount}
@@ -376,20 +378,20 @@ export default function InboxPage() {
             <DropdownMenuContent align="end" className="w-auto">
               <DropdownMenuItem onClick={handleMarkAllRead}>
                 <CheckCheck className="h-4 w-4" />
-                Mark all as read
+                {t("markAllRead")}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleArchiveAll}>
                 <Archive className="h-4 w-4" />
-                Archive all
+                {t("archiveAll")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleArchiveAllRead}>
                 <BookCheck className="h-4 w-4" />
-                Archive all read
+                {t("archiveAllRead")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleArchiveCompleted}>
                 <ListChecks className="h-4 w-4" />
-                Archive completed
+                {t("archiveCompleted")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -399,7 +401,7 @@ export default function InboxPage() {
         {items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Inbox className="mb-3 h-8 w-8 text-muted-foreground/50" />
-            <p className="text-sm">No notifications</p>
+            <p className="text-sm">{t("noNotifications")}</p>
           </div>
         ) : (
           <div>
@@ -459,8 +461,8 @@ export default function InboxPage() {
             <Inbox className="mb-3 h-10 w-10 text-muted-foreground/30" />
             <p className="text-sm">
               {items.length === 0
-                ? "Your inbox is empty"
-                : "Select a notification to view details"}
+                ? t("yourInboxEmpty")
+                : t("selectToViewDetails")}
             </p>
           </div>
         )}
