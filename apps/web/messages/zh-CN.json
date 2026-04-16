@@ -383,7 +383,26 @@
   "tokens": {
     "title": "个人访问令牌允许 CLI 和外部集成使用您的账户进行身份验证。",
     "tokenName": "令牌名称（例如：我的 CLI）",
-    "create": "创建"
+    "create": "创建",
+    "creating": "创建中...",
+    "days": "天",
+    "year": "年",
+    "noExpiry": "无过期",
+    "created": "创建于",
+    "lastUsed": "上次使用",
+    "neverUsed": "从未使用",
+    "expires": "过期于",
+    "revoke": "撤销",
+    "revokeToken": "撤销令牌",
+    "revokeTokenDescription": "此令牌将被永久撤销，无法再使用。此操作无法撤销。",
+    "tokenCreated": "令牌已创建",
+    "tokenCreatedDescription": "立即复制您的个人访问令牌。您将无法再次查看它。",
+    "copyToken": "复制令牌",
+    "done": "完成",
+    "failedToLoadTokens": "加载令牌失败",
+    "failedToCreateToken": "创建令牌失败",
+    "failedToRevokeToken": "撤销令牌失败",
+    "tokenRevoked": "令牌已撤销"
   },
   "members": {
     "addMember": "添加成员",

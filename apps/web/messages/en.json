@@ -383,7 +383,26 @@
   "tokens": {
     "title": "Personal access tokens allow the CLI and external integrations to authenticate with your account.",
     "tokenName": "Token name (e.g. My CLI)",
-    "create": "Create"
+    "create": "Create",
+    "creating": "Creating...",
+    "days": "days",
+    "year": "year",
+    "noExpiry": "No expiry",
+    "created": "Created",
+    "lastUsed": "Last used",
+    "neverUsed": "Never used",
+    "expires": "Expires",
+    "revoke": "Revoke",
+    "revokeToken": "Revoke token",
+    "revokeTokenDescription": "This token will be permanently revoked and can no longer be used. This cannot be undone.",
+    "tokenCreated": "Token created",
+    "tokenCreatedDescription": "Copy your personal access token now. You won't be able to see it again.",
+    "copyToken": "Copy token",
+    "done": "Done",
+    "failedToLoadTokens": "Failed to load tokens",
+    "failedToCreateToken": "Failed to create token",
+    "failedToRevokeToken": "Failed to revoke token",
+    "tokenRevoked": "Token revoked"
   },
   "members": {
     "addMember": "Add member",
