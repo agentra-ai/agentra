@@ -107,12 +107,12 @@ export function AccountTab() {
                 onChange={handleAvatarUpload}
               />
               <div className="text-xs text-muted-foreground">
-                Click to upload avatar
+                {t("clickToUploadAvatar")}
               </div>
             </div>
 
             <div>
-              <Label className="text-xs text-muted-foreground">Name</Label>
+              <Label className="text-xs text-muted-foreground">{t("profile")}</Label>
               <Input
                 type="search"
                 value={profileName}
@@ -127,7 +127,7 @@ export function AccountTab() {
                 disabled={profileSaving || !profileName.trim()}
               >
                 <Save className="h-3 w-3" />
-                {profileSaving ? tCommon("loading") : "Update Profile"}
+                {profileSaving ? tCommon("loading") : tCommon("save")}
               </Button>
             </div>
           </CardContent>

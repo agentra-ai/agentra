@@ -114,7 +114,8 @@
     "themeDescription": "Choose your preferred theme",
     "light": "Light",
     "dark": "Dark",
-    "system": "System"
+    "system": "System",
+    "clickToUploadAvatar": "Click to upload avatar"
   },
   "navigation": {
     "dashboard": "Dashboard",
