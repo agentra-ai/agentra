@@ -156,6 +156,7 @@ File: `server/internal/realtime/hub.go`
 
 - Ensure `streaming:logs` events are broadcast to all subscribers for a workspace
 - Rate limit log events to prevent flooding (batch every 100ms)
+- Only broadcast to clients subscribed to the specific task (per-task subscription)
 
 ### 3. Log Buffering
 
