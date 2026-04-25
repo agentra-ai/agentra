@@ -83,6 +83,12 @@ func (c *Client) ReportProgress(ctx context.Context, taskID, summary string, ste
 	}, nil)
 }
 
+func (c *Client) ReportAgentStage(ctx context.Context, taskID, stage string) error {
+	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/stage", taskID), map[string]any{
+		"stage": stage,
+	}, nil)
+}
+
 // TaskMessageData represents a single agent execution message for batch reporting.
 type TaskMessageData struct {
 	Seq     int            `json:"seq"`
