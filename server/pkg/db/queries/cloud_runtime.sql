@@ -1,6 +1,6 @@
 -- name: CreateCloudRuntime :one
-INSERT INTO cloud_runtimes (workspace_id, gateway_url, provider, encrypted_api_key, api_key_hash)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO cloud_runtimes (workspace_id, gateway_url, provider, encrypted_api_key, api_key_hash, max_concurrent_tasks)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: GetCloudRuntimeByWorkspace :one
@@ -8,7 +8,7 @@ SELECT * FROM cloud_runtimes WHERE workspace_id = $1 AND is_active = true;
 
 -- name: UpdateCloudRuntime :one
 UPDATE cloud_runtimes
-SET gateway_url = $2, provider = $3, encrypted_api_key = $4, api_key_hash = $5, updated_at = NOW()
+SET gateway_url = $2, provider = $3, encrypted_api_key = $4, api_key_hash = $5, max_concurrent_tasks = $6, updated_at = NOW()
 WHERE id = $1
 RETURNING *;
 

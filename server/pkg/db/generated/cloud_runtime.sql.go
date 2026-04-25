@@ -37,17 +37,18 @@ func (q *Queries) CompleteCloudRuntimeTask(ctx context.Context, arg CompleteClou
 }
 
 const createCloudRuntime = `-- name: CreateCloudRuntime :one
-INSERT INTO cloud_runtimes (workspace_id, gateway_url, provider, encrypted_api_key, api_key_hash)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO cloud_runtimes (workspace_id, gateway_url, provider, encrypted_api_key, api_key_hash, max_concurrent_tasks)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, workspace_id, gateway_url, provider, encrypted_api_key, api_key_hash, is_active, max_concurrent_tasks, created_at, updated_at
 `
 
 type CreateCloudRuntimeParams struct {
-	WorkspaceID     pgtype.UUID `json:"workspace_id"`
-	GatewayUrl      pgtype.Text `json:"gateway_url"`
-	Provider        string      `json:"provider"`
-	EncryptedApiKey []byte      `json:"encrypted_api_key"`
-	ApiKeyHash      string      `json:"api_key_hash"`
+	WorkspaceID        pgtype.UUID `json:"workspace_id"`
+	GatewayUrl         pgtype.Text `json:"gateway_url"`
+	Provider           string      `json:"provider"`
+	EncryptedApiKey    []byte      `json:"encrypted_api_key"`
+	ApiKeyHash         string      `json:"api_key_hash"`
+	MaxConcurrentTasks int32       `json:"max_concurrent_tasks"`
 }
 
 func (q *Queries) CreateCloudRuntime(ctx context.Context, arg CreateCloudRuntimeParams) (CloudRuntime, error) {
@@ -57,6 +58,7 @@ func (q *Queries) CreateCloudRuntime(ctx context.Context, arg CreateCloudRuntime
 		arg.Provider,
 		arg.EncryptedApiKey,
 		arg.ApiKeyHash,
+		arg.MaxConcurrentTasks,
 	)
 	var i CloudRuntime
 	err := row.Scan(
@@ -160,17 +162,18 @@ func (q *Queries) GetCloudRuntimeTaskByTaskID(ctx context.Context, taskID pgtype
 
 const updateCloudRuntime = `-- name: UpdateCloudRuntime :one
 UPDATE cloud_runtimes
-SET gateway_url = $2, provider = $3, encrypted_api_key = $4, api_key_hash = $5, updated_at = NOW()
+SET gateway_url = $2, provider = $3, encrypted_api_key = $4, api_key_hash = $5, max_concurrent_tasks = $6, updated_at = NOW()
 WHERE id = $1
 RETURNING id, workspace_id, gateway_url, provider, encrypted_api_key, api_key_hash, is_active, max_concurrent_tasks, created_at, updated_at
 `
 
 type UpdateCloudRuntimeParams struct {
-	ID              pgtype.UUID `json:"id"`
-	GatewayUrl      pgtype.Text `json:"gateway_url"`
-	Provider        string      `json:"provider"`
-	EncryptedApiKey []byte      `json:"encrypted_api_key"`
-	ApiKeyHash      string      `json:"api_key_hash"`
+	ID                 pgtype.UUID `json:"id"`
+	GatewayUrl         pgtype.Text `json:"gateway_url"`
+	Provider           string      `json:"provider"`
+	EncryptedApiKey    []byte      `json:"encrypted_api_key"`
+	ApiKeyHash         string      `json:"api_key_hash"`
+	MaxConcurrentTasks int32       `json:"max_concurrent_tasks"`
 }
 
 func (q *Queries) UpdateCloudRuntime(ctx context.Context, arg UpdateCloudRuntimeParams) (CloudRuntime, error) {
@@ -180,6 +183,7 @@ func (q *Queries) UpdateCloudRuntime(ctx context.Context, arg UpdateCloudRuntime
 		arg.Provider,
 		arg.EncryptedApiKey,
 		arg.ApiKeyHash,
+		arg.MaxConcurrentTasks,
 	)
 	var i CloudRuntime
 	err := row.Scan(
