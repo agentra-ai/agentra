@@ -5,7 +5,7 @@ import { Bot, ChevronRight, ChevronUp, Loader2, ArrowDown, Brain, AlertCircle, C
 import { useTranslations } from "next-intl";
 import { api } from "@/shared/api";
 import { useWSEvent } from "@/features/realtime";
-import type { TaskMessagePayload, TaskCompletedPayload, TaskFailedPayload, TaskCancelledPayload } from "@/shared/types/events";
+import type { TaskMessagePayload, TaskCompletedPayload, TaskFailedPayload, TaskCancelledPayload, AgentStagePayload, AgentStage } from "@/shared/types/events";
 import type { AgentTask } from "@/shared/types/agent";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -115,6 +115,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
   const [autoScroll, setAutoScroll] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [isStuck, setIsStuck] = useState(false);
+  const [agentStage, setAgentStage] = useState<AgentStage>("idle");
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const seenSeqs = useRef(new Set<string>());
@@ -176,6 +177,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
       setItems([]);
       seenSeqs.current.clear();
       setCancelling(false);
+      setAgentStage("idle");
     }, [issueId]),
   );
 
@@ -188,6 +190,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
       setItems([]);
       seenSeqs.current.clear();
       setCancelling(false);
+      setAgentStage("idle");
     }, [issueId]),
   );
 
@@ -200,6 +203,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
       setItems([]);
       seenSeqs.current.clear();
       setCancelling(false);
+      setAgentStage("idle");
     }, [issueId]),
   );
 
@@ -215,9 +219,20 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
           setActiveTask(task);
           setItems([]);
           seenSeqs.current.clear();
+          setAgentStage("idle");
         }
       }).catch(console.error);
     }, [issueId, activeTask]),
+  );
+
+  // Handle agent stage changes
+  useWSEvent(
+    "agent:stage",
+    useCallback((payload: unknown) => {
+      const p = payload as AgentStagePayload;
+      if (!activeTask || p.task_id !== activeTask.id) return;
+      setAgentStage(p.stage);
+    }, [activeTask]),
   );
 
   // Elapsed time
@@ -312,6 +327,11 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
             <span className="truncate">{name} is working</span>
           </div>
           <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0">{elapsed}</span>
+          {agentStage !== "idle" && agentStage !== "done" && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-info/10 text-info shrink-0">
+              {agentStage}
+            </span>
+          )}
           {!isStuck && toolCount > 0 && (
             <span className="text-xs text-muted-foreground shrink-0">
               {toolCount} tool {toolCount === 1 ? "call" : "calls"}

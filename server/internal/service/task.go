@@ -313,6 +313,32 @@ func (s *TaskService) ReportProgress(ctx context.Context, taskID string, workspa
 	})
 }
 
+// AgentStage represents the current stage of agent execution.
+type AgentStage string
+
+const (
+	AgentStageReading      AgentStage = "reading"
+	AgentStageImplementing AgentStage = "implementing"
+	AgentStageTesting     AgentStage = "testing"
+	AgentStageCommitting  AgentStage = "committing"
+	AgentStageDone        AgentStage = "done"
+)
+
+// ReportAgentStage broadcasts an agent stage change via the event bus.
+func (s *TaskService) ReportAgentStage(ctx context.Context, taskID string, agentID string, workspaceID string, stage AgentStage) {
+	s.Bus.Publish(events.Event{
+		Type:        protocol.EventAgentStage,
+		WorkspaceID: workspaceID,
+		ActorType:   "system",
+		ActorID:     agentID,
+		Payload: map[string]any{
+			"task_id": taskID,
+			"agent_id": agentID,
+			"stage":    stage,
+		},
+	})
+}
+
 // ReconcileAgentStatus checks running task count and sets agent status accordingly.
 func (s *TaskService) ReconcileAgentStatus(ctx context.Context, agentID pgtype.UUID) {
 	running, err := s.Queries.CountRunningTasks(ctx, agentID)

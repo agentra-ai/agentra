@@ -61,4 +61,8 @@ const (
 	// Daemon events
 	EventDaemonHeartbeat = "daemon:heartbeat"
 	EventDaemonRegister  = "daemon:register"
+
+	// Agent workflow events
+	EventAgentStage      = "agent:stage"
+	EventStreamingLogs   = "streaming:logs"
 )

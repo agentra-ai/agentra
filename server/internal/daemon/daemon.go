@@ -765,6 +765,8 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 		return
 	}
 
+	// Report initial "reading" stage
+	_ = d.client.ReportAgentStage(ctx, task.ID, "reading")
 	_ = d.client.ReportProgress(ctx, task.ID, fmt.Sprintf("Launching %s", provider), 1, 2)
 
 	// Create a cancellable context so we can interrupt the running agent
@@ -792,12 +794,16 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 		}
 	}()
 
+	// Report "implementing" stage before agent starts executing
+	_ = d.client.ReportAgentStage(ctx, task.ID, "implementing")
+
 	result, err := d.runTask(runCtx, task, provider, taskLog)
 
 	// Check if we were cancelled by the polling goroutine.
 	select {
 	case <-cancelledByPoll:
 		taskLog.Info("task cancelled during execution, discarding result")
+		_ = d.client.ReportAgentStage(ctx, task.ID, "idle")
 		return
 	default:
 	}
@@ -807,6 +813,7 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 		if failErr := d.client.FailTask(ctx, task.ID, err.Error()); failErr != nil {
 			taskLog.Error("fail task callback failed", "error", failErr)
 		}
+		_ = d.client.ReportAgentStage(ctx, task.ID, "idle")
 		return
 	}
 
@@ -817,6 +824,7 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 	// moved the task to 'cancelled' so complete/fail would fail anyway.
 	if status, err := d.client.GetTaskStatus(ctx, task.ID); err == nil && status == "cancelled" {
 		taskLog.Info("task cancelled during execution, discarding result")
+		_ = d.client.ReportAgentStage(ctx, task.ID, "idle")
 		return
 	}
 
@@ -825,13 +833,20 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 		if err := d.client.FailTask(ctx, task.ID, result.Comment); err != nil {
 			taskLog.Error("report blocked task failed", "error", err)
 		}
+		_ = d.client.ReportAgentStage(ctx, task.ID, "idle")
 	default:
 		taskLog.Info("task completed", "status", result.Status)
+		// Report "committing" stage before completing
+		_ = d.client.ReportAgentStage(ctx, task.ID, "committing")
 		if err := d.client.CompleteTask(ctx, task.ID, result.Comment, result.BranchName, result.SessionID, result.WorkDir); err != nil {
 			taskLog.Error("complete task failed, falling back to fail", "error", err)
 			if failErr := d.client.FailTask(ctx, task.ID, fmt.Sprintf("complete task failed: %s", err.Error())); failErr != nil {
 				taskLog.Error("fail task fallback also failed", "error", failErr)
 			}
+			_ = d.client.ReportAgentStage(ctx, task.ID, "idle")
+		} else {
+			// Report "done" stage after successful completion
+			_ = d.client.ReportAgentStage(ctx, task.ID, "done")
 		}
 	}
 }
