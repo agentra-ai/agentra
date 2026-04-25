@@ -49,3 +49,4 @@ server/server
 .tmp
 .playwright-mcp
 .omx
+.worktrees/
