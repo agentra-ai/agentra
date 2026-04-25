@@ -169,6 +169,14 @@ func (c *Client) handleEvent(event map[string]any) {
 			logs, _ := event["logs"].(string)
 			c.Hub.OnTaskLogs(gatewayID, taskID, logs)
 		}
+
+	case "task:dispatch":
+		if c.Hub.OnTaskDispatch != nil {
+			gatewayID := c.ID
+			taskID, _ := event["task_id"].(string)
+			config, _ := event["config"].(map[string]any)
+			c.Hub.OnTaskDispatch(gatewayID, taskID, config)
+		}
 	}
 }
 

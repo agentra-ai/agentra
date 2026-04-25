@@ -11,10 +11,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/mention"
 	"github.com/agentra-ai/agentra/server/internal/realtime"
 	"github.com/agentra-ai/agentra/server/internal/util"
+	"github.com/agentra-ai/agentra/server/pkg/crypto"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/agentra-ai/agentra/server/pkg/protocol"
 	"github.com/agentra-ai/agentra/server/pkg/redact"
@@ -491,6 +493,78 @@ func (s *TaskService) broadcastTaskDispatch(ctx context.Context, task db.AgentTa
 		ActorID:     "",
 		Payload:     payload,
 	})
+
+	// Cloud runtime dispatch: send task to cloud gateway if configured
+	if task.RuntimeType == "cloud" && task.CloudRuntimeID.Valid {
+		taskIDStr := util.UUIDToString(task.ID)
+
+		// Retrieve cloud runtime configuration for this workspace
+		cr, err := s.Queries.GetCloudRuntimeByWorkspace(ctx, util.ParseUUID(workspaceID))
+		if err != nil || !cr.IsActive {
+			slog.Warn("cloud dispatch: no active runtime", "workspace_id", workspaceID, "task_id", taskIDStr)
+			return
+		}
+
+		gatewayID := s.Hub.GatewayHub.GetGatewayForWorkspace(workspaceID)
+		if gatewayID == "" {
+			slog.Warn("cloud dispatch: no gateway connected", "workspace_id", workspaceID, "task_id", taskIDStr)
+			return
+		}
+
+		// Decrypt API key using workspace-specific passphrase
+		passphrase := workspaceID + string(auth.JWTSecret())
+		apiKey, err := crypto.DecryptAPIKey(string(cr.EncryptedApiKey), passphrase)
+		if err != nil {
+			slog.Error("cloud dispatch: failed to decrypt API key", "error", err, "workspace_id", workspaceID, "task_id", taskIDStr)
+			return
+		}
+
+		// Collect issue, agent, and skill details for dispatch
+		var issueTitle, agentName, agentInstructions string
+		var skills []AgentSkillData
+
+		if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil {
+			issueTitle = issue.Title
+		}
+
+		if agent, err := s.Queries.GetAgent(ctx, task.AgentID); err == nil {
+			agentName = agent.Name
+			agentInstructions = agent.Instructions
+			skills = s.LoadAgentSkills(ctx, task.AgentID)
+		}
+
+		// Build dispatch configuration for gateway
+		config := map[string]any{
+			"task_id":      taskIDStr,
+			"agent_id":     util.UUIDToString(task.AgentID),
+			"issue_id":     util.UUIDToString(task.IssueID),
+			"issue_title":  issueTitle,
+			"agent_name":   agentName,
+			"instructions": agentInstructions,
+			"skills":       skills,
+			"api_key":      apiKey,
+			"gateway_url":  cr.GatewayUrl.String,
+			"provider":     cr.Provider,
+		}
+
+		// Send dispatch message to gateway
+		msg, err := json.Marshal(map[string]any{
+			"type":   "task:dispatch",
+			"task_id": taskIDStr,
+			"config": config,
+		})
+		if err != nil {
+			slog.Error("cloud dispatch: failed to marshal message", "error", err, "task_id", taskIDStr)
+			return
+		}
+
+		if err := s.Hub.GatewayHub.SendToGateway(gatewayID, msg); err != nil {
+			slog.Error("cloud dispatch: failed to send to gateway", "error", err, "gateway_id", gatewayID, "task_id", taskIDStr)
+			return
+		}
+
+		slog.Info("cloud task dispatched", "task_id", taskIDStr, "gateway_id", gatewayID, "workspace_id", workspaceID)
+	}
 }
 
 func (s *TaskService) broadcastTaskEvent(ctx context.Context, eventType string, task db.AgentTaskQueue) {
