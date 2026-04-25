@@ -53,6 +53,20 @@ func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue, t
 		return db.AgentTaskQueue{}, fmt.Errorf("agent has no runtime")
 	}
 
+	// Determine runtime type and cloud runtime ID
+	var runtimeType interface{}
+	var cloudRuntimeID pgtype.UUID
+	taskWorkspaceID := issue.WorkspaceID
+	if s.ShouldUseCloudRuntime(ctx, taskWorkspaceID, &agent) {
+		runtimeType = "cloud"
+		cr, err := s.Queries.GetCloudRuntimeByWorkspace(ctx, agent.WorkspaceID)
+		if err == nil && cr.IsActive {
+			cloudRuntimeID = cr.ID
+		}
+	} else {
+		runtimeType = "local"
+	}
+
 	var commentID pgtype.UUID
 	if len(triggerCommentID) > 0 {
 		commentID = triggerCommentID[0]
@@ -64,6 +78,8 @@ func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue, t
 		IssueID:          issue.ID,
 		Priority:         priorityToInt(issue.Priority),
 		TriggerCommentID: commentID,
+		RuntimeType:      runtimeType,
+		CloudRuntimeID:   cloudRuntimeID,
 	})
 	if err != nil {
 		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", err)
@@ -92,12 +108,28 @@ func (s *TaskService) EnqueueTaskForMention(ctx context.Context, issue db.Issue,
 		return db.AgentTaskQueue{}, fmt.Errorf("agent has no runtime")
 	}
 
+	// Determine runtime type and cloud runtime ID
+	var runtimeType interface{}
+	var cloudRuntimeID pgtype.UUID
+	taskWorkspaceID := issue.WorkspaceID
+	if s.ShouldUseCloudRuntime(ctx, taskWorkspaceID, &agent) {
+		runtimeType = "cloud"
+		cr, err := s.Queries.GetCloudRuntimeByWorkspace(ctx, agent.WorkspaceID)
+		if err == nil && cr.IsActive {
+			cloudRuntimeID = cr.ID
+		}
+	} else {
+		runtimeType = "local"
+	}
+
 	task, err := s.Queries.CreateAgentTask(ctx, db.CreateAgentTaskParams{
 		AgentID:          agentID,
 		RuntimeID:        agent.RuntimeID,
 		IssueID:          issue.ID,
 		Priority:         priorityToInt(issue.Priority),
 		TriggerCommentID: triggerCommentID,
+		RuntimeType:      runtimeType,
+		CloudRuntimeID:   cloudRuntimeID,
 	})
 	if err != nil {
 		slog.Error("mention task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID), "error", err)
@@ -400,6 +432,23 @@ type AgentSkillData struct {
 type AgentSkillFileData struct {
 	Path    string `json:"path"`
 	Content string `json:"content"`
+}
+
+// ShouldUseCloudRuntime determines if a task should use cloud runtime
+func (s *TaskService) ShouldUseCloudRuntime(ctx context.Context, workspaceID pgtype.UUID, agent *db.Agent) bool {
+	// If agent prefers local, don't use cloud
+	if agent != nil && agent.PreferredRuntime == "local" {
+		return false
+	}
+
+	// Check workspace has active cloud runtime
+	runtime, err := s.Queries.GetCloudRuntimeByWorkspace(ctx, workspaceID)
+	if err != nil || !runtime.IsActive {
+		return false
+	}
+
+	// Agent prefers 'cloud' or 'any' (or nil/empty) and workspace has cloud runtime
+	return agent == nil || agent.PreferredRuntime == "any" || agent.PreferredRuntime == "cloud"
 }
 
 func priorityToInt(p string) int32 {
