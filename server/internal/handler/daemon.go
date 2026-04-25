@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
+	"github.com/agentra-ai/agentra/server/internal/service"
 	"github.com/agentra-ai/agentra/server/pkg/protocol"
 	"github.com/agentra-ai/agentra/server/pkg/redact"
 	"github.com/go-chi/chi/v5"
@@ -377,6 +378,35 @@ func (h *Handler) ReportTaskProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.TaskService.ReportProgress(r.Context(), taskID, workspaceID, req.Summary, req.Step, req.Total)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// ReportAgentStage receives an agent stage change from the daemon.
+type TaskStageRequest struct {
+	Stage string `json:"stage"` // "reading", "implementing", "testing", "committing", "done"
+}
+
+func (h *Handler) ReportAgentStage(w http.ResponseWriter, r *http.Request) {
+	taskID := chi.URLParam(r, "taskId")
+
+	var req TaskStageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	task, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+
+	workspaceID := ""
+	if issue, err := h.Queries.GetIssue(r.Context(), task.IssueID); err == nil {
+		workspaceID = uuidToString(issue.WorkspaceID)
+	}
+
+	h.TaskService.ReportAgentStage(r.Context(), taskID, uuidToString(task.AgentID), workspaceID, service.AgentStage(req.Stage))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 

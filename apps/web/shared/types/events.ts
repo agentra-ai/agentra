@@ -35,6 +35,8 @@ export type WSEventType =
   | "member:removed"
   | "daemon:heartbeat"
   | "daemon:register"
+  | "agent:stage"
+  | "streaming:logs"
   | "skill:created"
   | "skill:updated"
   | "skill:deleted"
@@ -168,6 +170,20 @@ export interface TaskMessagePayload {
   content?: string;
   input?: Record<string, unknown>;
   output?: string;
+}
+
+export type AgentStage = "idle" | "reading" | "implementing" | "testing" | "committing" | "done";
+
+export interface AgentStagePayload {
+  task_id: string;
+  agent_id: string;
+  stage: AgentStage;
+}
+
+export interface StreamingLogsPayload {
+  task_id: string;
+  agent_id: string;
+  lines: string[];
 }
 
 export interface TaskCompletedPayload {
