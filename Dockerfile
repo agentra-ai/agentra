@@ -16,6 +16,7 @@ ARG COMMIT=unknown
 RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/server ./cmd/server
 RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o bin/agentra ./cmd/agentra
 RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/migrate ./cmd/migrate
+RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/gateway ./cmd/gateway
 
 # --- Frontend build stage ---
 FROM node:22-alpine AS web-builder
@@ -56,6 +57,19 @@ COPY server/migrations/ ./migrations/
 EXPOSE 8080
 
 ENTRYPOINT ["./server"]
+
+# --- Gateway runtime stage ---
+FROM golang:1.26-alpine AS gateway-runtime
+
+RUN apk add --no-cache ca-certificates tzdata
+
+WORKDIR /app
+
+COPY --from=server-builder /src/server/bin/gateway ./
+
+EXPOSE 8081
+
+ENTRYPOINT ["./gateway"]
 
 # --- Frontend runtime stage ---
 FROM node:22-alpine AS web-runtime
