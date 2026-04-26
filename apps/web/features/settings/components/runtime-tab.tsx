@@ -31,20 +31,10 @@ export function RuntimeTab() {
     setSuccess(false);
 
     try {
-      const res = await api.post('/api/cloud-runtime/validate', {
-        provider,
-        api_key: apiKey,
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || 'Invalid API key');
-        return;
-      }
-
+      await api.validateCloudRuntime(provider, apiKey);
       setSuccess(true);
     } catch (e) {
-      setError('Connection test failed');
+      setError(e instanceof Error ? e.message : "Connection test failed");
     } finally {
       setIsValidating(false);
     }
@@ -55,22 +45,16 @@ export function RuntimeTab() {
     setError(null);
 
     try {
-      const res = await api.post('/api/cloud-runtime', {
+      await api.saveCloudRuntime({
         provider,
         api_key: apiKey,
-        gateway_url: runtimeType === 'cloud' && gatewayUrl ? gatewayUrl : null,
+        gateway_url: runtimeType === "cloud" && gatewayUrl ? gatewayUrl : null,
         max_concurrent_tasks: 3,
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || 'Failed to save');
-        return;
-      }
-
       setSuccess(true);
-    } catch {
-      setError('Save failed');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed");
     } finally {
       setIsSaving(false);
     }

@@ -307,3 +307,39 @@ func (c *Client) writePump() {
 		}
 	}
 }
+
+// HandleGatewayWebSocket upgrades an HTTP connection to WebSocket for Cloud Runtime Gateway connections.
+func HandleGatewayWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
+	gatewayID := r.URL.Query().Get("gateway_id")
+	if gatewayID == "" {
+		http.Error(w, `{"error":"gateway_id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Validate auth token if provided
+	token := r.URL.Query().Get("token")
+	if token != "" {
+		// For now, tokens are not validated - gateways are trusted within the network
+		// In production, validate against a shared secret or JWT
+	}
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		slog.Error("gateway websocket upgrade failed", "error", err, "gateway_id", gatewayID)
+		return
+	}
+
+	gatewayClient := &gateway.Client{
+		ID:   gatewayID,
+		Conn: conn,
+		Hub:  hub.GatewayHub,
+		Send: make(chan []byte, 256),
+	}
+
+	hub.GatewayHub.Register(gatewayClient)
+
+	go gatewayClient.WritePump()
+	go gatewayClient.ReadPump()
+
+	slog.Info("gateway connected", "gateway_id", gatewayID)
+}

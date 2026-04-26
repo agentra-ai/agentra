@@ -21,6 +21,7 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/realtime"
 	"github.com/agentra-ai/agentra/server/internal/service"
 	"github.com/agentra-ai/agentra/server/internal/storage"
+	"github.com/agentra-ai/agentra/server/internal/util"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
 
@@ -93,6 +94,9 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 	cfSigner := auth.NewCloudFrontSignerFromEnv()
 	h := handler.New(queries, pool, hub, bus, emailSvc, fileStorage, cfSigner)
 
+	// Wire up GatewayHub callbacks to TaskService
+	setGatewayCallbacks(hub, h)
+
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -117,6 +121,11 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 	mc := &membershipChecker{queries: queries}
 	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
 		realtime.HandleWebSocket(hub, mc, w, r)
+	})
+
+	// Cloud Runtime Gateway WebSocket
+	r.Get("/api/gateway/connect", func(w http.ResponseWriter, r *http.Request) {
+		realtime.HandleGatewayWebSocket(hub, w, r)
 	})
 
 	// Auth (public)
@@ -318,4 +327,47 @@ func parseUUID(s string) pgtype.UUID {
 		return pgtype.UUID{}
 	}
 	return u
+}
+
+// setGatewayCallbacks wires up the GatewayHub callbacks to TaskService methods.
+func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
+	hub.GatewayHub.OnTaskComplete = func(gatewayID, taskID string, exitCode int, output string) {
+		ctx := context.Background()
+		taskUUID := util.ParseUUID(taskID)
+		if !taskUUID.Valid {
+			slog.Error("gateway complete: invalid task ID", "task_id", taskID)
+			return
+		}
+		// Exit code 0 = success, non-zero = failure
+		if exitCode == 0 {
+			_, err := h.TaskService.CompleteTask(ctx, taskUUID, []byte(output), "", "")
+			if err != nil {
+				slog.Error("gateway complete: failed", "task_id", taskID, "error", err)
+			}
+		} else {
+			_, err := h.TaskService.FailTask(ctx, taskUUID, output)
+			if err != nil {
+				slog.Error("gateway fail: failed", "task_id", taskID, "error", err)
+			}
+		}
+	}
+
+	hub.GatewayHub.OnTaskFail = func(gatewayID, taskID string, errorMsg string) {
+		ctx := context.Background()
+		taskUUID := util.ParseUUID(taskID)
+		if !taskUUID.Valid {
+			slog.Error("gateway fail: invalid task ID", "task_id", taskID)
+			return
+		}
+		_, err := h.TaskService.FailTask(ctx, taskUUID, errorMsg)
+		if err != nil {
+			slog.Error("gateway fail: failed", "task_id", taskID, "error", err)
+		}
+	}
+
+	hub.GatewayHub.OnTaskLogs = func(gatewayID, taskID string, logs string) {
+		// Broadcast logs to workspace via realtime
+		// TODO: Implement log streaming to web clients
+		slog.Debug("gateway logs", "gateway_id", gatewayID, "task_id", taskID, "logs_len", len(logs))
+	}
 }

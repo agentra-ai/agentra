@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -16,6 +17,10 @@ type WSClient struct {
 	conn      *websocket.Conn
 	mu        sync.Mutex
 	logger    *slog.Logger
+
+	// Callbacks set by Gateway
+	OnTaskDispatch func(taskID string, config map[string]any)
+	OnTaskCancel   func(taskID string)
 }
 
 func NewWSClient(serverURL, gatewayID, authToken string, logger *slog.Logger) *WSClient {
@@ -28,7 +33,9 @@ func NewWSClient(serverURL, gatewayID, authToken string, logger *slog.Logger) *W
 }
 
 func (c *WSClient) Connect(ctx context.Context) error {
-	url := c.serverURL + "/api/gateway/connect?gateway_id=" + c.gatewayID
+	// Strip /ws suffix if present - AGENTRA_SERVER_URL may include it for daemon use
+	baseURL := strings.TrimSuffix(c.serverURL, "/ws")
+	url := baseURL + "/api/gateway/connect?gateway_id=" + c.gatewayID
 	if c.authToken != "" {
 		url += "&token=" + c.authToken
 	}
@@ -74,9 +81,16 @@ func (c *WSClient) Run(ctx context.Context) error {
 func (c *WSClient) handleEvent(event map[string]any) {
 	switch event["type"] {
 	case "task:dispatch":
-		// Handled by gateway
+		taskID, _ := event["task_id"].(string)
+		config, _ := event["config"].(map[string]any)
+		if c.OnTaskDispatch != nil && taskID != "" {
+			c.OnTaskDispatch(taskID, config)
+		}
 	case "task:cancel":
-		// Handled by gateway
+		taskID, _ := event["task_id"].(string)
+		if c.OnTaskCancel != nil && taskID != "" {
+			c.OnTaskCancel(taskID)
+		}
 	case "gateway:heartbeat":
 		c.send(map[string]any{"type": "gateway:heartbeat"})
 	}

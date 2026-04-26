@@ -591,4 +591,24 @@ export class ApiClient {
   async deleteAttachment(id: string): Promise<void> {
     await this.fetch(`/api/attachments/${id}`, { method: "DELETE" });
   }
+
+  // Cloud Runtime
+  async validateCloudRuntime(provider: string, apiKey: string): Promise<void> {
+    await this.fetch("/api/cloud-runtime/validate", {
+      method: "POST",
+      body: JSON.stringify({ provider, api_key: apiKey }),
+    });
+  }
+
+  async saveCloudRuntime(data: {
+    provider: string;
+    api_key: string;
+    gateway_url: string | null;
+    max_concurrent_tasks: number;
+  }): Promise<void> {
+    await this.fetch("/api/cloud-runtime", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
 }
