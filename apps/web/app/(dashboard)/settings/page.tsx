@@ -1,6 +1,6 @@
 "use client";
 
-import { User, Palette, Key, Settings, Users, FolderGit2 } from "lucide-react";
+import { User, Palette, Key, Settings, Users, FolderGit2, Cloud } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useWorkspaceStore } from "@/features/workspace";
@@ -10,6 +10,7 @@ import { TokensTab } from "./_components/tokens-tab";
 import { WorkspaceTab } from "./_components/workspace-tab";
 import { MembersTab } from "./_components/members-tab";
 import { RepositoriesTab } from "./_components/repositories-tab";
+import { RuntimeTab } from "@/features/settings/components/runtime-tab";
 
 export default function SettingsPage() {
   const t = useTranslations("settings");
@@ -25,6 +26,7 @@ export default function SettingsPage() {
     { value: "workspace", label: t("general"), icon: Settings },
     { value: "repositories", label: t("repositories"), icon: FolderGit2 },
     { value: "members", label: t("members"), icon: Users },
+    { value: "runtime", label: t("runtime"), icon: Cloud },
   ];
 
   return (
@@ -66,6 +68,7 @@ export default function SettingsPage() {
           <TabsContent value="workspace"><WorkspaceTab /></TabsContent>
           <TabsContent value="repositories"><RepositoriesTab /></TabsContent>
           <TabsContent value="members"><MembersTab /></TabsContent>
+          <TabsContent value="runtime"><RuntimeTab /></TabsContent>
         </div>
       </div>
     </Tabs>

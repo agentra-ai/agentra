@@ -108,6 +108,7 @@
     "general": "General",
     "repositories": "Repositories",
     "members": "Members",
+    "runtime": "Runtime",
     "language": "Language",
     "languageDescription": "Select your preferred language",
     "theme": "Theme",
