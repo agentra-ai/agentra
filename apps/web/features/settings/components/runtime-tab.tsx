@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { api } from '@/shared/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +17,7 @@ interface CloudRuntimeConfig {
 }
 
 export function RuntimeTab() {
+  const t = useTranslations("settings");
   const [runtimeType, setRuntimeType] = useState<'local' | 'cloud'>('local');
   const [provider, setProvider] = useState<'anthropic' | 'openai'>('anthropic');
   const [apiKey, setApiKey] = useState('');
@@ -63,15 +65,15 @@ export function RuntimeTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Runtime Settings</h2>
+        <h2 className="text-lg font-semibold">{t("runtimeSettings")}</h2>
         <p className="text-sm text-muted-foreground">
-          Configure where agents execute tasks
+          {t("runtimeSettingsDescription")}
         </p>
       </div>
 
       {/* Runtime Type Selector */}
       <div className="space-y-2">
-        <Label>Runtime Type</Label>
+        <Label>{t("runtimeType")}</Label>
         <div className="flex gap-4">
           <button
             type="button"
@@ -80,9 +82,9 @@ export function RuntimeTab() {
               runtimeType === 'local' ? 'border-primary bg-primary/5' : 'border-border'
             }`}
           >
-            <div className="font-medium">Local Daemon</div>
+            <div className="font-medium">{t("localDaemon")}</div>
             <div className="text-sm text-muted-foreground">
-              Agents run on your machine
+              {t("localDaemonDescription")}
             </div>
           </button>
           <button
@@ -92,9 +94,9 @@ export function RuntimeTab() {
               runtimeType === 'cloud' ? 'border-primary bg-primary/5' : 'border-border'
             }`}
           >
-            <div className="font-medium">Cloud Runtime</div>
+            <div className="font-medium">{t("cloudRuntime")}</div>
             <div className="text-sm text-muted-foreground">
-              Agents run in managed containers
+              {t("cloudRuntimeDescription")}
             </div>
           </button>
         </div>
@@ -104,21 +106,21 @@ export function RuntimeTab() {
         <>
           {/* Provider Selection */}
           <div className="space-y-2">
-            <Label>AI Provider</Label>
+            <Label>{t("aiProvider")}</Label>
             <Select value={provider} onValueChange={(v) => setProvider(v as typeof provider)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
-                <SelectItem value="openai">OpenAI (GPT)</SelectItem>
+                <SelectItem value="anthropic">{t("anthropic")}</SelectItem>
+                <SelectItem value="openai">{t("openai")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {/* API Key */}
           <div className="space-y-2">
-            <Label>API Key</Label>
+            <Label>{t("apiKey")}</Label>
             <div className="flex gap-2">
               <Input
                 type="password"
@@ -132,11 +134,11 @@ export function RuntimeTab() {
                 onClick={handleTestConnection}
                 disabled={!apiKey || isValidating}
               >
-                {isValidating ? 'Testing...' : 'Test'}
+                {isValidating ? t("testing") : t("test")}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Your API key is encrypted and never exposed
+              {t("apiKeyEncrypted")}
             </p>
           </div>
 
@@ -145,12 +147,12 @@ export function RuntimeTab() {
           )}
 
           {success && (
-            <p className="text-sm text-green-600">Settings saved successfully</p>
+            <p className="text-sm text-green-600">{t("settingsSaved")}</p>
           )}
 
           {/* Save Button */}
           <Button onClick={handleSave} disabled={isSaving || !apiKey}>
-            {isSaving ? 'Saving...' : 'Save Cloud Runtime'}
+            {isSaving ? t("saving") : t("saveCloudRuntime")}
           </Button>
         </>
       )}
