@@ -62,6 +62,17 @@ const (
 	EventDaemonHeartbeat = "daemon:heartbeat"
 	EventDaemonRegister  = "daemon:register"
 
+	// Gateway events (server <-> gateway)
+	EventGatewayRegister     = "gateway:register"
+	EventGatewayHeartbeat    = "gateway:heartbeat"
+	EventGatewayConnected    = "gateway:connected"
+	EventGatewayDisconnected = "gateway:disconnected"
+
+	// Gateway task events (server <-> gateway)
+	EventTaskCancel     = "task:cancel"
+	EventTaskDispatched = "task:dispatched"
+	EventTaskLogs       = "task:logs"
+
 	// Agent workflow events
 	EventAgentStage      = "agent:stage"
 	EventStreamingLogs   = "streaming:logs"

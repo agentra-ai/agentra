@@ -273,6 +273,15 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 				r.Get("/{runtimeId}/update/{updateId}", h.GetUpdate)
 			})
 
+			// Cloud Runtime (admin-only)
+			r.Route("/api/cloud-runtime", func(r chi.Router) {
+				r.Use(middleware.RequireWorkspaceRole(queries, "owner", "admin"))
+				r.Post("/", h.RegisterCloudRuntime)
+				r.Get("/", h.GetCloudRuntime)
+				r.Delete("/", h.DeleteCloudRuntime)
+				r.Post("/validate", h.ValidateAPIKey)
+			})
+
 			// Inbox
 			r.Route("/api/inbox", func(r chi.Router) {
 				r.Get("/", h.ListInbox)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Bot, ChevronRight, ChevronUp, Loader2, ArrowDown, Brain, AlertCircle, Clock, CheckCircle2, XCircle, Square } from "lucide-react";
+import { Bot, ChevronRight, ChevronUp, Loader2, ArrowDown, Brain, AlertCircle, Clock, CheckCircle2, XCircle, Square, Cloud } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { api } from "@/shared/api";
 import { useWSEvent } from "@/features/realtime";
@@ -325,6 +325,12 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
           <div className="flex items-center gap-1.5 text-xs font-medium min-w-0">
             <Loader2 className={cn("h-3 w-3 animate-spin shrink-0", isStuck ? "text-brand" : "text-info")} />
             <span className="truncate">{name} is working</span>
+            {activeTask.runtime_type === "cloud" && (
+              <span className="flex items-center gap-0.5 text-xs px-1 py-0.5 rounded bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 shrink-0">
+                <Cloud className="h-3 w-3" />
+                <span>Cloud</span>
+              </span>
+            )}
           </div>
           <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0">{elapsed}</span>
           {agentStage !== "idle" && agentStage !== "done" && (

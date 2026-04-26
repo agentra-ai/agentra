@@ -58,8 +58,10 @@ WHERE agent_id = $1
 ORDER BY created_at DESC;
 
 -- name: CreateAgentTask :one
-INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, trigger_comment_id)
-VALUES ($1, $2, $3, 'queued', $4, sqlc.narg(trigger_comment_id))
+-- Creates an agent task. runtime_type and cloud_runtime_id are optional:
+-- they default to 'local' and NULL respectively if not provided.
+INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, trigger_comment_id, runtime_type, cloud_runtime_id)
+VALUES ($1, $2, $3, 'queued', $4, $5, COALESCE(sqlc.narg('runtime_type'), 'local'), sqlc.narg('cloud_runtime_id'))
 RETURNING *;
 
 -- name: CancelAgentTasksByIssue :exec

@@ -10,6 +10,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/agentra-ai/agentra/server/internal/auth"
+	"github.com/agentra-ai/agentra/server/internal/gateway"
 )
 
 // MembershipChecker verifies a user belongs to a workspace.
@@ -40,6 +41,9 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 	mu         sync.RWMutex
+
+	// GatewayHub manages Cloud Runtime Gateway connections
+	GatewayHub *gateway.Hub
 }
 
 // NewHub creates a new Hub instance.
@@ -49,6 +53,7 @@ func NewHub() *Hub {
 		broadcast:  make(chan []byte),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
+		GatewayHub: gateway.NewHub(),
 	}
 }
 
