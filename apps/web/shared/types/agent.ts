@@ -52,6 +52,7 @@ export interface AgentTask {
   result: unknown;
   error: string | null;
   created_at: string;
+  runtime_type?: "local" | "cloud";
 }
 
 export interface Agent {

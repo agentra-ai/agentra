@@ -39,6 +39,7 @@ type Agent struct {
 	Instructions       string             `json:"instructions"`
 	ArchivedAt         pgtype.Timestamptz `json:"archived_at"`
 	ArchivedBy         pgtype.UUID        `json:"archived_by"`
+	PreferredRuntime   string             `json:"preferred_runtime"`
 }
 
 type AgentRuntime struct {
@@ -79,6 +80,8 @@ type AgentTaskQueue struct {
 	SessionID        pgtype.Text        `json:"session_id"`
 	WorkDir          pgtype.Text        `json:"work_dir"`
 	TriggerCommentID pgtype.UUID        `json:"trigger_comment_id"`
+	RuntimeType      string             `json:"runtime_type"`
+	CloudRuntimeID   pgtype.UUID        `json:"cloud_runtime_id"`
 }
 
 type Attachment struct {
@@ -93,6 +96,33 @@ type Attachment struct {
 	ContentType  string             `json:"content_type"`
 	SizeBytes    int64              `json:"size_bytes"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type CloudRuntime struct {
+	ID                 pgtype.UUID        `json:"id"`
+	WorkspaceID        pgtype.UUID        `json:"workspace_id"`
+	GatewayUrl         pgtype.Text        `json:"gateway_url"`
+	Provider           string             `json:"provider"`
+	EncryptedApiKey    []byte             `json:"encrypted_api_key"`
+	ApiKeyHash         string             `json:"api_key_hash"`
+	IsActive           bool               `json:"is_active"`
+	MaxConcurrentTasks int32              `json:"max_concurrent_tasks"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CloudRuntimeTask struct {
+	ID             pgtype.UUID        `json:"id"`
+	CloudRuntimeID pgtype.UUID        `json:"cloud_runtime_id"`
+	TaskID         pgtype.UUID        `json:"task_id"`
+	ContainerID    pgtype.Text        `json:"container_id"`
+	StartedAt      pgtype.Timestamptz `json:"started_at"`
+	CompletedAt    pgtype.Timestamptz `json:"completed_at"`
+	ExitCode       pgtype.Int4        `json:"exit_code"`
+	TokenUsage     []byte             `json:"token_usage"`
+	CostEstimate   pgtype.Numeric     `json:"cost_estimate"`
+	Status         string             `json:"status"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type Comment struct {
