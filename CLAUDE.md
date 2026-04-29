@@ -271,3 +271,17 @@ test("example", async ({ page }) => {
   // api.cleanup() in afterEach removes the issue
 });
 ```
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default triage label vocabulary is used. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: one `CONTEXT.md` at the repo root + `docs/adr/`. See `docs/agents/domain.md`.
