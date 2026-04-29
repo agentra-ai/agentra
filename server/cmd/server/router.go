@@ -352,13 +352,29 @@ func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
 		}
 	}
 
-	hub.GatewayHub.OnTaskFail = func(gatewayID, taskID string, errorMsg string) {
+	hub.GatewayHub.OnTaskFail = func(gatewayID, taskID string, errorMsg string, retryable bool) {
 		ctx := context.Background()
 		taskUUID := util.ParseUUID(taskID)
 		if !taskUUID.Valid {
 			slog.Error("gateway fail: invalid task ID", "task_id", taskID)
 			return
 		}
+
+		// If the failure is retryable, attempt to retry the task
+		if retryable {
+			if task, retried, err := h.TaskService.RetryTask(ctx, taskUUID); err != nil {
+				slog.Error("gateway fail: retry failed", "task_id", taskID, "error", err)
+				// Fall through to mark as failed
+			} else if retried {
+				slog.Info("gateway fail: task re-queued for retry", "task_id", taskID,
+					"retry_count", task.RetryCount, "max_retries", task.MaxRetries)
+				return
+			} else {
+				slog.Warn("gateway fail: retry not possible (max retries or invalid state)", "task_id", taskID)
+				// Fall through to mark as failed
+			}
+		}
+
 		_, err := h.TaskService.FailTask(ctx, taskUUID, errorMsg)
 		if err != nil {
 			slog.Error("gateway fail: failed", "task_id", taskID, "error", err)

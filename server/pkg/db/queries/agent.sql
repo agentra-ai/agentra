@@ -125,6 +125,19 @@ SET status = 'failed', completed_at = now(), error = $2
 WHERE id = $1 AND status IN ('dispatched', 'running')
 RETURNING *;
 
+-- name: RetryAgentTask :one
+-- Resets a failed task back to queued, incrementing retry_count.
+-- Used for automatic retry with exponential backoff on transient failures.
+UPDATE agent_task_queue
+SET status = 'queued',
+    completed_at = NULL,
+    error = NULL,
+    retry_count = retry_count + 1,
+    dispatched_at = NULL,
+    started_at = NULL
+WHERE id = $1 AND status = 'failed' AND retry_count < max_retries
+RETURNING *;
+
 -- name: FailStaleTasks :many
 -- Fails tasks stuck in dispatched/running beyond the given thresholds.
 -- Handles cases where the daemon is alive but the task is orphaned

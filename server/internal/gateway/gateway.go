@@ -15,7 +15,13 @@ type Config struct {
 	AuthToken   string
 	DockerHost  string
 	BaseImage   string
+	MaxRetries  int
 }
+
+const (
+	defaultMaxRetries = 3
+	baseRetryDelay    = 1 * time.Second
+)
 
 type Gateway struct {
 	cfg          Config
@@ -35,6 +41,9 @@ type RunningTask struct {
 }
 
 func New(cfg Config, logger *slog.Logger) *Gateway {
+	if cfg.MaxRetries <= 0 {
+		cfg.MaxRetries = defaultMaxRetries
+	}
 	cm, _ := NewContainerManager(cfg.DockerHost, cfg.BaseImage)
 	return &Gateway{
 		cfg:          cfg,
@@ -123,11 +132,11 @@ func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
 		},
 	}
 
-	// Create container
-	containerID, err := g.containerMgr.CreateContainer(taskCtx, containerCfg)
+	// Create container with retry
+	containerID, err := g.createContainerWithRetry(taskCtx, containerCfg, taskID)
 	if err != nil {
-		g.logger.Error("task dispatch: failed to create container", "task_id", taskID, "error", err)
-		g.wsClient.SendTaskFailed(taskID, fmt.Sprintf("failed to create container: %v", err))
+		g.logger.Error("task dispatch: container creation failed after retries", "task_id", taskID, "error", err)
+		g.wsClient.SendTaskFailedWithRetry(taskID, fmt.Sprintf("failed to create container after %d attempts: %v", g.cfg.MaxRetries, err), false)
 		g.tasks.Delete(taskID)
 		return
 	}
@@ -140,10 +149,14 @@ func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
 		g.logger.Error("task dispatch: failed to send dispatched", "task_id", taskID, "error", err)
 	}
 
-	// Start container
-	if err := g.containerMgr.StartContainer(taskCtx, containerID); err != nil {
-		g.logger.Error("task dispatch: failed to start container", "task_id", taskID, "error", err)
-		g.wsClient.SendTaskFailed(taskID, fmt.Sprintf("failed to start container: %v", err))
+	// Start container with retry
+	if err := g.startContainerWithRetry(taskCtx, containerID, taskID); err != nil {
+		g.logger.Error("task dispatch: container start failed after retries", "task_id", taskID, "error", err)
+		// Destroy the created container before reporting failure
+		if destroyErr := g.containerMgr.DestroyContainer(context.Background(), containerID); destroyErr != nil {
+			g.logger.Error("task dispatch: failed to destroy container after start failure", "task_id", taskID, "error", destroyErr)
+		}
+		g.wsClient.SendTaskFailedWithRetry(taskID, fmt.Sprintf("failed to start container after %d attempts: %v", g.cfg.MaxRetries, err), false)
 		g.tasks.Delete(taskID)
 		return
 	}
@@ -154,7 +167,8 @@ func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
 		exitCode, err := g.containerMgr.WaitContainer(taskCtx, containerID)
 		if err != nil {
 			g.logger.Error("task wait failed", "task_id", taskID, "error", err)
-			g.wsClient.SendTaskFailed(taskID, fmt.Sprintf("wait failed: %v", err))
+			// Container wait failure is retryable (container may be hung)
+			g.wsClient.SendTaskFailedWithRetry(taskID, fmt.Sprintf("wait failed: %v", err), true)
 		} else {
 			// Get logs
 			logs, err := g.containerMgr.GetContainerLogs(context.Background(), containerID, time.Time{})
@@ -167,8 +181,9 @@ func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
 				g.logger.Info("task completed", "task_id", taskID, "exit_code", exitCode)
 				g.wsClient.SendTaskCompleted(taskID, exitCode, output)
 			} else {
+				// Agent exit code != 0 is not retryable (agent code failed)
 				g.logger.Info("task failed", "task_id", taskID, "exit_code", exitCode)
-				g.wsClient.SendTaskFailed(taskID, output)
+				g.wsClient.SendTaskFailedWithRetry(taskID, output, false)
 			}
 		}
 
@@ -179,6 +194,54 @@ func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
 
 		g.tasks.Delete(taskID)
 	}()
+}
+
+// createContainerWithRetry attempts to create a container with exponential backoff.
+func (g *Gateway) createContainerWithRetry(ctx context.Context, cfg *TaskConfig, taskID string) (string, error) {
+	var lastErr error
+	for attempt := 0; attempt < g.cfg.MaxRetries; attempt++ {
+		if attempt > 0 {
+			delay := baseRetryDelay * time.Duration(1<<(attempt-1)) // 1s, 2s, 4s...
+			g.logger.Info("retrying container creation", "task_id", taskID, "attempt", attempt+1, "delay", delay)
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(delay):
+			}
+		}
+
+		containerID, err := g.containerMgr.CreateContainer(ctx, cfg)
+		if err == nil {
+			return containerID, nil
+		}
+		lastErr = err
+		g.logger.Warn("container creation attempt failed", "task_id", taskID, "attempt", attempt+1, "error", err)
+	}
+	return "", lastErr
+}
+
+// startContainerWithRetry attempts to start a container with exponential backoff.
+func (g *Gateway) startContainerWithRetry(ctx context.Context, containerID, taskID string) error {
+	var lastErr error
+	for attempt := 0; attempt < g.cfg.MaxRetries; attempt++ {
+		if attempt > 0 {
+			delay := baseRetryDelay * time.Duration(1<<(attempt-1)) // 1s, 2s, 4s...
+			g.logger.Info("retrying container start", "task_id", taskID, "attempt", attempt+1, "delay", delay)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+			}
+		}
+
+		if err := g.containerMgr.StartContainer(ctx, containerID); err == nil {
+			return nil
+		} else {
+			lastErr = err
+			g.logger.Warn("container start attempt failed", "task_id", taskID, "attempt", attempt+1, "error", err)
+		}
+	}
+	return lastErr
 }
 
 func (g *Gateway) handleTaskCancel(taskID string) {

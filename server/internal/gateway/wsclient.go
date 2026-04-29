@@ -122,10 +122,15 @@ func (c *WSClient) SendTaskCompleted(taskID string, exitCode int, output string)
 }
 
 func (c *WSClient) SendTaskFailed(taskID, errorMsg string) error {
+	return c.SendTaskFailedWithRetry(taskID, errorMsg, true)
+}
+
+func (c *WSClient) SendTaskFailedWithRetry(taskID, errorMsg string, retryable bool) error {
 	return c.send(map[string]any{
-		"type":   "task:failed",
-		"taskId": taskID,
-		"error":  errorMsg,
+		"type":     "task:failed",
+		"taskId":   taskID,
+		"error":    errorMsg,
+		"retryable": retryable,
 	})
 }
 

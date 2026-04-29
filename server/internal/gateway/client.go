@@ -35,7 +35,7 @@ type Hub struct {
 	// Task dispatch callbacks
 	OnTaskDispatch func(gatewayID, taskID string, config map[string]any)
 	OnTaskComplete func(gatewayID, taskID string, exitCode int, output string)
-	OnTaskFail     func(gatewayID, taskID string, error string)
+	OnTaskFail     func(gatewayID, taskID string, error string, retryable bool)
 	OnTaskLogs     func(gatewayID, taskID string, logs string)
 	OnTaskCancel   func(gatewayID, taskID string)
 }
@@ -159,7 +159,8 @@ func (c *Client) handleEvent(event map[string]any) {
 			gatewayID := c.ID
 			taskID, _ := event["task_id"].(string)
 			errStr, _ := event["error"].(string)
-			c.Hub.OnTaskFail(gatewayID, taskID, errStr)
+			retryable, _ := event["retryable"].(bool)
+			c.Hub.OnTaskFail(gatewayID, taskID, errStr, retryable)
 		}
 
 	case "task:logs":

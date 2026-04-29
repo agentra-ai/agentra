@@ -82,6 +82,8 @@ type AgentTaskQueue struct {
 	TriggerCommentID pgtype.UUID        `json:"trigger_comment_id"`
 	RuntimeType      string             `json:"runtime_type"`
 	CloudRuntimeID   pgtype.UUID        `json:"cloud_runtime_id"`
+	RetryCount       int32              `json:"retry_count"`
+	MaxRetries       int32              `json:"max_retries"`
 }
 
 type Attachment struct {

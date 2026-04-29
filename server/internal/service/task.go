@@ -293,6 +293,31 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 	return &task, nil
 }
 
+// RetryTask resets a failed task back to queued for automatic retry.
+// Returns the updated task if retry was successful, or nil if max retries exceeded.
+func (s *TaskService) RetryTask(ctx context.Context, taskID pgtype.UUID) (*db.AgentTaskQueue, bool, error) {
+	task, err := s.Queries.RetryAgentTask(ctx, taskID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Either task not found, not in failed state, or max retries exceeded
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("retry task: %w", err)
+	}
+
+	slog.Info("task retry scheduled", "task_id", util.UUIDToString(task.ID),
+		"retry_count", task.RetryCount, "max_retries", task.MaxRetries,
+		"issue_id", util.UUIDToString(task.IssueID))
+
+	// Broadcast retry event
+	s.broadcastTaskEvent(ctx, protocol.EventTaskRetry, task)
+
+	// Re-dispatch to gateway if cloud runtime
+	s.broadcastTaskDispatch(ctx, task)
+
+	return &task, true, nil
+}
+
 // FailTask marks a task as failed.
 // Issue status is NOT changed here — the agent manages it via the CLI.
 func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg string) (*db.AgentTaskQueue, error) {
