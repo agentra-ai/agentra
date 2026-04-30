@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -32,6 +33,26 @@ type Client struct {
 	send        chan []byte
 	userID      string
 	workspaceID string
+	rooms       map[string]bool // workspaceID -> subscribed
+	mu          sync.RWMutex
+}
+
+func (c *Client) joinRoom(workspaceID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.rooms[workspaceID] = true
+}
+
+func (c *Client) leaveRoom(workspaceID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.rooms, workspaceID)
+}
+
+func (c *Client) isInRoom(workspaceID string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.rooms[workspaceID]
 }
 
 // Hub manages WebSocket connections organized by workspace rooms.
@@ -131,32 +152,37 @@ func (h *Hub) Run() {
 // BroadcastToWorkspace sends a message only to clients in the given workspace.
 func (h *Hub) BroadcastToWorkspace(workspaceID string, message []byte) {
 	h.mu.RLock()
-	clients := h.rooms[workspaceID]
-	var slow []*Client
-	for client := range clients {
-		select {
-		case client.send <- message:
-		default:
-			slow = append(slow, client)
+	var slow []*Client // clients to remove from room
+	for _, clients := range h.rooms {
+		for client := range clients {
+			if client.workspaceID == workspaceID && client.isInRoom(workspaceID) {
+				select {
+				case client.send <- message:
+				default:
+					slow = append(slow, client)
+				}
+			}
 		}
 	}
 	h.mu.RUnlock()
 
-	// Remove slow clients under write lock
+	// Asynchronously remove slow clients to avoid blocking callers
 	if len(slow) > 0 {
-		h.mu.Lock()
-		for _, client := range slow {
-			if room, ok := h.rooms[workspaceID]; ok {
-				if _, exists := room[client]; exists {
-					delete(room, client)
-					close(client.send)
-					if len(room) == 0 {
-						delete(h.rooms, workspaceID)
+		go func() {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			for _, client := range slow {
+				if room, ok := h.rooms[workspaceID]; ok {
+					if _, exists := room[client]; exists {
+						delete(room, client)
+						close(client.send)
+						if len(room) == 0 {
+							delete(h.rooms, workspaceID)
+						}
 					}
 				}
 			}
-		}
-		h.mu.Unlock()
+		}()
 	}
 }
 
@@ -196,21 +222,23 @@ func (h *Hub) SendToUser(userID string, message []byte, excludeWorkspace ...stri
 		}
 	}
 
-	// Remove slow clients under write lock (same pattern as BroadcastToWorkspace)
+	// Asynchronously remove slow clients to avoid blocking BroadcastToWorkspace
 	if len(slow) > 0 {
-		h.mu.Lock()
-		for _, t := range slow {
-			if room, ok := h.rooms[t.workspaceID]; ok {
-				if _, exists := room[t.client]; exists {
-					delete(room, t.client)
-					close(t.client.send)
-					if len(room) == 0 {
-						delete(h.rooms, t.workspaceID)
+		go func() {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			for _, t := range slow {
+				if room, ok := h.rooms[t.workspaceID]; ok {
+					if _, exists := room[t.client]; exists {
+						delete(room, t.client)
+						close(t.client.send)
+						if len(room) == 0 {
+							delete(h.rooms, t.workspaceID)
+						}
 					}
 				}
 			}
-		}
-		h.mu.Unlock()
+		}()
 	}
 }
 
@@ -271,7 +299,10 @@ func HandleWebSocket(hub *Hub, mc MembershipChecker, w http.ResponseWriter, r *h
 		send:        make(chan []byte, 256),
 		userID:      userID,
 		workspaceID: workspaceID,
+		rooms:       make(map[string]bool),
 	}
+	// Auto-join the workspace room on connect
+	client.joinRoom(workspaceID)
 	hub.register <- client
 
 	go client.writePump()
@@ -285,15 +316,45 @@ func (c *Client) readPump() {
 	}()
 
 	for {
-		_, _, err := c.conn.ReadMessage()
+		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
 				slog.Debug("websocket read error", "error", err, "user_id", c.userID, "workspace_id", c.workspaceID)
 			}
 			break
 		}
-		// TODO: Route inbound messages to appropriate handlers
-		slog.Debug("ws message received", "user_id", c.userID, "workspace_id", c.workspaceID)
+
+		var event map[string]any
+		if err := json.Unmarshal(message, &event); err != nil {
+			slog.Debug("ws message unmarshal failed", "user_id", c.userID, "error", err)
+			continue
+		}
+
+		c.handleInboundEvent(event)
+	}
+}
+
+func (c *Client) handleInboundEvent(event map[string]any) {
+	switch event["type"] {
+	case "ping":
+		msg, _ := json.Marshal(map[string]any{"type": "pong"})
+		c.send <- msg
+	case "subscribe":
+		workspaceID, _ := event["workspace_id"].(string)
+		if workspaceID == "" {
+			return
+		}
+		c.joinRoom(workspaceID)
+		slog.Debug("client subscribed to room", "user_id", c.userID, "workspace_id", workspaceID)
+	case "unsubscribe":
+		workspaceID, _ := event["workspace_id"].(string)
+		if workspaceID == "" {
+			return
+		}
+		c.leaveRoom(workspaceID)
+		slog.Debug("client unsubscribed from room", "user_id", c.userID, "workspace_id", workspaceID)
+	default:
+		slog.Debug("ws inbound message ignored", "user_id", c.userID, "type", event["type"])
 	}
 }
 
