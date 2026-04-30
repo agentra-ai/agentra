@@ -172,7 +172,15 @@ func (h *Hub) BroadcastToWorkspace(workspaceID string, message []byte) {
 			h.mu.Lock()
 			defer h.mu.Unlock()
 			for _, client := range slow {
-				client.leaveRoom(workspaceID)
+				if room, ok := h.rooms[workspaceID]; ok {
+					if _, exists := room[client]; exists {
+						delete(room, client)
+						close(client.send)
+						if len(room) == 0 {
+							delete(h.rooms, workspaceID)
+						}
+					}
+				}
 			}
 		}()
 	}
