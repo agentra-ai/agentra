@@ -2,24 +2,42 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/events"
-	"github.com/agentra-ai/agentra/server/internal/middleware"
+	"github.com/agentra-ai/agentra/server/internal/handlerutil"
 	"github.com/agentra-ai/agentra/server/internal/realtime"
 	"github.com/agentra-ai/agentra/server/internal/service"
 	"github.com/agentra-ai/agentra/server/internal/storage"
-	"github.com/agentra-ai/agentra/server/internal/util"
 )
+
+// Forwarding wrappers to preserve existing call sites in other handler files.
+func writeJSON(w http.ResponseWriter, status int, v any)                        { handlerutil.WriteJSON(w, status, v) }
+func writeError(w http.ResponseWriter, status int, msg string)                  { handlerutil.WriteError(w, status, msg) }
+func parseUUID(s string) pgtype.UUID                                             { return handlerutil.ParseUUID(s) }
+func uuidToString(u pgtype.UUID) string                                         { return handlerutil.UUIDToString(u) }
+func textToPtr(t pgtype.Text) *string                                           { return handlerutil.TextToPtr(t) }
+func ptrToText(s *string) pgtype.Text                                           { return handlerutil.PtrToText(s) }
+func strToText(s string) pgtype.Text                                            { return handlerutil.StrToText(s) }
+func timestampToString(t pgtype.Timestamptz) string                             { return handlerutil.TimestampToString(t) }
+func timestampToPtr(t pgtype.Timestamptz) *string                               { return handlerutil.TimestampToPtr(t) }
+func uuidToPtr(u pgtype.UUID) *string                                           { return handlerutil.UUIDToPtr(u) }
+func isNotFound(err error) bool                                                  { return handlerutil.IsNotFound(err) }
+func isUniqueViolation(err error) bool                                          { return handlerutil.IsUniqueViolation(err) }
+func requestUserID(r *http.Request) string                                      { return handlerutil.RequestUserID(r) }
+func requireUserID(w http.ResponseWriter, r *http.Request) (string, bool)       { return handlerutil.RequireUserID(w, r) }
+func resolveWorkspaceID(r *http.Request) string                                 { return handlerutil.ResolveWorkspaceID(r) }
+func ctxMember(ctx context.Context) (db.Member, bool)                           { return handlerutil.CtxMember(ctx) }
+func ctxWorkspaceID(ctx context.Context) string                                  { return handlerutil.CtxWorkspaceID(ctx) }
+func workspaceIDFromURL(r *http.Request, param string) string                   { return handlerutil.WorkspaceIDFromURL(r, param) }
+func roleAllowed(role string, roles ...string) bool                              { return handlerutil.RoleAllowed(role, roles...) }
+func countOwners(members []db.Member) int                                      { return handlerutil.CountOwners(members) }
 
 type txStarter interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
@@ -66,26 +84,6 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 	}
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
-}
-
-// Thin wrappers around util functions (preserve existing handler code unchanged).
-func parseUUID(s string) pgtype.UUID       { return util.ParseUUID(s) }
-func uuidToString(u pgtype.UUID) string    { return util.UUIDToString(u) }
-func textToPtr(t pgtype.Text) *string      { return util.TextToPtr(t) }
-func ptrToText(s *string) pgtype.Text      { return util.PtrToText(s) }
-func strToText(s string) pgtype.Text       { return util.StrToText(s) }
-func timestampToString(t pgtype.Timestamptz) string { return util.TimestampToString(t) }
-func timestampToPtr(t pgtype.Timestamptz) *string   { return util.TimestampToPtr(t) }
-func uuidToPtr(u pgtype.UUID) *string      { return util.UUIDToPtr(u) }
-
 // publish sends a domain event through the event bus.
 func (h *Handler) publish(eventType, workspaceID, actorType, actorID string, payload any) {
 	h.Bus.Publish(events.Event{
@@ -95,19 +93,6 @@ func (h *Handler) publish(eventType, workspaceID, actorType, actorID string, pay
 		ActorID:     actorID,
 		Payload:     payload,
 	})
-}
-
-func isNotFound(err error) bool {
-	return errors.Is(err, pgx.ErrNoRows)
-}
-
-func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
-}
-
-func requestUserID(r *http.Request) string {
-	return r.Header.Get("X-User-ID")
 }
 
 // resolveActor determines whether the request is from an agent or a human member.
@@ -122,16 +107,16 @@ func (h *Handler) resolveActor(r *http.Request, userID, workspaceID string) (act
 	}
 
 	// Validate the agent exists in the target workspace.
-	agent, err := h.Queries.GetAgent(r.Context(), parseUUID(agentID))
-	if err != nil || uuidToString(agent.WorkspaceID) != workspaceID {
+	agent, err := h.Queries.GetAgent(r.Context(), handlerutil.ParseUUID(agentID))
+	if err != nil || handlerutil.UUIDToString(agent.WorkspaceID) != workspaceID {
 		slog.Debug("resolveActor: X-Agent-ID rejected, agent not found or workspace mismatch", "agent_id", agentID, "workspace_id", workspaceID)
 		return "member", userID
 	}
 
 	// When X-Task-ID is provided, cross-check that the task belongs to this agent.
 	if taskID := r.Header.Get("X-Task-ID"); taskID != "" {
-		task, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
-		if err != nil || uuidToString(task.AgentID) != agentID {
+		task, err := h.Queries.GetAgentTask(r.Context(), handlerutil.ParseUUID(taskID))
+		if err != nil || handlerutil.UUIDToString(task.AgentID) != agentID {
 			slog.Debug("resolveActor: X-Task-ID rejected, task not found or agent mismatch", "agent_id", agentID, "task_id", taskID)
 			return "member", userID
 		}
@@ -140,94 +125,36 @@ func (h *Handler) resolveActor(r *http.Request, userID, workspaceID string) (act
 	return "agent", agentID
 }
 
-func requireUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
-	userID := requestUserID(r)
-	if userID == "" {
-		writeError(w, http.StatusUnauthorized, "user not authenticated")
-		return "", false
-	}
-	return userID, true
-}
-
-func resolveWorkspaceID(r *http.Request) string {
-	// Prefer context value set by workspace middleware.
-	if id := middleware.WorkspaceIDFromContext(r.Context()); id != "" {
-		return id
-	}
-	workspaceID := r.URL.Query().Get("workspace_id")
-	if workspaceID != "" {
-		return workspaceID
-	}
-	return r.Header.Get("X-Workspace-ID")
-}
-
-// ctxMember returns the workspace member from context (set by workspace middleware).
-func ctxMember(ctx context.Context) (db.Member, bool) {
-	return middleware.MemberFromContext(ctx)
-}
-
-// ctxWorkspaceID returns the workspace ID from context (set by workspace middleware).
-func ctxWorkspaceID(ctx context.Context) string {
-	return middleware.WorkspaceIDFromContext(ctx)
-}
-
-// workspaceIDFromURL returns the workspace ID from context (preferred) or chi URL param (fallback).
-func workspaceIDFromURL(r *http.Request, param string) string {
-	if id := middleware.WorkspaceIDFromContext(r.Context()); id != "" {
-		return id
-	}
-	return chi.URLParam(r, param)
-}
-
 // workspaceMember returns the member from middleware context, or falls back to a DB
 // lookup when the handler is called directly (e.g. in tests).
 func (h *Handler) workspaceMember(w http.ResponseWriter, r *http.Request, workspaceID string) (db.Member, bool) {
-	if m, ok := ctxMember(r.Context()); ok {
+	if m, ok := handlerutil.CtxMember(r.Context()); ok {
 		return m, true
 	}
 	return h.requireWorkspaceMember(w, r, workspaceID, "workspace not found")
 }
 
-func roleAllowed(role string, roles ...string) bool {
-	for _, candidate := range roles {
-		if role == candidate {
-			return true
-		}
-	}
-	return false
-}
-
-func countOwners(members []db.Member) int {
-	owners := 0
-	for _, member := range members {
-		if member.Role == "owner" {
-			owners++
-		}
-	}
-	return owners
-}
-
 func (h *Handler) getWorkspaceMember(ctx context.Context, userID, workspaceID string) (db.Member, error) {
 	return h.Queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      parseUUID(userID),
-		WorkspaceID: parseUUID(workspaceID),
+		UserID:      handlerutil.ParseUUID(userID),
+		WorkspaceID: handlerutil.ParseUUID(workspaceID),
 	})
 }
 
 func (h *Handler) requireWorkspaceMember(w http.ResponseWriter, r *http.Request, workspaceID, notFoundMsg string) (db.Member, bool) {
 	if workspaceID == "" {
-		writeError(w, http.StatusBadRequest, "workspace_id is required")
+		handlerutil.WriteError(w, http.StatusBadRequest, "workspace_id is required")
 		return db.Member{}, false
 	}
 
-	userID, ok := requireUserID(w, r)
+	userID, ok := handlerutil.RequireUserID(w, r)
 	if !ok {
 		return db.Member{}, false
 	}
 
 	member, err := h.getWorkspaceMember(r.Context(), userID, workspaceID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, notFoundMsg)
+		handlerutil.WriteError(w, http.StatusNotFound, notFoundMsg)
 		return db.Member{}, false
 	}
 
@@ -239,21 +166,21 @@ func (h *Handler) requireWorkspaceRole(w http.ResponseWriter, r *http.Request, w
 	if !ok {
 		return db.Member{}, false
 	}
-	if !roleAllowed(member.Role, roles...) {
-		writeError(w, http.StatusForbidden, "insufficient permissions")
+	if !handlerutil.RoleAllowed(member.Role, roles...) {
+		handlerutil.WriteError(w, http.StatusForbidden, "insufficient permissions")
 		return db.Member{}, false
 	}
 	return member, true
 }
 
 func (h *Handler) loadIssueForUser(w http.ResponseWriter, r *http.Request, issueID string) (db.Issue, bool) {
-	if _, ok := requireUserID(w, r); !ok {
+	if _, ok := handlerutil.RequireUserID(w, r); !ok {
 		return db.Issue{}, false
 	}
 
-	workspaceID := resolveWorkspaceID(r)
+	workspaceID := handlerutil.ResolveWorkspaceID(r)
 	if workspaceID == "" {
-		writeError(w, http.StatusBadRequest, "workspace_id is required")
+		handlerutil.WriteError(w, http.StatusBadRequest, "workspace_id is required")
 		return db.Issue{}, false
 	}
 
@@ -263,11 +190,11 @@ func (h *Handler) loadIssueForUser(w http.ResponseWriter, r *http.Request, issue
 	}
 
 	issue, err := h.Queries.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{
-		ID:          parseUUID(issueID),
-		WorkspaceID: parseUUID(workspaceID),
+		ID:          handlerutil.ParseUUID(issueID),
+		WorkspaceID: handlerutil.ParseUUID(workspaceID),
 	})
 	if err != nil {
-		writeError(w, http.StatusNotFound, "issue not found")
+		handlerutil.WriteError(w, http.StatusNotFound, "issue not found")
 		return db.Issue{}, false
 	}
 	return issue, true
@@ -283,7 +210,7 @@ func (h *Handler) resolveIssueByIdentifier(ctx context.Context, id, workspaceID 
 		return db.Issue{}, false
 	}
 	issue, err := h.Queries.GetIssueByNumber(ctx, db.GetIssueByNumberParams{
-		WorkspaceID: parseUUID(workspaceID),
+		WorkspaceID: handlerutil.ParseUUID(workspaceID),
 		Number:      parts.number,
 	})
 	if err != nil {
@@ -337,50 +264,50 @@ func (h *Handler) getIssuePrefix(ctx context.Context, workspaceID pgtype.UUID) s
 }
 
 func (h *Handler) loadAgentForUser(w http.ResponseWriter, r *http.Request, agentID string) (db.Agent, bool) {
-	if _, ok := requireUserID(w, r); !ok {
+	if _, ok := handlerutil.RequireUserID(w, r); !ok {
 		return db.Agent{}, false
 	}
 
-	workspaceID := resolveWorkspaceID(r)
+	workspaceID := handlerutil.ResolveWorkspaceID(r)
 	if workspaceID == "" {
-		writeError(w, http.StatusBadRequest, "workspace_id is required")
+		handlerutil.WriteError(w, http.StatusBadRequest, "workspace_id is required")
 		return db.Agent{}, false
 	}
 
 	agent, err := h.Queries.GetAgentInWorkspace(r.Context(), db.GetAgentInWorkspaceParams{
-		ID:          parseUUID(agentID),
-		WorkspaceID: parseUUID(workspaceID),
+		ID:          handlerutil.ParseUUID(agentID),
+		WorkspaceID: handlerutil.ParseUUID(workspaceID),
 	})
 	if err != nil {
-		writeError(w, http.StatusNotFound, "agent not found")
+		handlerutil.WriteError(w, http.StatusNotFound, "agent not found")
 		return db.Agent{}, false
 	}
 	return agent, true
 }
 
 func (h *Handler) loadInboxItemForUser(w http.ResponseWriter, r *http.Request, itemID string) (db.InboxItem, bool) {
-	userID, ok := requireUserID(w, r)
+	userID, ok := handlerutil.RequireUserID(w, r)
 	if !ok {
 		return db.InboxItem{}, false
 	}
 
-	workspaceID := resolveWorkspaceID(r)
+	workspaceID := handlerutil.ResolveWorkspaceID(r)
 	if workspaceID == "" {
-		writeError(w, http.StatusBadRequest, "workspace_id is required")
+		handlerutil.WriteError(w, http.StatusBadRequest, "workspace_id is required")
 		return db.InboxItem{}, false
 	}
 
 	item, err := h.Queries.GetInboxItemInWorkspace(r.Context(), db.GetInboxItemInWorkspaceParams{
-		ID:          parseUUID(itemID),
-		WorkspaceID: parseUUID(workspaceID),
+		ID:          handlerutil.ParseUUID(itemID),
+		WorkspaceID: handlerutil.ParseUUID(workspaceID),
 	})
 	if err != nil {
-		writeError(w, http.StatusNotFound, "inbox item not found")
+		handlerutil.WriteError(w, http.StatusNotFound, "inbox item not found")
 		return db.InboxItem{}, false
 	}
 
-	if item.RecipientType != "member" || uuidToString(item.RecipientID) != userID {
-		writeError(w, http.StatusNotFound, "inbox item not found")
+	if item.RecipientType != "member" || handlerutil.UUIDToString(item.RecipientID) != userID {
+		handlerutil.WriteError(w, http.StatusNotFound, "inbox item not found")
 		return db.InboxItem{}, false
 	}
 	return item, true
