@@ -152,16 +152,29 @@ func (h *Hub) Run() {
 // BroadcastToWorkspace sends a message only to clients in the given workspace.
 func (h *Hub) BroadcastToWorkspace(workspaceID string, message []byte) {
 	h.mu.RLock()
-	defer h.mu.RUnlock()
+	var slow []*Client // clients to remove from room
 	for _, clients := range h.rooms {
 		for client := range clients {
 			if client.workspaceID == workspaceID && client.isInRoom(workspaceID) {
 				select {
 				case client.send <- message:
 				default:
+					slow = append(slow, client)
 				}
 			}
 		}
+	}
+	h.mu.RUnlock()
+
+	// Asynchronously remove slow clients to avoid blocking callers
+	if len(slow) > 0 {
+		go func() {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			for _, client := range slow {
+				client.leaveRoom(workspaceID)
+			}
+		}()
 	}
 }
 
@@ -201,21 +214,23 @@ func (h *Hub) SendToUser(userID string, message []byte, excludeWorkspace ...stri
 		}
 	}
 
-	// Remove slow clients under write lock (same pattern as BroadcastToWorkspace)
+	// Asynchronously remove slow clients to avoid blocking BroadcastToWorkspace
 	if len(slow) > 0 {
-		h.mu.Lock()
-		for _, t := range slow {
-			if room, ok := h.rooms[t.workspaceID]; ok {
-				if _, exists := room[t.client]; exists {
-					delete(room, t.client)
-					close(t.client.send)
-					if len(room) == 0 {
-						delete(h.rooms, t.workspaceID)
+		go func() {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			for _, t := range slow {
+				if room, ok := h.rooms[t.workspaceID]; ok {
+					if _, exists := room[t.client]; exists {
+						delete(room, t.client)
+						close(t.client.send)
+						if len(room) == 0 {
+							delete(h.rooms, t.workspaceID)
+						}
 					}
 				}
 			}
-		}
-		h.mu.Unlock()
+		}()
 	}
 }
 
@@ -303,6 +318,7 @@ func (c *Client) readPump() {
 
 		var event map[string]any
 		if err := json.Unmarshal(message, &event); err != nil {
+			slog.Debug("ws message unmarshal failed", "user_id", c.userID, "error", err)
 			continue
 		}
 
