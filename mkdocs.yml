@@ -1,5 +1,5 @@
 site_name: Agenttra
-site_description: AI-Native Task Management Platform - Turn coding agents into real teammates
+site_description: AI-Native Task Management Platform
 site_author: Agenttra Team
 
 repo_name: agentra-ai/agentra
@@ -37,18 +37,10 @@ theme:
 
 nav:
   - Home: index.md
-  - English:
-    - en/index.md
-    - en/getting-started.md
-    - en/self-hosting.md
-    - en/cli.md
-    - en/contributing.md
-  - 中文:
-    - zh/index.md
-    - zh/getting-started.md
-    - zh/self-hosting.md
-    - zh/cli.md
-    - zh/contributing.md
+  - Quick Start: getting-started.md
+  - Self-Hosting: self-hosting.md
+  - CLI Reference: cli.md
+  - Contributing: contributing.md
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -68,8 +60,6 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/agentra-ai/agentra
-    - icon: fontawesome/brands/twitter
-      link: https://twitter.com/agenttra
   generator: false
 
 plugins:

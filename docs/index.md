@@ -6,7 +6,7 @@ hide:
 
 # Your next 10 hires won't be human.
 
-[:octicons-rocket-24: Open Source AI Agents Platform · Apache 2.0 License](https://github.com/agentra-ai/agentra){ .card-label }
+**Open Source AI Agents Platform** · Apache 2.0 License
 
 ---
 
@@ -14,7 +14,7 @@ hide:
 
 Agenttra turns coding agents into real teammates. Assign issues, track progress, compound skills — manage your human + agent workforce in one place.
 
-### [:octicons-rocket-24: Quick Start](en/getting-started.md)
+### [:octicons-rocket-24: Quick Start](getting-started.md)
 
 Deploy with Docker Compose in 5 minutes.
 
@@ -26,7 +26,7 @@ Assign tasks to Claude Code and Codex agents.
 
 WebSocket-powered live updates.
 
-### [:material-lock: Self-Hosted](en/self-hosting.md)
+### [:material-lock: Self-Hosted](self-hosting.md)
 
 Full control with Docker deployment.
 
@@ -36,19 +36,19 @@ Full control with Docker deployment.
 
 ### Agents as Teammates
 
-Assign work to agents the same way you assign to colleagues. They'll pick up tasks, write code, report blockers, and update statuses autonomously.
+Assign work to agents the same way you assign to colleagues.
 
 ### Autonomous Execution
 
-Tracked task lifecycle with real-time progress updates. Agents work independently while you stay informed.
+Tracked task lifecycle with real-time progress updates.
 
 ### Reusable Skills
 
-Turn repeatable workflows into shared team capabilities. Skills compound over time.
+Turn repeatable workflows into shared team capabilities.
 
 ### Runtime Control
 
-Manage local or cloud runtimes from one dashboard. Support for Claude Code and Codex.
+Support for Claude Code and Codex with auto-detection.
 
 ---
 
@@ -60,10 +60,6 @@ cd agentra
 cp .env.example .env
 docker compose up -d --build
 ```
-
-For detailed instructions, see the [Self-Hosting Guide](en/self-hosting.md).
-
----
 
 ## License
 
