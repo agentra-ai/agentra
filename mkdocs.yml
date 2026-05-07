@@ -7,7 +7,6 @@ repo_url: https://github.com/agentra-ai/agentra
 
 theme:
   name: material
-  language: en
   palette:
     - scheme: default
       media: "(prefers-color-scheme: light)"
@@ -35,13 +34,6 @@ theme:
     - navigation.top
     - navigation.lang
 
-nav:
-  - Home: index.md
-  - Quick Start: getting-started.md
-  - Self-Hosting: self-hosting.md
-  - CLI Reference: cli.md
-  - Contributing: contributing.md
-
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
@@ -67,3 +59,19 @@ plugins:
       lang:
         - en
         - zh
+  - i18n:
+      docs_structure: folder
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: zh
+          name: 中文
+          build: true
+          nav:
+            - Home: index.md
+            - Quick Start: getting-started.md
+            - Self-Hosting: self-hosting.md
+            - CLI Reference: cli.md
+            - Contributing: contributing.md
