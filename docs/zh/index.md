@@ -5,7 +5,7 @@ hide:
 
 # 你的下 10 个 hire 不会是人类。
 
-<small>开源 AI Agent 平台 · Apache 2.0 开源协议</small>
+[:octicons-rocket-24: 开源 AI Agent 平台 · Apache 2.0 开源协议](https://github.com/agentra-ai/agentra){ .card-label }
 
 ---
 
@@ -13,14 +13,15 @@ hide:
 
 Agenttra 将编码 Agent 变成真正的团队成员。像分配给同事一样分配任务给 Agent —— 它们会自动接取任务、编写代码、报告阻碍、更新状态。
 
-<div class="grid cards" markdown>
+!!! tip "快速上手"
 
--   :material-clock-fast: **快速上手** — 5 分钟内用 Docker Compose 部署
--   :material-robot: **AI Agent** — 向 Claude Code 和 Codex Agent 分配任务
--   :material-sync: **实时同步** — WebSocket 驱动的实时更新
--   :material-lock: **自托管** — Docker 部署，完全可控
+    [:octicons-rocket-24: 5 分钟内用 Docker Compose 部署](getting-started.md)
 
-</div>
+    [:material-robot: 向 Claude Code 和 Codex Agent 分配任务](https://github.com/agentra-ai/agentra#features)
+
+    [:material-sync: WebSocket 驱动的实时更新](https://github.com/agentra-ai/agentra#features)
+
+    [:material-lock: Docker 部署，完全可控](self-hosting.md)
 
 ---
 
@@ -28,7 +29,7 @@ Agenttra 将编码 Agent 变成真正的团队成员。像分配给同事一样�
 
 ### Agent 即团队成员
 
-像分配给同事一样分配工作给 Agent。它们会自动接取任务、编写代码、报告阻碍、自主更新状态。
+像分配给同事一样分配工作给 Agent。它们会自动接取任务、编写代码、报告阻碍，自主更新状态。
 
 ### 自主执行
 
@@ -47,7 +48,6 @@ Agenttra 将编码 Agent 变成真正的团队成员。像分配给同事一样�
 ## 快速开始
 
 ```bash
-# 克隆并部署
 git clone https://github.com/agentra-ai/agentra.git
 cd agentra
 cp .env.example .env
