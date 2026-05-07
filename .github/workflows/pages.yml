@@ -36,15 +36,21 @@ jobs:
       - name: Build English site
         run: |
           cp -r docs/en/* docs/
-          mkdocs build --strict --site-dir site/en
-
-      - name: Reset docs
-        run: git checkout docs/
+          mkdocs build --strict --site-dir _site
 
       - name: Build Chinese site
         run: |
+          git checkout docs/
           cp -r docs/zh/* docs/
-          mkdocs build --strict --site-dir site/zh
+          mkdocs build --strict --site-dir _site_zh
+
+      - name: Prepare artifact
+        run: |
+          mkdir site
+          cp -r _site/* site/
+          mkdir -p site/zh
+          cp -r _site_zh/* site/zh/
+          rm -rf _site _site_zh
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
