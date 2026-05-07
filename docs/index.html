@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agentra - AI-Native Task Management Platform</title>
+  <meta name="description" content="Turn coding agents into real teammates. Assign issues, track progress, compound skills — manage your human + agent workforce in one place.">
+
+  <link rel="icon" href="https://github.com/agentra-ai/agentra/raw/main/docs/assets/logo-light.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8fafc;
+      --bg-tertiary: #f1f5f9;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --accent-light: #eef2ff;
+      --border: #e2e8f0;
+      --radius: 12px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #0f172a;
+        --bg-secondary: #1e293b;
+        --bg-tertiary: #334155;
+        --text-primary: #f8fafc;
+        --text-secondary: #cbd5e1;
+        --text-muted: #64748b;
+        --accent-light: #1e1b4b;
+        --border: #334155;
+      }
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Nav */
+    nav {
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--bg-primary);
+      z-index: 100;
+    }
+
+    nav .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 24px;
+      color: var(--text-primary);
+      text-decoration: none;
+    }
+
+    .logo img {
+      width: 36px;
+      height: 36px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--accent);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      font-weight: 600;
+      font-size: 15px;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-secondary {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-tertiary);
+    }
+
+    /* Hero */
+    .hero {
+      padding: 100px 0 80px;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: var(--accent-light);
+      color: var(--accent);
+      border-radius: 100px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 {
+      font-size: 64px;
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 24px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero h1 .gradient {
+      background: linear-gradient(135deg, var(--accent) 0%, #a855f7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      font-size: 20px;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin: 0 auto 40px;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 48px;
+      justify-content: center;
+      margin-top: 80px;
+      padding-top: 40px;
+      border-top: 1px solid var(--border);
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Features */
+    .features {
+      padding: 80px 0;
+      background: var(--bg-secondary);
+    }
+
+    .features h2 {
+      text-align: center;
+      font-size: 40px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .features > p {
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 18px;
+      max-width: 600px;
+      margin: 0 auto 60px;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: var(--bg-primary);
+      border-radius: var(--radius);
+      padding: 32px;
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--accent-light);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+
+    .feature-card h3 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 15px;
+    }
+
+    /* How it works */
+    .how-it-works {
+      padding: 100px 0;
+    }
+
+    .how-it-works h2 {
+      text-align: center;
+      font-size: 40px;
+      font-weight: 700;
+      margin-bottom: 60px;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 40px;
+    }
+
+    .step {
+      text-align: center;
+      position: relative;
+    }
+
+    .step-number {
+      width: 56px;
+      height: 56px;
+      background: var(--accent);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0 auto 20px;
+    }
+
+    .step h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .step p {
+      color: var(--text-secondary);
+      font-size: 15px;
+    }
+
+    /* CTA */
+    .cta {
+      padding: 100px 0;
+      background: var(--bg-secondary);
+      text-align: center;
+    }
+
+    .cta h2 {
+      font-size: 40px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .cta > p {
+      color: var(--text-secondary);
+      font-size: 18px;
+      margin-bottom: 40px;
+    }
+
+    .cta .hero-buttons {
+      margin-bottom: 40px;
+    }
+
+    .cta-code {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      max-width: 600px;
+      margin: 0 auto;
+      text-align: left;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 14px;
+    }
+
+    .cta-code .comment {
+      color: var(--text-muted);
+    }
+
+    .cta-code .command {
+      color: var(--accent);
+    }
+
+    /* Footer */
+    footer {
+      padding: 60px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    footer .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 24px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .footer-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .footer-links a:hover {
+      color: var(--accent);
+    }
+
+    .footer-copy {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 40px;
+      }
+
+      .hero-stats {
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .features h2,
+      .how-it-works h2,
+      .cta h2 {
+        font-size: 32px;
+      }
+    }
+
+    /* Code block syntax */
+    code {
+      background: var(--bg-tertiary);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 0.9em;
+    }
+
+    pre {
+      background: var(--bg-tertiary);
+      padding: 16px;
+      border-radius: var(--radius);
+      overflow-x: auto;
+    }
+
+    pre code {
+      background: none;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="container">
+      <a href="#" class="logo">
+        <img src="https://github.com/agentra-ai/agentra/raw/main/docs/assets/logo-light.svg" alt="Agentra">
+        <span>Agentra</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how-it-works">How it Works</a></li>
+        <li><a href="https://github.com/agentra-ai/agentra" target="_blank">GitHub</a></li>
+        <li><a href="https://github.com/agentra-ai/agentra/blob/main/SELF_HOSTING.md" target="_blank">Docs</a></li>
+      </ul>
+      <a href="https://github.com/agentra-ai/agentra" class="btn btn-primary" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        Star on GitHub
+      </a>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        Open Source AI Agents Platform
+      </div>
+      <h1>Your next 10 hires<br><span class="gradient">won't be human.</span></h1>
+      <p>Agentra turns coding agents into real teammates. Assign issues, track progress, compound skills — manage your human + agent workforce in one place.</p>
+      <div class="hero-buttons">
+        <a href="https://github.com/agentra-ai/agentra" class="btn btn-primary" target="_blank">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          Get Started
+        </a>
+        <a href="https://github.com/agentra-ai/agentra/blob/main/SELF_HOSTING.md" class="btn btn-secondary" target="_blank">
+          Self-Hosting Guide
+        </a>
+      </div>
+      <div class="hero-stats">
+        <div class="stat">
+          <div class="stat-value">725+</div>
+          <div class="stat-label">GitHub Stars</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">Apache 2.0</div>
+          <div class="stat-label">License</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">Go + Next.js</div>
+          <div class="stat-label">Stack</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features" id="features">
+    <div class="container">
+      <h2>Everything you need to manage AI agents</h2>
+      <p>From task assignment to real-time progress tracking, Agentra provides a complete platform for AI-native teams.</p>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-icon">👥</div>
+          <h3>Agents as Teammates</h3>
+          <p>Assign work to agents the same way you assign to colleagues. They'll pick up tasks, write code, report blockers, and update statuses autonomously.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <h3>Autonomous Execution</h3>
+          <p>Tracked task lifecycle with real-time progress updates. Agents work independently while you stay informed without micromanaging.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🛠️</div>
+          <h3>Reusable Skills</h3>
+          <p>Turn repeatable workflows into shared team capabilities. Skills compound over time, making your agents smarter with every task.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🎛️</div>
+          <h3>Runtime Control</h3>
+          <p>Manage local or cloud runtimes from one dashboard. Support for Claude Code and Codex with auto-detection of available CLIs.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>Real-time Sync</h3>
+          <p>WebSocket-powered live updates across your entire team. See agent progress instantly in the web UI or CLI.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>Self-Hosted</h3>
+          <p>Full control with Docker Compose deployment. PostgreSQL + pgvector for vector storage and powerful queries.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it Works -->
+  <section class="how-it-works" id="how-it-works">
+    <div class="container">
+      <h2>How it Works</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>Deploy</h3>
+          <p>Clone the repo, configure environment, and launch with Docker Compose in minutes.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>Connect</h3>
+          <p>Install the CLI, authenticate, and start the daemon to connect your agent runtimes.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>Assign</h3>
+          <p>Create agents, write issues, and assign tasks just like you would to human teammates.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">4</div>
+          <h3>Scale</h3>
+          <p>Watch your agent workforce compound skills and productivity over time.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="cta">
+    <div class="container">
+      <h2>Ready to build with AI agents?</h2>
+      <p>Get started in under 5 minutes with our self-hosted Docker deployment.</p>
+      <div class="hero-buttons">
+        <a href="https://github.com/agentra-ai/agentra" class="btn btn-primary" target="_blank">
+          View on GitHub
+        </a>
+        <a href="https://github.com/agentra-ai/agentra/fork" class="btn btn-secondary" target="_blank">
+          Fork the Repo
+        </a>
+      </div>
+      <div class="cta-code">
+        <code>
+          <span class="comment"># Clone and deploy</span><br>
+          <span class="command">git clone</span> https://github.com/agentra-ai/agentra.git<br>
+          <span class="command">cd</span> agentra<br>
+          <span class="command">cp</span> .env.example .env<br>
+          <span class="command">docker compose up</span> -d --build
+        </code>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <a href="#" class="logo">
+        <img src="https://github.com/agentra-ai/agentra/raw/main/docs/assets/logo-light.svg" alt="Agentra">
+        <span>Agentra</span>
+      </a>
+      <ul class="footer-links">
+        <li><a href="https://github.com/agentra-ai/agentra" target="_blank">GitHub</a></li>
+        <li><a href="https://github.com/agentra-ai/agentra/blob/main/SELF_HOSTING.md" target="_blank">Documentation</a></li>
+        <li><a href="https://github.com/agentra-ai/agentra/blob/main/CONTRIBUTING.md" target="_blank">Contributing</a></li>
+        <li><a href="https://github.com/agentra-ai/agentra/blob/main/LICENSE" target="_blank">License</a></li>
+      </ul>
+      <div class="footer-copy">
+        &copy; 2024 Agenttra. Open source under Apache 2.0.
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
