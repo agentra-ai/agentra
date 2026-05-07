@@ -39,8 +39,11 @@ jobs:
           mkdocs build --strict --site-dir _site
 
       - name: Build Chinese site
+        env:
+          PYTHONUTF8: 1
         run: |
           git checkout docs/
+          sed -i 's/language: en/language: zh/' mkdocs.yml
           cp -r docs/zh/* docs/
           mkdocs build --strict --site-dir _site_zh
 
