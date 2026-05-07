@@ -54,4 +54,4 @@ Config stored at `~/.agentra/`.
 
 ## See Also
 
-- [CLI and Daemon Guide](../CLI_AND_DAEMON.md)
+- [GitHub Repository](https://github.com/agentra-ai/agentra)

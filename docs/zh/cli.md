@@ -54,4 +54,4 @@ agentra agent delete      # 删除 Agent
 
 ## 另请参阅
 
-- [CLI 和守护进程指南](../CLI_AND_DAEMON.md)
+- [GitHub 仓库](https://github.com/agentra-ai/agentra)
