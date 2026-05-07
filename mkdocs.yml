@@ -5,7 +5,6 @@ site_url: https://agentra-ai.github.io/agentra
 
 repo_name: agentra-ai/agentra
 repo_url: https://github.com/agentra-ai/agentra
-edit_url: https://github.com/agentra-ai/agentra/edit/main/docs/
 
 theme:
   name: material
