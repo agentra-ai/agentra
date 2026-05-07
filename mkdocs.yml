@@ -42,7 +42,6 @@ nav:
   - Self-Hosting: en/self-hosting.md
   - CLI Reference: en/cli.md
   - Contributing: en/contributing.md
-  - language
 
 markdown_extensions:
   - pymdownx.highlight:
