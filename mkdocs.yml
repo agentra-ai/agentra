@@ -30,7 +30,6 @@ theme:
     - search.highlight
     - content.tabs.link
     - content.code.copy
-    - navigation.instant
     - navigation.top
     - navigation.lang
 
