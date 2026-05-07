@@ -9,6 +9,7 @@ edit_url: https://github.com/agentra-ai/agentra/edit/main/docs/
 
 theme:
   name: material
+  language: en
   palette:
     - scheme: default
       media: "(prefers-color-scheme: light)"
@@ -32,13 +33,13 @@ theme:
     - search.highlight
     - content.tabs.link
     - content.code.copy
+    - navigation.instant
+    - navigation.top
+    - navigation.lang
 
 nav:
-  - Home: index.md
-  - Quick Start: getting-started.md
-  - Self-Hosting: self-hosting.md
-  - CLI Reference: cli.md
-  - Contributing: contributing.md
+  - en/
+  - zh/
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -51,6 +52,8 @@ markdown_extensions:
   - pymdownx.mark
   - attr_list
   - md_in_html
+  - toc:
+      permalink: true
 
 extra:
   social:
@@ -58,6 +61,10 @@ extra:
       link: https://github.com/agentra-ai/agentra
     - icon: fontawesome/brands/twitter
       link: https://twitter.com/agenttra
+  generator: false
 
 plugins:
-  - search
+  - search:
+      lang:
+        - en
+        - zh
