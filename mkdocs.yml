@@ -37,8 +37,18 @@ theme:
 
 nav:
   - Home: index.md
-  - en/
-  - zh/
+  - English:
+    - en/index.md
+    - en/getting-started.md
+    - en/self-hosting.md
+    - en/cli.md
+    - en/contributing.md
+  - 中文:
+    - zh/index.md
+    - zh/getting-started.md
+    - zh/self-hosting.md
+    - zh/cli.md
+    - zh/contributing.md
 
 markdown_extensions:
   - pymdownx.highlight:
