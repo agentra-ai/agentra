@@ -7,7 +7,29 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
+
+	"github.com/agentra-ai/agentra/server/pkg/agent/types"
+)
+
+// Re-export shared types for backward compatibility.
+type (
+	Session     = types.Session
+	MessageType = types.MessageType
+	Message     = types.Message
+	ExecOptions = types.ExecOptions
+	Result      = types.Result
+	TokenUsage  = types.TokenUsage
+)
+
+// Re-export constants.
+const (
+	MessageText       = types.MessageText
+	MessageThinking   = types.MessageThinking
+	MessageToolUse    = types.MessageToolUse
+	MessageToolResult = types.MessageToolResult
+	MessageStatus     = types.MessageStatus
+	MessageError      = types.MessageError
+	MessageLog        = types.MessageLog
 )
 
 // Backend is the unified interface for executing prompts via coding agents.
@@ -15,71 +37,7 @@ type Backend interface {
 	// Execute runs a prompt and returns a Session for streaming results.
 	// The caller should read from Session.Messages (optional) and wait on
 	// Session.Result for the final outcome.
-	Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error)
-}
-
-// ExecOptions configures a single execution.
-type ExecOptions struct {
-	Cwd             string
-	Model           string
-	SystemPrompt    string
-	MaxTurns        int
-	Timeout         time.Duration
-	ResumeSessionID string // if non-empty, resume a previous agent session
-}
-
-// Session represents a running agent execution.
-type Session struct {
-	// Messages streams events as the agent works. The channel is closed
-	// when the agent finishes (before Result is sent).
-	Messages <-chan Message
-	// Result receives exactly one value — the final outcome — then closes.
-	Result <-chan Result
-}
-
-// MessageType identifies the kind of Message.
-type MessageType string
-
-const (
-	MessageText       MessageType = "text"
-	MessageThinking   MessageType = "thinking"
-	MessageToolUse    MessageType = "tool-use"
-	MessageToolResult MessageType = "tool-result"
-	MessageStatus     MessageType = "status"
-	MessageError      MessageType = "error"
-	MessageLog        MessageType = "log"
-)
-
-// Message is a unified event emitted by an agent during execution.
-type Message struct {
-	Type    MessageType
-	Content string         // text content (Text, Error, Log)
-	Tool    string         // tool name (ToolUse, ToolResult)
-	CallID  string         // tool call ID (ToolUse, ToolResult)
-	Input   map[string]any // tool input (ToolUse)
-	Output  string         // tool output (ToolResult)
-	Status  string         // agent status string (Status)
-	Level   string         // log level (Log)
-}
-
-// Result is the final outcome after an agent session completes.
-type Result struct {
-	Status     string // "completed", "failed", "aborted", "timeout"
-	Output     string // accumulated text output
-	Error      string // error message if failed
-	DurationMs int64
-	SessionID  string
-
-	// TokenUsage is populated by API-based providers after execution.
-	TokenUsage *TokenUsage
-}
-
-// TokenUsage holds token consumption metrics from an API provider.
-type TokenUsage struct {
-	InputTokens     int64 `json:"input_tokens"`
-	OutputTokens    int64 `json:"output_tokens"`
-	CacheReadTokens int64 `json:"cache_read_tokens,omitempty"`
-	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
+	Execute(ctx context.Context, prompt string, opts types.ExecOptions) (*types.Session, error)
 }
 
 // Config configures a Backend instance.

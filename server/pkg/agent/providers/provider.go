@@ -4,9 +4,29 @@ package agentproviders
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"github.com/agentra-ai/agentra/server/pkg/agent"
+	"github.com/agentra-ai/agentra/server/pkg/agent/types"
+)
+
+// Re-export for convenience.
+type (
+	Session     = types.Session
+	Message     = types.Message
+	MessageType = types.MessageType
+	Result      = types.Result
+	TokenUsage  = types.TokenUsage
+	ExecOptions = types.ExecOptions
+)
+
+// Re-export constants.
+const (
+	MessageText       = types.MessageText
+	MessageThinking   = types.MessageThinking
+	MessageToolUse    = types.MessageToolUse
+	MessageToolResult = types.MessageToolResult
+	MessageStatus     = types.MessageStatus
+	MessageError      = types.MessageError
+	MessageLog        = types.MessageLog
 )
 
 // Model describes a supported model for a Provider.
@@ -16,40 +36,23 @@ type Model struct {
 }
 
 // Provider is the interface for API-based LLM backends.
-// It is separate from the CLI-based Backend interface and supports
-// providers that communicate over HTTP (Anthropic, OpenAI, OpenRouter, Ollama).
 type Provider interface {
-	// Name returns the provider identifier (e.g., "anthropic", "openai").
 	Name() string
-	// Models returns the list of models supported by this provider.
 	Models() []Model
-	// Execute runs a prompt and returns a Session for streaming results.
-	Execute(ctx context.Context, prompt string, opts ExecOptions) (*agent.Session, error)
-	// StreamExecute runs a prompt and streams results via SSE.
-	StreamExecute(ctx context.Context, prompt string, opts ExecOptions) (*agent.Session, error)
-	// Supports returns true if this provider can handle the given model.
+	Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error)
+	StreamExecute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error)
 	Supports(model Model) bool
-}
-
-// ExecOptions configures a single API provider execution.
-type ExecOptions struct {
-	Cwd          string
-	Model        string // Model name (e.g., "claude-3-5-sonnet-20241022")
-	SystemPrompt string
-	MaxTurns     int
-	Timeout      time.Duration
 }
 
 // APIConfig holds configuration for an API-based provider.
 type APIConfig struct {
-	APIKey     string            // the API key / token
-	Endpoint   string            // base URL (optional, defaults to official API)
-	Extra      map[string]string // extra headers or config
-	WorkspaceID string          // workspace ID, used for key encryption passphrase
+	APIKey      string            // the API key / token
+	Endpoint    string            // base URL (optional, defaults to official API)
+	Extra       map[string]string // extra headers or config
+	WorkspaceID string            // workspace ID, used for key encryption passphrase
 }
 
 // NewProvider creates a Provider for the given type.
-// Supported types: "anthropic", "openai", "openrouter", "ollama".
 func NewProvider(providerType string, cfg APIConfig) (Provider, error) {
 	switch providerType {
 	case "anthropic":
