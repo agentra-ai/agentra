@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { api } from '@/shared/api'
 import type { AgentMemory, TeamMemory } from '@/shared/types'
 
 interface MemoryEntry {
