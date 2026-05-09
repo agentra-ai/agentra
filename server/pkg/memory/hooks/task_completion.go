@@ -8,6 +8,39 @@ import (
 	"github.com/agentra-ai/agentra/server/pkg/memory"
 )
 
+// ExtractLearnings extracts key learnings from task output.
+func ExtractLearnings(output string) []string {
+	var learnings []string
+
+	// Simple pattern-based extraction
+	// Look for lines starting with "-", "*", or numbered patterns
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") {
+			learnings = append(learnings, strings.TrimPrefix(trimmed, "- "))
+		}
+	}
+
+	// If no structured learnings found, extract last paragraph as summary
+	if len(learnings) == 0 && len(output) > 100 {
+		paragraphs := strings.Split(output, "\n\n")
+		if len(paragraphs) > 0 {
+			lastParagraph := strings.TrimSpace(paragraphs[len(paragraphs)-1])
+			if len(lastParagraph) > 50 && len(lastParagraph) < 500 {
+				learnings = append(learnings, lastParagraph)
+			}
+		}
+	}
+
+	return learnings
+}
+
+// TaskResult represents the result of a completed task.
+type TaskResult struct {
+	Output string
+}
+
 type TaskCompletionHook struct {
 	memorySvc *memory.MemoryService
 }
@@ -67,4 +100,18 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max] + "..."
+}
+
+// OnTaskComplete extracts learnings from completed task and stores them.
+func OnTaskComplete(ctx context.Context, svc *memory.MemoryService, task *AgentTask, result *TaskResult) error {
+	learnings := ExtractLearnings(result.Output)
+
+	for _, learning := range learnings {
+		err := svc.StoreAgentMemory(ctx, task.AgentID, task.WorkspaceID, memory.MemoryTypeLearning, learning, true)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
