@@ -1,110 +1,117 @@
 # 竞品研究与项目强化分析
 
-**日期**: 2026-05-09
-**版本**: v0.2
+**日期**: 2026-05-10
+**版本**: v0.2.1 (更新)
 
 ---
 
-## 一、ROADMAP 项目完成情况
+## 一、GitHub 竞品收集 (2026-05-10 更新)
 
-### Phase 1 (Q2-Q3 2025) - Solid Foundation - IN PROGRESS
-
-| 功能 | 状态 | 说明 |
-|------|------|------|
-| Issue Management | ✅ Done | 完整 CRUD，状态/优先级/分配 |
-| Agent Assignment | ✅ Done | 支持 Claude/Codex/OpenCode |
-| Task Lifecycle | ✅ Done | queued→claimed→started→completed/failed |
-| Local Daemon Runtime | ✅ Done | 自动发现 CLI，轮询任务 |
-| Skills System | ✅ Done | 可复用工作流模板 |
-| Comments & Mentions | ✅ Done | @mention 解析 |
-| Real-time Sync | ✅ Done | WebSocket 广播 |
-| Cloud Runtime | 🚧 In Progress | Gateway/容器执行已实现 |
-| GitHub Integration | ❌ Not Started | OAuth App/PR linking |
-| CLI Installer | ❌ Not Started | one-liner setup |
-| Onboarding Wizard | ❌ Not Started | 引导流程 |
-| Execution Traces | ❌ Not Started | 结构性日志 |
-| Human-in-the-Loop | ❌ Not Started | 审批门 |
-| Token Cost Tracking | ❌ Not Started | 实时成本估算 |
-
-### Phase 2 (Q4 2025) - Agent Intelligence - PLANNED
-
-| 功能 | 状态 | 说明 |
-|------|------|------|
-| Agent Memory Store | ❌ Not Started | pgvector-backed |
-| RAG Context Injection | ❌ Not Started | 自动检索 |
-| Agentra MCP Server | ❌ Not Started | 暴露为 MCP tools |
-| External MCP Registry | ❌ Not Started | GitHub/Slack |
-| Sub-Task Trees | ❌ Not Started | 任务分解 |
-| Multi-Agent Planner | ❌ Not Started | 规划 agent |
-| Task Graph Visualization | ❌ Not Started | DAG view |
-| Analytics Dashboard | ❌ Not Started | 统计图表 |
-
-### Phase 3-4 - 未开始
-
----
-
-## 二、GitHub 竞品收集
-
-### 2.1 核心竞品 (Agent-native Task Management)
+### 1.1 核心竞品 (Agent-native Task Management)
 
 | 项目 | Stars | 技术栈 | 核心定位 |
 |------|-------|--------|----------|
+| **[swarmclaw](https://github.com/swarmclawai/swarmclaw)** | 471+ | Rust/Go | 自托管 runtime, MCP tools, agent memory, 23+ LLM providers |
+| **[hindsight](https://github.com/vectorize-io/hindsight)** | 12k+ | - | Agent Memory That Learns |
 | **[Overseer](https://github.com/dmmulroy/overseer)** | 223 | Rust | MCP server + SQLite + 原生 VCS 集成 |
 | **[Tasuku](https://github.com/iheanyi/tasuku)** | 63 | Go | Markdown 文件存储 + MCP tools |
 | **[Beekeeper](https://github.com/i-am-bee/beekeeper)** | 52 | Python | Supervisor agent + 多 agent 编排 |
 | **[Moo Tasks](https://github.com/dizlexic/moo-tasks)** | 32 | Nuxt4/MySQL | Kanban UI + MCP server |
 | **[AgentsBoard](https://github.com/Justmalhar/AgentsBoard)** | 11 | - | AI Agent 看板 |
 
-### 2.2 相关项目 (Multi-agent Systems)
+### 1.2 Multi-Agent Orchestration
 
 | 项目 | Stars | 技术栈 | 核心定位 |
 |------|-------|--------|----------|
-| **[AI-teams-controller](https://github.com/hungson175/AI-teams-controller-public)** | 7 | Claude Code | 多 agent tmux teams + 记忆系统 |
-| **[Forge](https://github.com/idkuday/forge)** | 2 | - | AI 软件开发系统 + agent teams |
-| **[Overseer](https://github.com/dmmulroy/overseer)** | 223 | Rust | **已在上表** |
+| **[Clawix](https://github.com/ClawixAI/clawix)** | - | - | Open-source multi-agent orchestration, Docker containers, RBAC |
+| **[golutra](https://github.com/golutra/golutra)** | - | - | Multi-agent AI orchestration platform, parallel execution |
+| **[leprachuan/Wee-Orchestrator](https://github.com/leprachuan/Wee-Orchestrator)** | - | - | Self-hosted multi-agent orchestrator, 5 runtimes, 17+ models |
+| **[nevenkordic/broodlink](https://github.com/nevenkordic/broodlink)** | - | - | Multi-agent platform for coordination, observation, and governance |
+| **[JohnEsleyer/HermitShell](https://github.com/JohnEsleyer/HermitShell-old)** | - | - | Secure multi-agent platform with Docker "cubicles" |
+
+### 1.3 MCP Server Ecosystem
+
+| 项目 | Stars | 技术栈 | 核心定位 |
+|------|-------|--------|----------|
+| **[mem0-mcp](https://github.com/coleam00/mcp-mem0)** | - | - | MCP server for long term agent memory |
+| **[dispatch](https://github.com/rezzedai/dispatch)** | - | - | MCP task server for Claude Code |
+| **[agentmemo-mcp](https://github.com/andrewpetecoleman-cloud/agentmemo-mcp)** | - | - | MCP + approval gateway |
+| **[nash-software/mcp-agent-tasks](https://github.com/nash-software/mcp-agent-tasks)** | - | - | File-based AI agent task management with MCP |
+| **[galthran-wq/memex](https://github.com/galthran-wq/memex)** | - | - | Personal knowledge base with MCP server |
+| **[FASTPROD/ContextEngine](https://github.com/FASTPROD/ContextEngine)** | - | - | MCP server for AI agents that remember across sessions |
+
+### 1.4 CrewAI / Multi-Agent Frameworks
+
+| 项目 | Stars | 技术栈 | 核心定位 |
+|------|-------|--------|----------|
+| **CrewAI examples** | many | Python | Multi AI agent system for financial analysis |
+| **crewai-multi-agent-ap** | - | Python | Agent coordination |
 
 ---
 
-## 三、技术实现对比
+## 二、技术架构对比
 
-### 3.1 架构对比
+### 2.1 架构对比矩阵
 
-| 维度 | Agentra | Overseer | Tasuku | Beekeeper | Moo Tasks |
-|------|---------|----------|--------|-----------|-----------|
-| **存储** | PostgreSQL | SQLite | Markdown 文件 | 内存/文件 | MySQL |
-| **Agent 接口** | CLI Backend | MCP Server | MCP Server | BeeAI Framework | MCP Server |
-| **多 agent 协调** | Daemon Poll | 原生 VCS | per-file locking | Supervisor 编排 | 板级隔离 |
-| **前端** | Next.js | Web UI (单页) | TUI + CLI | 交互式 UI | Nuxt4 Web |
-| **实时性** | WebSocket | 轮询 | 轮询 | 实时 | 轮询 |
-| **部署方式** | Docker Compose | npm | go install | mise | Docker |
+| 维度 | Agentra | swarmclaw | Overseer | Tasuku | Beekeeper | hindsight |
+|------|---------|----------|---------|--------|-----------|-----------|
+| **存储** | PostgreSQL | PostgreSQL | SQLite | Markdown | Memory/File | PostgreSQL |
+| **Agent 接口** | CLI Backend | Multi-runtime | MCP Server | MCP Server | BeeAI | API |
+| **多 agent 协调** | Daemon Poll | Swarm 编排 | 原生 VCS | per-file locking | Supervisor | 消息传递 |
+| **前端** | Next.js 16 | Web UI | Web UI | TUI + CLI | Interactive UI | Web UI |
+| **实时性** | WebSocket | 轮询 | 轮询 | 轮询 | 实时 | 轮询 |
+| **部署方式** | Docker Compose | Self-hosted | npm | go install | mise | Cloud |
+| **VCS 集成** | ❌ | ❌ | ✅ (jj/git) | ✅ | ❌ | ❌ |
+| **RBAC** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| **多 workspace** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Agent Memory** | ✅ (pgvector) | ✅ (内置) | ✅ (learnings) | ✅ (learnings) | ❌ | ✅ |
 
-### 3.2 核心功能矩阵
+### 2.2 swarmclaw 深度分析 (最强竞品)
 
-| 功能 | Agentra | Overseer | Tasuku | Beekeeper | Moo Tasks |
-|------|---------|----------|--------|-----------|-----------|
-| Issue/Task 管理 | ✅ | ✅ milestone/task/subtask | ✅ | ✅ hierarchical | ✅ Kanban |
-| Agent 分配 | ✅ | ✅ (via codemode) | ✅ | ✅ (supervisor) | ✅ |
-| 实时状态 | ✅ WS | ❌ | ❌ | ✅ | ❌ |
-| 任务分解 | ❌ | ❌ | ❌ | ✅ | ❌ |
-| 记忆系统 | ❌ | ✅ (learnings bubble) | ✅ (learnings) | ❌ | ❌ |
-| MCP 暴露 | ❌ | ✅ | ✅ | ❌ | ✅ |
-| 自托管 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 云运行时 | ✅ (Phase 1) | ❌ | ❌ | ❌ | ❌ |
-| GitHub 集成 | ❌ | ❌ | ❌ | ❌ | ❌ |
+**特性**:
+- 23+ LLM providers (Claude, GPT, Gemini, OpenRouter, Ollama, etc.)
+- 内置 agent memory
+- MCP tools
+- schedules (定时任务)
+- delegation (委托/任务分发)
+- self-hosted, open-source
+- Docker-based agent isolation
 
-### 3.3 Overseer 深度分析 (最强大竞品)
+**优势**:
+1. **多 provider 支持**: 一套系统支持所有主流 LLM
+2. **内置 memory**: 不需要额外集成
+3. **Swarm 编排**: 多个 agent 协同工作
+4. **MCP native**: 从头支持 MCP 协议
+
+**劣势**:
+1. 无 WebSocket 实时性
+2. 无 issue/项目管理 UI
+3. 无团队协作功能
+
+### 2.3 hindsight 深度分析 (高 Stars)
+
+**架构**: Agent Memory That Learns
+- 12k+ stars (最高)
+- 专注于 agent 记忆系统
+- 学习并记住每次交互
+
+**启示**:
+- Agent Memory 是刚需功能
+- 简单专注的定位更容易获得关注
+
+### 2.4 Overseer 深度分析 (技术最成熟)
 
 **架构**:
 ```
 ┌─────────────────────────────────────┐
-│     Overseer MCP (Node.js)          │
+│     Overseer MCP (Node.js)           │
 │  - Single "execute" tool (codemode) │
 │  - VM sandbox with tasks/learnings  │
 └─────────────────────────────────────┘
               │
               ▼
 ┌─────────────────────────────────────┐
-│         os CLI (Rust)               │
+│         os CLI (Rust)                │
 │  - SQLite storage                   │
 │  - jj-lib (primary VCS)             │
 │  - gix (git fallback)               │
@@ -123,7 +130,7 @@
 3. 无多 workspace 支持
 4. 无 GitHub/PR 集成
 
-### 3.4 Tasuku 深度分析 (最相似定位)
+### 2.5 Tasuku 深度分析 (最轻量)
 
 **架构**:
 - Markdown 文件存储 (`.tasuku/tasks/*.md`)
@@ -141,156 +148,183 @@
 2. 无中央协调
 3. learnings 无结构性存储
 
-### 3.5 Beekeeper 深度分析 (多 agent 编排)
+---
 
-**架构**:
-- Supervisor agent (中央协调)
-- Agent registry
-- Task management (分解子任务)
+## 三、实现方案对比
 
-**优势**:
-1. **Supervisor 编排**: 自动分解任务给 specialized agents
-2. **Interactive + Autonomous 模式**
-3. **Workspace persistence**: 配置可复用
+### 3.1 Memory 实现方案
 
-**劣势**:
-1. 无持久化任务存储
-2. 依赖 BeeAI 框架
-3. 无标准 MCP 接口
+| 方案 | 代表项目 | 实现方式 | 向量维度 | 向量库 |
+|------|---------|---------|---------|--------|
+| **pgvector** | Agentra, hindsight | PostgreSQL 扩展 | 1536 (OpenAI) | pgvector |
+| **内置 memory** | swarmclaw | 自实现 | - | - |
+| **SQLite FTS** | Overseer | SQLite 全文搜索 | - | - |
+| **Markdown 文件** | Tasuku | 文件系统 | - | - |
+
+### 3.2 Agent 调度方案
+
+| 方案 | 代表项目 | 调度方式 | 隔离方式 |
+|------|---------|---------|---------|
+| **轮询 daemon** | Agentra | Long-polling | 进程 |
+| **MCP Server** | Overseer, Tasuku | MCP 协议 | VM/进程 |
+| **Swarm 编排** | swarmclaw | 消息传递 | Docker 容器 |
+| **Supervisor** | Beekeeper | 中央协调 | 内存 |
+
+### 3.3 任务分解方案
+
+| 方案 | 代表项目 | 分解方式 | 依赖管理 |
+|------|---------|---------|---------|
+| **Task Graph** | Agentra | DAG + 节点类型 | edges 表 |
+| **Task Tree** | Overseer | 父子继承 | 树形结构 |
+| **Markdown 文件** | Tasuku | 目录结构 | 文件依赖 |
+| **Crew** | CrewAI | Role-based | 消息流 |
 
 ---
 
-## 四、产品化对比
+## 四、交互设计对比
 
-### 4.1 商业模式
+### 4.1 UI 模式
+
+| 产品 | UI 类型 | 实时更新 | 可视化 |
+|------|---------|---------|--------|
+| Agentra | Next.js Web | WebSocket | Issue 管理 |
+| swarmclaw | Web UI | 轮询 | Agent 监控 |
+| Overseer | Web UI | 轮询 | Task 看板 |
+| Tasuku | TUI + CLI | 轮询 | 列表 |
+| Beekeeper | Interactive UI | 实时 | Agent 状态 |
+| hindsight | Web UI | 轮询 | Memory 视图 |
+
+### 4.2 Agent 交互
+
+| 产品 | Agent 创建 | Agent 分配 | 任务触发 |
+|------|-----------|-----------|---------|
+| Agentra | Admin UI | Issue assign | Manual/Auto |
+| swarmclaw | Config file | delegation | Scheduled |
+| Overseer | MCP call | codemode | On assign |
+| Tasuku | File create | Auto | On create |
+| Beekeeper | Registry | Supervisor | On input |
+
+---
+
+## 五、产品定位对比
+
+### 5.1 目标用户
+
+| 产品 | 目标用户 | 团队规模 | 部署方式 |
+|------|---------|---------|---------|
+| Agentra | AI-native 团队 | 2-10 | Self-hosted/Cloud |
+| swarmclaw | 开发者 | 个人/团队 | Self-hosted |
+| Overseer | VCS 用户 | 个人 | 本地 |
+| Tasuku | 开发者 | 个人 | 本地 |
+| Beekeeper | 企业 | 团队 | Self-hosted |
+| hindsight | 所有用户 | 任意 | Cloud |
+
+### 5.2 商业模式
 
 | 产品 | 商业模式 | 定价 |
 |------|----------|------|
 | Agentra | 开源 + 云服务 | 待定 |
-| Linear | SaaS | $8/seat/mo |
-| Jira | SaaS | $7.75/seat/mo |
+| swarmclaw | 开源 | 免费 |
 | Overseer | 开源 | 免费 |
-| Moo Tasks | 开源 | 免费 |
-
-### 4.2 开发者生态
-
-| 产品 | MCP 支持 | VS Code/Cursor | CLI 工具 | Editor 插件 |
-|------|----------|----------------|----------|-------------|
-| Agentra | ❌ | ❌ | ✅ | ❌ |
-| Overseer | ✅ | ✅ | ✅ | ❌ |
-| Tasuku | ✅ | ✅ | ✅ | ✅ (slash commands) |
-| Moo Tasks | ✅ | ✅ | ❌ | ❌ |
-| Beekeeper | ❌ | ❌ | ✅ | ❌ |
+| Tasuku | 开源 | 免费 |
+| Beekeeper | 开源 | 免费 |
+| hindsight | SaaS | $9/mo |
 
 ---
 
-## 五、强化方向建议
+## 六、项目强化建议
 
-### 5.1 高优先级 (P0)
+### 6.1 高优先级 (P0) - 立即实现
 
-#### 1. **MCP Server 暴露** ⭐⭐⭐⭐⭐
+#### 1. **多 LLM Provider 支持** ⭐⭐⭐⭐⭐
 
-Overseer 和 Moo Tasks 都通过 MCP 暴露 task management 能力。Agentra 应该:
-- 暴露 issues, skills, memory 作为 MCP tools
-- 支持 external MCP registry (GitHub, Slack)
-- 参考: Overseer codemode pattern
+swarmclaw 已支持 23+ providers，Agentra 目前仅支持 Claude/Codex/OpenCode。
 
-**为什么重要**: MCP 是 AI agent 的事实标准，暴露 MCP server 可以让任何 MCP-compatible agent 直接使用 Agentra
+**建议实现**:
+- 在 `pkg/agent/backend.go` 中添加更多 provider 接口
+- 支持: OpenAI GPT, Google Gemini, Anthropic, Ollama, OpenRouter
+- 使用 provider-specific SDK 或统一接口
 
-#### 2. **Agent Memory (RAG)** ⭐⭐⭐⭐⭐
+**Why**: 扩大用户群体，降低 provider 锁定风险
 
-竞品分析显示记忆系统是核心差异点:
-- Overseer: learnings bubble up
-- Tasuku: 轻量 learnings capture
-- AI-teams-controller: self-improving memory
+#### 2. **VCS 集成** ⭐⭐⭐⭐⭐
 
-**建议**: pgvector-backed per-agent memory store (ROADMAP Phase 2)
+Overseer 的 VCS 原生集成是其最大亮点。Agentra 目前没有 VCS 集成。
 
-#### 3. **Execution Traces** ⭐⭐⭐⭐
-
-Agent 工作流分析报告 (docs/agent-workflow-analysis.md) 显示当前缺乏结构性日志:
-- 记录每个 task 的 steps, tools, tokens, cost
-- 可视化执行链路
-- 失败时快速定位问题
-
-### 5.2 中优先级 (P1)
-
-#### 4. **强制 PR 流程** ⭐⭐⭐⭐
-
-Agent 跳过 PR 的问题需要从系统层面解决:
-- skill 指令中明确要求 PR
-- branch 命名规范
-- CI + Code Review 门控
-
-#### 5. **GitHub 深度集成** ⭐⭐⭐⭐
-
-竞品均无 GitHub 集成，但这是企业必需功能:
-- OAuth GitHub App
+**建议实现**:
+- 支持 GitHub PR 创建和状态同步
 - Issue ↔ PR ↔ commit linking
-- PR status badge on issue cards
+- Branch 命名规范
+- 自动 commit on task complete
 
-#### 6. **实时性增强** ⭐⭐⭐
+**Why**: 竞品普遍缺失，但企业必需功能
 
-Agentra 有 WebSocket 实时同步，但竞品多无此功能:
-- 保持领先优势
-- 增加 message replay
-- 增加 heartbeat pings
+#### 3. **Agent Memory 强化** ⭐⭐⭐⭐⭐
 
-### 5.3 低优先级 (P2)
+swarmclaw 和 hindsight 都以内置 memory 为核心卖点。
 
-#### 7. **Task 分解支持** ⭐⭐⭐
+**当前状态**: Agent Memory 已完成 (pgvector + RAG)
 
-Beekeeper 的 supervisor 编排模式值得借鉴:
-- Planner agent role
-- 子任务树模型
-- 并行执行独立子任务
+**强化方向**:
+- Memory 自动学习 (从任务结果中提取)
+- Cross-agent memory sharing
+- Memory 过期和衰减策略
+- Memory 搜索 UI
 
-#### 8. **Analytics Dashboard** ⭐⭐
+**Why**: Memory 是 agent 智能的核心
 
-可视化:
-- Agent 成功率
-- Cycle time
-- Cost dashboard
+### 6.2 中优先级 (P1) - 下个 Sprint
+
+#### 4. **Execution Traces** ⭐⭐⭐⭐
+
+竞品普遍没有结构性执行日志。
+
+**建议实现**:
+- 每任务存储: steps, tools, tokens, cost, duration
+- 可视化执行链路 (类似 GitHub Actions)
+- 失败时快速定位问题
+- 成本分析 dashboard
+
+**Why**: 调试和成本分析的基础
+
+#### 5. **Swarm/Multi-agent 编排** ⭐⭐⭐⭐
+
+swarmclaw 的 swarm 编排模式值得借鉴。
+
+**建议实现**:
+- Agent  delegation 协议
+- 多个 agent 协同工作
+- Docker 容器隔离执行
+- RBAC + token governance
+
+**Why**: Task Graph 的下一步演进
+
+#### 6. **实时性增强** ⭐⭐⭐⭐
+
+Agentra 有 WebSocket，但可以学习 Beekeeper 的实时交互模式。
+
+**建议实现**:
+- Agent 执行实时输出 (Streaming)
+- Interactive mode (human-in-the-loop)
+- 实时日志查看器
+
+**Why**: 保持实时性领先优势
+
+### 6.3 低优先级 (P2) - 长期规划
+
+#### 7. **Skills Marketplace** ⭐⭐⭐
+
+竞品没有成型的 marketplace。
+
+**建议**: 预设常用 task graph 模板
+
+#### 8. **Onboarding Wizard** ⭐⭐
+
+降低新用户上手门槛。
 
 ---
 
-## 六、竞品关键技术亮点
-
-### 6.1 Overseer 的 VCS 原生集成
-
-```javascript
-await tasks.start(login.id);  // VCS: creates bookmark
-// ... work ...
-await tasks.complete(login.id, {  // VCS: commits
-  result: "Implemented",
-  learnings: ["bcrypt rounds should be 12+"]
-});
-```
-
-### 6.2 Tasuku 的 per-file locking
-
-```
-.tasuku/
-├── tasks/task-id.md      # One file per task
-├── archive/              # Archived tasks
-├── context/
-│   ├── learnings.md
-│   └── decisions.md
-└── index.json
-```
-
-### 6.3 Beekeeper 的 Supervisor 编排
-
-```
-User Input → Supervisor Agent → Agent Registry
-                                ├── Operator Agent 1
-                                ├── Operator Agent 2
-                                └── ...
-```
-
----
-
-## 七、结论
+## 七、竞争差异化方向
 
 ### 7.1 Agentra 的独特优势
 
@@ -299,53 +333,71 @@ User Input → Supervisor Agent → Agent Registry
 3. **多 agent 后端**: Claude/Codex/OpenCode 统一接口
 4. **云运行时**: Phase 1 即将完成
 5. **企业级**: PostgreSQL + 多 workspace + JWT
+6. **Task Graph**: 完整的任务分解和 DAG 执行
+7. **Memory**: pgvector-backed RAG memory
 
 ### 7.2 需要追赶的差距
 
-1. **MCP 暴露**: Overseer/Moo Tasks 已实现
-2. **记忆系统**: Overseer/Tasuku 已实现
-3. **GitHub 集成**: 所有竞品均无，但 Agentra 尚未实现
+1. **多 Provider 支持**: swarmclaw 23+ vs Agentra 3
+2. **VCS 集成**: Overseer 已实现，Agentra 尚未
+3. **Memory 自动学习**: hindsight 的" learns" 概念
 
 ### 7.3 建议的差异化方向
 
 1. **Real-time + MCP**: 唯一同时有实时同步和 MCP 的产品
 2. **Cloud Runtime + Memory**: 云运行时 + RAG 记忆
-3. **GitHub-first**: 深度 GitHub 集成
+3. **Task Graph + Agent Memory**: 任务分解 + 智能记忆
+4. **GitHub-first**: 深度 GitHub 集成
 
 ---
 
-### 7.4 新竞品发现 (2026-05)
+## 八、强化实施计划
 
-| 项目 | Stars | 关键特性 |
-|------|-------|----------|
-| [swarmclaw](https://github.com/swarmclawai/swarmclaw) | 471 | 自托管 runtime, MCP tools, agent memory, 23+ LLM providers |
-| [hindsight](https://github.com/vectorize-io/hindsight) | 12k | Agent Memory That Learns |
-| [dispatch](https://github.com/rezzedai/dispatch) | - | MCP task server for Claude Code |
-| [mem0-mcp](https://github.com/coleam00/mcp-mem0) | - | MCP server for long term agent memory |
-| [agentmemo-mcp](https://github.com/andrewpetecoleman-cloud/agentmemo-mcp) | - | MCP + approval gateway |
+### Phase 2.5 (2026-05) - 强化 Agent Intelligence
 
-**swarmclaw 是最强竞品** - 与 Agentra 高度重叠 (self-hosted, multi-agent, MCP tools)，且已有 agent memory 内置，支持 23+ LLM providers。
+| 功能 | 优先级 | 实现方式 |
+|------|--------|---------|
+| 多 LLM Provider | P0 | 在 backend interface 中添加 provider 抽象 |
+| GitHub PR 集成 | P0 | OAuth App + webhooks |
+| Execution Traces | P1 | 新建 `task_runs` 表 + API |
+| Swarm 编排 | P1 | 基于 Task Graph 的 agent delegation |
+| Memory 自动学习 | P1 | 在 hooks 中自动提取 learnings |
+| Real-time streaming | P1 | WebSocket streaming logs |
 
-### 7.5 建议的改进方向
+### Phase 3 (Q3 2026) - Team Scale
 
-| 优先级 | 改进 | 理由 |
-|--------|------|------|
-| P0 | **Agent-to-Agent Handoff** | 竞品普遍缺失，任务分解是 multi-agent 的核心 |
-| P0 | **23+ LLM Providers** | swarmclaw 已实现，Agentra 目前仅支持 Claude/Codex/OpenCode |
-| P1 | **Execution Traces** | 结构性日志，调试和成本分析的基础 |
-| P1 | **Memory → MCP 暴露** | Memory tools 通过 MCP Server 暴露给 agents |
+保持 ROADMAP 原计划
 
 ---
 
-## 八、参考资料
+## 九、结论
+
+**swarmclaw 是当前最强竞品** - 与 Agentra 高度重叠，且已有 agent memory 内置，支持 23+ LLM providers。
+
+**Agentra 的核心竞争力**:
+- Task Graph (任务分解)
+- Real-time WebSocket
+- Enterprise features (多 workspace, RBAC)
+- MCP Server 暴露
+
+**需要加强的方向**:
+1. 多 LLM Provider 支持
+2. GitHub VCS 集成
+3. Execution Traces
+4. Memory 自动学习
+
+---
+
+## 十、参考资料
 
 - [Agentra ROADMAP.md](ROADMAP.md)
-- [Agent Workflow Analysis](agent-workflow-analysis.md)
+- [Agent Memory Design](../specs/2026-05-09-agent-memory-design.md)
+- [Agent Handoff Design](../specs/2026-05-09-agent-handoff-design.md)
+- [swarmclaw - GitHub](https://github.com/swarmclawai/swarmclaw)
+- [hindsight - GitHub](https://github.com/vectorize-io/hindsight)
 - [Overseer - GitHub](https://github.com/dmmulroy/overseer)
 - [Tasuku - GitHub](https://github.com/iheanyi/tasuku)
 - [Beekeeper - GitHub](https://github.com/i-am-bee/beekeeper)
-- [Moo Tasks - GitHub](https://github.com/dizlexic/moo-tasks)
-- [AI-teams-controller - GitHub](https://github.com/hungson175/AI-teams-controller-public)
-- [swarmclaw - GitHub](https://github.com/swarmclawai/swarmclaw)
-- [hindsight - GitHub](https://github.com/vectorize-io/hindsight)
-- [dispatch - GitHub](https://github.com/rezzedai/dispatch)
+- [Clawix - GitHub](https://github.com/ClawixAI/clawix)
+- [golutra - GitHub](https://github.com/golutra/golutra)
+- [ContextEngine - GitHub](https://github.com/FASTPROD/ContextEngine)

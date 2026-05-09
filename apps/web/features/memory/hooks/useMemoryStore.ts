@@ -1,14 +1,15 @@
 import { create } from 'zustand'
-import { api } from '@/shared/api'
-import type { AgentMemory, TeamMemory } from '@/shared/types'
 
 interface MemoryEntry {
   id: string
+  workspace_id: string
+  agent_id?: string
   memory_type: 'learning' | 'task_result' | 'context' | 'pattern'
   content: string
-  agent_id?: string
-  score?: number
+  is_private: boolean
+  embedding?: number[]
   created_at: string
+  updated_at: string
 }
 
 interface MemoryState {
@@ -21,7 +22,7 @@ interface MemoryState {
   deleteMemory: (id: string, agentId?: string) => Promise<void>
 }
 
-export const useMemoryStore = create<MemoryState>((set, get) => ({
+export const useMemoryStore = create<MemoryState>((set) => ({
   memories: [],
   isLoading: false,
   error: null,
@@ -29,8 +30,9 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   fetchAgentMemories: async (agentId: string) => {
     set({ isLoading: true, error: null })
     try {
-      const res = await api.get(`/agents/${agentId}/memories`)
-      set({ memories: res.data, isLoading: false })
+      const res = await fetch(`/api/agents/${agentId}/memories`)
+      const data = await res.json()
+      set({ memories: Array.isArray(data) ? data : [], isLoading: false })
     } catch (e: any) {
       set({ error: e.message, isLoading: false })
     }
@@ -39,21 +41,26 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   fetchTeamMemories: async (workspaceId: string) => {
     set({ isLoading: true, error: null })
     try {
-      const res = await api.get(`/workspaces/${workspaceId}/memories`)
-      set({ memories: res.data, isLoading: false })
+      const res = await fetch(`/api/workspaces/${workspaceId}/memories`)
+      const data = await res.json()
+      set({ memories: Array.isArray(data) ? data : [], isLoading: false })
     } catch (e: any) {
       set({ error: e.message, isLoading: false })
     }
   },
 
   storeMemory: async (data) => {
-    const workspaceId = data.workspace_id
-    const res = await api.post(`/workspaces/${workspaceId}/memories`, data)
-    set(state => ({ memories: [res.data, ...state.memories] }))
+    const res = await fetch(`/api/workspaces/${data.workspace_id}/memories`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    const newMem = await res.json()
+    set(state => ({ memories: [newMem, ...state.memories] }))
   },
 
   deleteMemory: async (id: string, agentId?: string) => {
-    await api.delete(`/memories/${id}?agent_id=${agentId || ''}`)
+    await fetch(`/api/memories/${id}?agent_id=${agentId || ''}`, { method: 'DELETE' })
     set(state => ({ memories: state.memories.filter(m => m.id !== id) }))
   },
 }))

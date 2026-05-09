@@ -183,6 +183,210 @@ func (q *Queries) ListAgentMemories(ctx context.Context, agentID pgtype.UUID) ([
 	return items, nil
 }
 
+const listAgentMemoriesTimeRange = `-- name: ListAgentMemoriesTimeRange :many
+SELECT id, agent_id, memory_type, content, metadata, is_private, created_at
+FROM agent_memories
+WHERE agent_id = $1 AND workspace_id = $2
+  AND ($3::text[] IS NULL OR memory_type = ANY($3))
+  AND created_at BETWEEN $4 AND $5
+ORDER BY created_at DESC
+LIMIT $6
+`
+
+type ListAgentMemoriesTimeRangeParams struct {
+	AgentID     pgtype.UUID        `json:"agent_id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Column3     []string           `json:"column_3"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	CreatedAt_2 pgtype.Timestamptz `json:"created_at_2"`
+	Limit       int32              `json:"limit"`
+}
+
+type ListAgentMemoriesTimeRangeRow struct {
+	ID         pgtype.UUID        `json:"id"`
+	AgentID    pgtype.UUID        `json:"agent_id"`
+	MemoryType string             `json:"memory_type"`
+	Content    string             `json:"content"`
+	Metadata   []byte             `json:"metadata"`
+	IsPrivate  pgtype.Bool        `json:"is_private"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListAgentMemoriesTimeRange(ctx context.Context, arg ListAgentMemoriesTimeRangeParams) ([]ListAgentMemoriesTimeRangeRow, error) {
+	rows, err := q.db.Query(ctx, listAgentMemoriesTimeRange,
+		arg.AgentID,
+		arg.WorkspaceID,
+		arg.Column3,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAgentMemoriesTimeRangeRow{}
+	for rows.Next() {
+		var i ListAgentMemoriesTimeRangeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.MemoryType,
+			&i.Content,
+			&i.Metadata,
+			&i.IsPrivate,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllMemoriesTimeRange = `-- name: ListAllMemoriesTimeRange :many
+SELECT am.id, am.agent_id, am.memory_type, am.content, am.metadata, am.created_at
+FROM agent_memories am
+WHERE am.workspace_id = $1 AND am.is_private = false
+  AND ($2::text[] IS NULL OR am.memory_type = ANY($2))
+  AND am.created_at BETWEEN $3 AND $4
+UNION ALL
+SELECT tm.id, NULL, tm.memory_type, tm.content, tm.metadata, tm.created_at
+FROM team_memory tm
+WHERE tm.workspace_id = $1
+  AND ($2::text[] IS NULL OR tm.memory_type = ANY($2))
+  AND tm.created_at BETWEEN $3 AND $4
+ORDER BY created_at DESC
+LIMIT $5
+`
+
+type ListAllMemoriesTimeRangeParams struct {
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Column2     []string           `json:"column_2"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	CreatedAt_2 pgtype.Timestamptz `json:"created_at_2"`
+	Limit       int32              `json:"limit"`
+}
+
+type ListAllMemoriesTimeRangeRow struct {
+	ID         pgtype.UUID        `json:"id"`
+	AgentID    pgtype.UUID        `json:"agent_id"`
+	MemoryType string             `json:"memory_type"`
+	Content    string             `json:"content"`
+	Metadata   []byte             `json:"metadata"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListAllMemoriesTimeRange(ctx context.Context, arg ListAllMemoriesTimeRangeParams) ([]ListAllMemoriesTimeRangeRow, error) {
+	rows, err := q.db.Query(ctx, listAllMemoriesTimeRange,
+		arg.WorkspaceID,
+		arg.Column2,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllMemoriesTimeRangeRow{}
+	for rows.Next() {
+		var i ListAllMemoriesTimeRangeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.MemoryType,
+			&i.Content,
+			&i.Metadata,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMemoriesGraph = `-- name: ListMemoriesGraph :many
+SELECT am.id, am.agent_id, am.memory_type, am.content, am.metadata, am.is_private, am.created_at
+FROM agent_memories am
+WHERE am.workspace_id = $1
+  AND ($2::text[] IS NULL OR am.memory_type = ANY($2))
+  AND (
+    -- Primary entity matches (entities extracted from query)
+    am.content ILIKE '%' || $3 || '%'
+    -- Related entity matches (entities found in existing memories)
+    OR am.id IN (
+      SELECT DISTINCT am2.id
+      FROM agent_memories am2
+      WHERE am2.workspace_id = $1
+        AND am2.content ILIKE '%' || $4 || '%'
+    )
+  )
+ORDER BY am.created_at DESC
+LIMIT $5
+`
+
+type ListMemoriesGraphParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Column2     []string    `json:"column_2"`
+	Column3     pgtype.Text `json:"column_3"`
+	Column4     pgtype.Text `json:"column_4"`
+	Limit       int32       `json:"limit"`
+}
+
+type ListMemoriesGraphRow struct {
+	ID         pgtype.UUID        `json:"id"`
+	AgentID    pgtype.UUID        `json:"agent_id"`
+	MemoryType string             `json:"memory_type"`
+	Content    string             `json:"content"`
+	Metadata   []byte             `json:"metadata"`
+	IsPrivate  pgtype.Bool        `json:"is_private"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+// Entity/temporal/causal graph traversal via entity extraction and relationship queries
+// This query finds memories containing entities mentioned in the query and related entities
+func (q *Queries) ListMemoriesGraph(ctx context.Context, arg ListMemoriesGraphParams) ([]ListMemoriesGraphRow, error) {
+	rows, err := q.db.Query(ctx, listMemoriesGraph,
+		arg.WorkspaceID,
+		arg.Column2,
+		arg.Column3,
+		arg.Column4,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMemoriesGraphRow{}
+	for rows.Next() {
+		var i ListMemoriesGraphRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.MemoryType,
+			&i.Content,
+			&i.Metadata,
+			&i.IsPrivate,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTeamMemories = `-- name: ListTeamMemories :many
 SELECT id, workspace_id, memory_type, content, embedding, metadata, created_by, created_at, updated_at FROM team_memory WHERE workspace_id = $1 ORDER BY created_at DESC
 `
@@ -281,6 +485,71 @@ func (q *Queries) SearchAgentMemories(ctx context.Context, arg SearchAgentMemori
 	return items, nil
 }
 
+const searchAgentMemoriesBM25 = `-- name: SearchAgentMemoriesBM25 :many
+SELECT id, agent_id, memory_type, content, metadata, is_private, created_at,
+       ts_rank(to_tsvector('english', content), plainto_tsquery('english', $2)) AS score
+FROM agent_memories
+WHERE agent_id = $1 AND workspace_id = $3
+  AND to_tsvector('english', content) @@ plainto_tsquery('english', $2)
+  AND ($4::text[] IS NULL OR memory_type = ANY($4))
+ORDER BY score DESC
+LIMIT $5
+`
+
+type SearchAgentMemoriesBM25Params struct {
+	AgentID        pgtype.UUID `json:"agent_id"`
+	PlaintoTsquery string      `json:"plainto_tsquery"`
+	WorkspaceID    pgtype.UUID `json:"workspace_id"`
+	Column4        []string    `json:"column_4"`
+	Limit          int32       `json:"limit"`
+}
+
+type SearchAgentMemoriesBM25Row struct {
+	ID         pgtype.UUID        `json:"id"`
+	AgentID    pgtype.UUID        `json:"agent_id"`
+	MemoryType string             `json:"memory_type"`
+	Content    string             `json:"content"`
+	Metadata   []byte             `json:"metadata"`
+	IsPrivate  pgtype.Bool        `json:"is_private"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	Score      float32            `json:"score"`
+}
+
+func (q *Queries) SearchAgentMemoriesBM25(ctx context.Context, arg SearchAgentMemoriesBM25Params) ([]SearchAgentMemoriesBM25Row, error) {
+	rows, err := q.db.Query(ctx, searchAgentMemoriesBM25,
+		arg.AgentID,
+		arg.PlaintoTsquery,
+		arg.WorkspaceID,
+		arg.Column4,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchAgentMemoriesBM25Row{}
+	for rows.Next() {
+		var i SearchAgentMemoriesBM25Row
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.MemoryType,
+			&i.Content,
+			&i.Metadata,
+			&i.IsPrivate,
+			&i.CreatedAt,
+			&i.Score,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const searchAllMemories = `-- name: SearchAllMemories :many
 SELECT id, agent_id, memory_type, content, metadata, created_at,
        (1 - (embedding <=> $2::vector))::float AS score
@@ -329,6 +598,74 @@ func (q *Queries) SearchAllMemories(ctx context.Context, arg SearchAllMemoriesPa
 	items := []SearchAllMemoriesRow{}
 	for rows.Next() {
 		var i SearchAllMemoriesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.MemoryType,
+			&i.Content,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.Score,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchAllMemoriesBM25 = `-- name: SearchAllMemoriesBM25 :many
+SELECT id, agent_id, memory_type, content, metadata, created_at,
+       ts_rank(to_tsvector('english', content), plainto_tsquery('english', $2)) AS score
+FROM (
+    SELECT id, agent_id, memory_type, content, metadata, created_at
+    FROM agent_memories
+    WHERE agent_memories.workspace_id = $1 AND is_private = false
+    UNION ALL
+    SELECT id, NULL, memory_type, content, metadata, created_at
+    FROM team_memory
+    WHERE team_memory.workspace_id = $1
+) AS all_memories
+WHERE to_tsvector('english', content) @@ plainto_tsquery('english', $2)
+  AND ($3::text[] IS NULL OR memory_type = ANY($3))
+ORDER BY score DESC
+LIMIT $4
+`
+
+type SearchAllMemoriesBM25Params struct {
+	WorkspaceID    pgtype.UUID `json:"workspace_id"`
+	PlaintoTsquery string      `json:"plainto_tsquery"`
+	Column3        []string    `json:"column_3"`
+	Limit          int32       `json:"limit"`
+}
+
+type SearchAllMemoriesBM25Row struct {
+	ID         pgtype.UUID        `json:"id"`
+	AgentID    pgtype.UUID        `json:"agent_id"`
+	MemoryType string             `json:"memory_type"`
+	Content    string             `json:"content"`
+	Metadata   []byte             `json:"metadata"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	Score      float32            `json:"score"`
+}
+
+func (q *Queries) SearchAllMemoriesBM25(ctx context.Context, arg SearchAllMemoriesBM25Params) ([]SearchAllMemoriesBM25Row, error) {
+	rows, err := q.db.Query(ctx, searchAllMemoriesBM25,
+		arg.WorkspaceID,
+		arg.PlaintoTsquery,
+		arg.Column3,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchAllMemoriesBM25Row{}
+	for rows.Next() {
+		var i SearchAllMemoriesBM25Row
 		if err := rows.Scan(
 			&i.ID,
 			&i.AgentID,

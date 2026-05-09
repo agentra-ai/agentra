@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-
 	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/mention"
@@ -240,6 +240,18 @@ func (s *TaskService) StartTask(ctx context.Context, taskID pgtype.UUID) (*db.Ag
 	}
 
 	slog.Info("task started", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
+
+	// Create trace recording for this task run.
+	run, err := s.Queries.CreateTaskRun(ctx, db.CreateTaskRunParams{
+		TaskID:  task.ID,
+		AgentID: task.AgentID,
+	})
+	if err != nil {
+		slog.Warn("start task: failed to create trace run", "task_id", util.UUIDToString(task.ID), "error", err)
+	} else {
+		slog.Info("trace run created", "run_id", util.UUIDToString(run.ID), "task_id", util.UUIDToString(task.ID))
+	}
+
 	return &task, nil
 }
 
@@ -271,6 +283,9 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 	}
 
 	slog.Info("task completed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
+
+	// Finalize trace recording for this task run.
+	s.finalizeTrace(ctx, task.ID, task.AgentID, "completed", "", 0, 0, 0, string(result))
 
 	// Post agent output as a comment, but only for assignment-triggered tasks.
 	// Comment-triggered tasks: the agent replies via CLI with --parent, so
@@ -343,6 +358,9 @@ func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg s
 	}
 
 	slog.Warn("task failed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID), "error", errMsg)
+
+	// Finalize trace recording for this task run.
+	s.finalizeTrace(ctx, task.ID, task.AgentID, "failed", errMsg, 0, 0, 0, "")
 
 	if errMsg != "" {
 		s.createAgentComment(ctx, task.IssueID, task.AgentID, redact.Text(errMsg), "system", task.TriggerCommentID)
@@ -733,5 +751,38 @@ func agentToMap(a db.Agent) map[string]any {
 		"updated_at":           util.TimestampToString(a.UpdatedAt),
 		"archived_at":          util.TimestampToPtr(a.ArchivedAt),
 		"archived_by":          util.UUIDToPtr(a.ArchivedBy),
+	}
+}
+
+// finalizeTrace completes the trace record for a task run.
+func (s *TaskService) finalizeTrace(ctx context.Context, taskID, agentID pgtype.UUID, status, errorMsg string, exitCode, totalSteps, totalTokens int, output string) {
+	// Find the most recent run for this task.
+	runs, err := s.Queries.ListTaskRunsByTask(ctx, taskID)
+	if err != nil || len(runs) == 0 {
+		slog.Warn("finalize trace: no run found", "task_id", util.UUIDToString(taskID))
+		return
+	}
+	run := runs[0]
+
+	durationMs := 0
+	if run.CompletedAt.Valid && run.StartedAt.Valid {
+		durationMs = int(run.CompletedAt.Time.Sub(run.StartedAt.Time).Milliseconds())
+	}
+
+	_, err = s.Queries.CompleteTaskRun(ctx, db.CompleteTaskRunParams{
+		ID:          run.ID,
+		Status:      status,
+		DurationMs:  pgtype.Int4{Int32: int32(durationMs), Valid: true},
+		ExitCode:    pgtype.Int4{Int32: int32(exitCode), Valid: true},
+		TotalSteps:  pgtype.Int4{Int32: int32(totalSteps), Valid: true},
+		TotalTokens: pgtype.Int4{Int32: int32(totalTokens), Valid: true},
+		TotalCost:   pgtype.Numeric{},
+		Output:      pgtype.Text{String: output, Valid: output != ""},
+		Error:       pgtype.Text{String: errorMsg, Valid: errorMsg != ""},
+	})
+	if err != nil {
+		slog.Warn("finalize trace: failed", "run_id", util.UUIDToString(run.ID), "error", err)
+	} else {
+		slog.Info("trace run finalized", "run_id", util.UUIDToString(run.ID), "status", status)
 	}
 }

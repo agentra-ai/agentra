@@ -16,11 +16,11 @@ export function MemoryEditor({ open, onClose, agentId }: MemoryEditorProps) {
   const { workspace } = useWorkspaceStore()
   const { storeMemory } = useMemoryStore()
   const [content, setContent] = useState('')
-  const [memoryType, setMemoryType] = useState<string>('learning')
+  const [memoryType, setMemoryType] = useState<string | null>('learning')
   const [isPrivate, setIsPrivate] = useState(true)
 
   const handleSave = async () => {
-    if (!workspace?.id || !content.trim()) return
+    if (!workspace?.id || !content.trim() || !memoryType) return
     await storeMemory({
       workspace_id: workspace.id,
       agent_id: agentId,
@@ -39,7 +39,7 @@ export function MemoryEditor({ open, onClose, agentId }: MemoryEditorProps) {
           <DialogTitle>Add Memory</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-3">
-          <Select value={memoryType} onValueChange={setMemoryType}>
+          <Select value={memoryType ?? 'learning'} onValueChange={setMemoryType}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>

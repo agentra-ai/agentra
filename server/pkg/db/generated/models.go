@@ -41,6 +41,9 @@ type Agent struct {
 	ArchivedAt         pgtype.Timestamptz `json:"archived_at"`
 	ArchivedBy         pgtype.UUID        `json:"archived_by"`
 	PreferredRuntime   string             `json:"preferred_runtime"`
+	Provider           string             `json:"provider"`
+	ModelOverride      pgtype.Text        `json:"model_override"`
+	ProviderConfig     []byte             `json:"provider_config"`
 }
 
 type AgentMemory struct {
@@ -182,6 +185,30 @@ type DaemonToken struct {
 	DaemonID    string             `json:"daemon_id"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type GithubInstallation struct {
+	ID             pgtype.UUID        `json:"id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
+	InstallationID int64              `json:"installation_id"`
+	AccountLogin   string             `json:"account_login"`
+	AccountType    string             `json:"account_type"`
+	AccessToken    string             `json:"access_token"`
+	RefreshToken   pgtype.Text        `json:"refresh_token"`
+	TokenExpiresAt pgtype.Timestamptz `json:"token_expires_at"`
+	Repositories   []byte             `json:"repositories"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type GithubIssueLink struct {
+	ID         pgtype.UUID        `json:"id"`
+	IssueID    pgtype.UUID        `json:"issue_id"`
+	Repository string             `json:"repository"`
+	PrNumber   pgtype.Int4        `json:"pr_number"`
+	CommitSha  pgtype.Text        `json:"commit_sha"`
+	BranchName pgtype.Text        `json:"branch_name"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type InboxItem struct {
@@ -352,6 +379,23 @@ type TaskMessage struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type TaskRun struct {
+	ID          pgtype.UUID        `json:"id"`
+	TaskID      pgtype.UUID        `json:"task_id"`
+	AgentID     pgtype.UUID        `json:"agent_id"`
+	Status      string             `json:"status"`
+	StartedAt   pgtype.Timestamptz `json:"started_at"`
+	CompletedAt pgtype.Timestamptz `json:"completed_at"`
+	DurationMs  pgtype.Int4        `json:"duration_ms"`
+	ExitCode    pgtype.Int4        `json:"exit_code"`
+	TotalSteps  pgtype.Int4        `json:"total_steps"`
+	TotalTokens pgtype.Int4        `json:"total_tokens"`
+	TotalCost   pgtype.Numeric     `json:"total_cost"`
+	Output      pgtype.Text        `json:"output"`
+	Error       pgtype.Text        `json:"error"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type TeamMemory struct {
 	ID          pgtype.UUID        `json:"id"`
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
@@ -362,6 +406,21 @@ type TeamMemory struct {
 	CreatedBy   pgtype.UUID        `json:"created_by"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type TraceStep struct {
+	ID         pgtype.UUID        `json:"id"`
+	TaskRunID  pgtype.UUID        `json:"task_run_id"`
+	StepNumber int32              `json:"step_number"`
+	Timestamp  pgtype.Timestamptz `json:"timestamp"`
+	Action     string             `json:"action"`
+	Tool       pgtype.Text        `json:"tool"`
+	InputText  pgtype.Text        `json:"input_text"`
+	OutputText pgtype.Text        `json:"output_text"`
+	TokensUsed pgtype.Int4        `json:"tokens_used"`
+	DurationMs pgtype.Int4        `json:"duration_ms"`
+	Metadata   []byte             `json:"metadata"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type User struct {

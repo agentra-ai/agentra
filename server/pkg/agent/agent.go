@@ -69,6 +69,17 @@ type Result struct {
 	Error      string // error message if failed
 	DurationMs int64
 	SessionID  string
+
+	// TokenUsage is populated by API-based providers after execution.
+	TokenUsage *TokenUsage
+}
+
+// TokenUsage holds token consumption metrics from an API provider.
+type TokenUsage struct {
+	InputTokens     int64 `json:"input_tokens"`
+	OutputTokens    int64 `json:"output_tokens"`
+	CacheReadTokens int64 `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
 }
 
 // Config configures a Backend instance.

@@ -20,7 +20,7 @@ func (s *Summarizer) Summarize(steps []TraceStep) *TaskRunSummary {
 		lastTimestamp, _ = time.Parse(time.RFC3339, step.Timestamp)
 
 		summary.TotalTokens += step.TokensUsed
-		summary.TotalDuration += int64(step.DurationMs)
+		summary.DurationMs += int64(step.DurationMs)
 
 		if step.Tool != "" {
 			summary.ToolUsage[step.Tool]++
@@ -31,6 +31,6 @@ func (s *Summarizer) Summarize(steps []TraceStep) *TaskRunSummary {
 		}
 	}
 
-	summary.Duration = lastTimestamp.Sub(firstTimestamp).Milliseconds()
+	summary.DurationMs = lastTimestamp.Sub(firstTimestamp).Milliseconds()
 	return summary
 }
