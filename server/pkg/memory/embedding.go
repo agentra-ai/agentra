@@ -28,7 +28,7 @@ func NewEmbeddingClient() *EmbeddingClient {
 }
 
 func (c *EmbeddingClient) Embed(ctx context.Context, text string) ([]float32, error) {
-	resp, err := c.client.CreateEmbeddings(ctx, openai.EmbeddingCreateInput{
+	resp, err := c.client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
 		Input: text,
 		Model: openai.EmbeddingModel(c.model),
 	})
