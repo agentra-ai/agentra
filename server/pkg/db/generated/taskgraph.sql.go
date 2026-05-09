@@ -137,7 +137,7 @@ WHERE n.issue_id = $1 AND n.status = 'pending'
     JOIN task_graph_nodes dep ON dep.id = e.from_node_id
     WHERE e.to_node_id = n.id
       AND e.edge_type = 'depends_on'
-      AND dep.status NOT IN ('completed')
+      AND dep.status != 'completed'
   )
 `
 
@@ -202,7 +202,7 @@ func (q *Queries) GetTaskNode(ctx context.Context, id pgtype.UUID) (TaskGraphNod
 }
 
 const listEdgesByIssue = `-- name: ListEdgesByIssue :many
-SELECT e.id, e.from_node_id, e.to_node_id, e.edge_type, e.metadata, e.created_at FROM task_graph_edges e
+SELECT DISTINCT e.id, e.from_node_id, e.to_node_id, e.edge_type, e.metadata, e.created_at FROM task_graph_edges e
 JOIN task_graph_nodes n ON n.id = e.from_node_id OR n.id = e.to_node_id
 WHERE n.issue_id = $1
 ORDER BY e.created_at
