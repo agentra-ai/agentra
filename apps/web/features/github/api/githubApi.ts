@@ -1,5 +1,3 @@
-import { api } from "@/shared/api"
-
 export interface GitHubInstallation {
   id: string
   workspace_id: string
@@ -15,8 +13,9 @@ export interface GitHubInstallation {
 export const githubApi = {
   getInstallation: async (workspaceId: string): Promise<GitHubInstallation | null> => {
     try {
-      const res = await api.get<GitHubInstallation>(`/workspaces/${workspaceId}/github/installations`)
-      return res
+      const res = await fetch(`/api/workspaces/${workspaceId}/github/installations`)
+      if (!res.ok) return null
+      return res.json()
     } catch {
       return null
     }
@@ -28,10 +27,15 @@ export const githubApi = {
     account_type: string
     access_token: string
   }): Promise<GitHubInstallation> => {
-    return api.post<GitHubInstallation, typeof data>(`/workspaces/${workspaceId}/github/connect`, data)
+    const res = await fetch(`/api/workspaces/${workspaceId}/github/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return res.json()
   },
 
   disconnect: async (workspaceId: string): Promise<void> => {
-    await api.delete(`/workspaces/${workspaceId}/github/disconnect`)
+    await fetch(`/api/workspaces/${workspaceId}/github/disconnect`, { method: 'DELETE' })
   },
 }
