@@ -44,3 +44,47 @@ SELECT
     SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_count
 FROM task_runs
 WHERE agent_id = $1 AND created_at > NOW() - $2::interval;
+
+-- name: CreateExecutionTrace :one
+INSERT INTO execution_traces (task_id, agent_id, issue_id, provider, model, status, start_time)
+VALUES ($1, $2, $3, $4, $5, 'running', NOW())
+RETURNING *;
+
+-- name: GetExecutionTrace :one
+SELECT * FROM execution_traces WHERE id = $1;
+
+-- name: GetExecutionTraceByTask :one
+SELECT * FROM execution_traces WHERE task_id = $1 ORDER BY created_at DESC LIMIT 1;
+
+-- name: ListExecutionTracesByIssue :many
+SELECT * FROM execution_traces WHERE issue_id = $1 ORDER BY start_time DESC;
+
+-- name: ListExecutionTracesByAgent :many
+SELECT * FROM execution_traces WHERE agent_id = $1 ORDER BY start_time DESC LIMIT $2;
+
+-- name: RecordTraceStep :exec
+UPDATE execution_traces SET
+    steps = steps || $2::jsonb,
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: RecordToolCall :exec
+UPDATE execution_traces SET
+    tools = tools || $2::jsonb,
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: UpdateTraceTokens :exec
+UPDATE execution_traces SET
+    tokens = $2,
+    cost = $3,
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: EndExecutionTrace :one
+UPDATE execution_traces SET
+    status = $2,
+    end_time = NOW(),
+    updated_at = NOW()
+WHERE id = $1 AND status = 'running'
+RETURNING *;

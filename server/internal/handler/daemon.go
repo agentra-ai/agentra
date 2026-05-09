@@ -370,6 +370,13 @@ func (h *Handler) ReportTaskProgress(w http.ResponseWriter, r *http.Request) {
 
 	// Look up task to get workspace ID via the associated issue.
 	workspaceID := ""
+		// Look up execution trace for recording steps (best-effort).
+		traceID := ""
+		if h.TraceService != nil && h.TraceService.TraceService != nil {
+			if trace, lookupErr := h.TraceService.GetTraceByTask(r.Context(), taskID); lookupErr == nil {
+				traceID = trace.ID
+			}
+		}
 	task, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
 	if err == nil {
 		if issue, err := h.Queries.GetIssue(r.Context(), task.IssueID); err == nil {
@@ -402,6 +409,13 @@ func (h *Handler) ReportAgentStage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	workspaceID := ""
+		// Look up execution trace for recording steps (best-effort).
+		traceID := ""
+		if h.TraceService != nil && h.TraceService.TraceService != nil {
+			if trace, lookupErr := h.TraceService.GetTraceByTask(r.Context(), taskID); lookupErr == nil {
+				traceID = trace.ID
+			}
+		}
 	if issue, err := h.Queries.GetIssue(r.Context(), task.IssueID); err == nil {
 		workspaceID = uuidToString(issue.WorkspaceID)
 	}
@@ -514,6 +528,13 @@ func (h *Handler) ReportTaskMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	workspaceID := ""
+		// Look up execution trace for recording steps (best-effort).
+		traceID := ""
+		if h.TraceService != nil && h.TraceService.TraceService != nil {
+			if trace, lookupErr := h.TraceService.GetTraceByTask(r.Context(), taskID); lookupErr == nil {
+				traceID = trace.ID
+			}
+		}
 	if issue, err := h.Queries.GetIssue(r.Context(), task.IssueID); err == nil {
 		workspaceID = uuidToString(issue.WorkspaceID)
 	}
@@ -537,6 +558,8 @@ func (h *Handler) ReportTaskMessages(w http.ResponseWriter, r *http.Request) {
 			Input:   inputJSON,
 			Output:  pgtype.Text{String: msg.Output, Valid: msg.Output != ""},
 		})
+			// Record message as trace step (best-effort).
+			h.recordTraceMessage(r.Context(), traceID, msg)
 
 		if workspaceID != "" {
 			h.publish(protocol.EventTaskMessage, workspaceID, "system", "", protocol.TaskMessagePayload{

@@ -11,7 +11,7 @@ import (
 type TraceRecorder struct {
 	pool   *pgxpool.Pool
 	taskID uuid.UUID
-	steps  []TraceStep
+	steps  []TraceStepRecord
 	runID  uuid.UUID
 	mu     sync.Mutex
 }
@@ -21,11 +21,11 @@ func NewTraceRecorder(pool *pgxpool.Pool, taskID, runID uuid.UUID) *TraceRecorde
 		pool:   pool,
 		taskID: taskID,
 		runID:  runID,
-		steps:  []TraceStep{},
+		steps:  []TraceStepRecord{},
 	}
 }
 
-func (r *TraceRecorder) RecordStep(ctx context.Context, step *TraceStep) error {
+func (r *TraceRecorder) RecordStep(ctx context.Context, step *TraceStepRecord) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	step.TaskRunID = r.runID.String()

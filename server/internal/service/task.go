@@ -23,13 +23,14 @@ import (
 )
 
 type TaskService struct {
-	Queries *db.Queries
-	Hub     *realtime.Hub
-	Bus     *events.Bus
+	Queries      *db.Queries
+	Hub          *realtime.Hub
+	Bus          *events.Bus
+	TraceService *TraceService
 }
 
-func NewTaskService(q *db.Queries, hub *realtime.Hub, bus *events.Bus) *TaskService {
-	return &TaskService{Queries: q, Hub: hub, Bus: bus}
+func NewTaskService(q *db.Queries, hub *realtime.Hub, bus *events.Bus, traceSvc *TraceService) *TaskService {
+	return &TaskService{Queries: q, Hub: hub, Bus: bus, TraceService: traceSvc}
 }
 
 // EnqueueTaskForIssue creates a queued task for an agent-assigned issue.
@@ -241,7 +242,7 @@ func (s *TaskService) StartTask(ctx context.Context, taskID pgtype.UUID) (*db.Ag
 
 	slog.Info("task started", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
 
-	// Create trace recording for this task run.
+	// Create trace recording for this task run (existing task_runs table).
 	run, err := s.Queries.CreateTaskRun(ctx, db.CreateTaskRunParams{
 		TaskID:  task.ID,
 		AgentID: task.AgentID,
@@ -252,7 +253,36 @@ func (s *TaskService) StartTask(ctx context.Context, taskID pgtype.UUID) (*db.Ag
 		slog.Info("trace run created", "run_id", util.UUIDToString(run.ID), "task_id", util.UUIDToString(task.ID))
 	}
 
+	// Create execution trace (new execution_traces table).
+	if s.TraceService != nil && s.TraceService.TraceService != nil {
+		provider, model := s.resolveAgentProvider(ctx, task.AgentID)
+		_, err := s.TraceService.StartTrace(
+			ctx,
+			util.UUIDToString(task.ID),
+			util.UUIDToString(task.AgentID),
+			util.UUIDToString(task.IssueID),
+			provider,
+			model,
+		)
+		if err != nil {
+			slog.Warn("start task: failed to create execution trace", "task_id", util.UUIDToString(task.ID), "error", err)
+		}
+	}
+
 	return &task, nil
+}
+
+// resolveAgentProvider looks up the provider and model for an agent.
+func (s *TaskService) resolveAgentProvider(ctx context.Context, agentID pgtype.UUID) (provider, model string) {
+	agent, err := s.Queries.GetAgent(ctx, agentID)
+	if err != nil {
+		return "", ""
+	}
+	provider = agent.Provider
+	if agent.ModelOverride.Valid {
+		model = agent.ModelOverride.String
+	}
+	return
 }
 
 // CompleteTask marks a task as completed.
@@ -284,8 +314,10 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 
 	slog.Info("task completed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
 
-	// Finalize trace recording for this task run.
+		// Finalize trace recording for this task run (existing task_runs table).
 	s.finalizeTrace(ctx, task.ID, task.AgentID, "completed", "", 0, 0, 0, string(result))
+		// End execution trace (new execution_traces table).
+		s.endExecutionTrace(ctx, task.ID, "completed")
 
 	// Post agent output as a comment, but only for assignment-triggered tasks.
 	// Comment-triggered tasks: the agent replies via CLI with --parent, so
@@ -359,9 +391,11 @@ func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg s
 
 	slog.Warn("task failed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID), "error", errMsg)
 
-	// Finalize trace recording for this task run.
+		// Finalize trace recording for this task run (existing task_runs table).
 	s.finalizeTrace(ctx, task.ID, task.AgentID, "failed", errMsg, 0, 0, 0, "")
 
+		// End execution trace (new execution_traces table).
+		s.endExecutionTrace(ctx, task.ID, "failed")
 	if errMsg != "" {
 		s.createAgentComment(ctx, task.IssueID, task.AgentID, redact.Text(errMsg), "system", task.TriggerCommentID)
 	}
@@ -784,5 +818,21 @@ func (s *TaskService) finalizeTrace(ctx context.Context, taskID, agentID pgtype.
 		slog.Warn("finalize trace: failed", "run_id", util.UUIDToString(run.ID), "error", err)
 	} else {
 		slog.Info("trace run finalized", "run_id", util.UUIDToString(run.ID), "status", status)
+	}
+}
+
+// endExecutionTrace ends the execution trace for a task via the TraceService.
+// It looks up the most recent trace for the task and marks it with the given status.
+func (s *TaskService) endExecutionTrace(ctx context.Context, taskID pgtype.UUID, status string) {
+	if s.TraceService == nil || s.TraceService.TraceService == nil {
+		return
+	}
+	trace, err := s.TraceService.GetTraceByTask(ctx, util.UUIDToString(taskID))
+	if err != nil {
+		slog.Warn("end execution trace: failed to find trace", "task_id", util.UUIDToString(taskID), "error", err)
+		return
+	}
+	if err := s.TraceService.EndTrace(ctx, trace.ID, status); err != nil {
+		slog.Warn("end execution trace: failed", "trace_id", trace.ID, "error", err)
 	}
 }

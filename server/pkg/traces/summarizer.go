@@ -6,7 +6,7 @@ import (
 
 type Summarizer struct{}
 
-func (s *Summarizer) Summarize(steps []TraceStep) *TaskRunSummary {
+func (s *Summarizer) Summarize(steps []TraceStepRecord) *TaskRunSummary {
 	summary := &TaskRunSummary{
 		ToolUsage:  make(map[string]int),
 		KeyActions: []string{},

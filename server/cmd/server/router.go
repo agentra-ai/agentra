@@ -233,6 +233,7 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 					r.Get("/active-task", h.GetActiveTaskForIssue)
 					r.Post("/tasks/{taskId}/cancel", h.CancelTask)
 					r.Get("/task-runs", h.ListTasksByIssue)
+						r.Get("/traces", h.ListTracesByIssue)
 					r.Post("/reactions", h.AddIssueReaction)
 					r.Delete("/reactions", h.RemoveIssueReaction)
 					r.Get("/attachments", h.ListAttachments)
@@ -301,6 +302,8 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 				r.Post("/validate", h.ValidateAPIKey)
 			})
 
+				// Traces
+				r.Get("/api/traces/{taskId}", h.GetTraceByTask)
 			// Inbox
 			r.Route("/api/inbox", func(r chi.Router) {
 				r.Get("/", h.ListInbox)

@@ -17,7 +17,8 @@ type TaskRun struct {
 	CreatedAt   string `json:"created_at"`
 }
 
-type TraceStep struct {
+// TraceStepRecord is the database row representation of a trace_step.
+type TraceStepRecord struct {
 	ID          string         `json:"id"`
 	TaskRunID   string         `json:"task_run_id"`
 	StepNumber  int            `json:"step_number"`
