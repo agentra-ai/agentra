@@ -61,7 +61,7 @@ func ConfigurableExtractor(ctx context.Context, svc *memory.MemoryService, task 
 	// Extract and store learnings
 	learnings := ExtractLearnings(task.Output)
 	for _, learning := range learnings {
-		err := svc.StoreAgentMemory(ctx, task.AgentID, task.WorkspaceID, memory.MemoryTypePattern, learning, true)
+		_, err := svc.StoreAgentMemory(ctx, task.AgentID, task.WorkspaceID, memory.MemoryTypePattern, learning, true)
 		if err != nil {
 			slog.Error("failed to store learning", "error", err)
 		}

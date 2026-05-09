@@ -107,7 +107,7 @@ func OnTaskComplete(ctx context.Context, svc *memory.MemoryService, task *AgentT
 	learnings := ExtractLearnings(result.Output)
 
 	for _, learning := range learnings {
-		err := svc.StoreAgentMemory(ctx, task.AgentID, task.WorkspaceID, memory.MemoryTypeLearning, learning, true)
+		_, err := svc.StoreAgentMemory(ctx, task.AgentID, task.WorkspaceID, memory.MemoryTypeLearning, learning, true)
 		if err != nil {
 			return err
 		}

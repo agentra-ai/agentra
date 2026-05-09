@@ -4,23 +4,27 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/google/uuid"
-	"github.com/agentra-ai/agentra/pkg/db/generated"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgtype"
+	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
 
 type MemoryService struct {
-	pool     *pgxpool.Pool
-	queries  *db.Queries
-	embedder *EmbeddingClient
+	pool       *pgxpool.Pool
+	queries    *db.Queries
+	embedder   *EmbeddingClient
+	fusion     *FusionRetriever
 }
 
 func NewMemoryService(pool *pgxpool.Pool, embedder *EmbeddingClient) *MemoryService {
-	return &MemoryService{
+	s := &MemoryService{
 		pool:     pool,
 		queries:  db.New(pool),
 		embedder: embedder,
 	}
+	s.fusion = NewFusionRetriever(pool, embedder)
+	return s
 }
 
 func (s *MemoryService) StoreAgentMemory(ctx context.Context, agentID, workspaceID string, memType MemoryType, content string, isPrivate bool) (*StoreResult, error) {
@@ -39,13 +43,13 @@ func (s *MemoryService) StoreAgentMemory(ctx context.Context, agentID, workspace
 	}
 
 	row, err := s.queries.CreateAgentMemory(ctx, db.CreateAgentMemoryParams{
-		AgentID:     agentUUID,
-		WorkspaceID: workspaceUUID,
+		AgentID:     uuidToPg(agentUUID),
+		WorkspaceID: uuidToPg(workspaceUUID),
 		MemoryType:  string(memType),
 		Content:     content,
-		Embedding:   vec,
+		Embedding:   vectorToPg(vec),
 		Metadata:    []byte("{}"),
-		IsPrivate:   isPrivate,
+		IsPrivate:   boolToPg(isPrivate),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create agent memory: %w", err)
@@ -74,11 +78,11 @@ func (s *MemoryService) RecallAgentMemories(ctx context.Context, agentID, worksp
 	}
 
 	rows, err := s.queries.SearchAgentMemories(ctx, db.SearchAgentMemoriesParams{
-		AgentID:     agentUUID,
-		Column2:     vec,
-		WorkspaceID: workspaceUUID,
+		AgentID:     uuidToPg(agentUUID),
+		Column2:     vectorToPg(vec),
+		WorkspaceID: uuidToPg(workspaceUUID),
 		Column4:     memTypes,
-		Limit:       int64(limit),
+		Limit:       int32(limit),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("search agent memories: %w", err)
@@ -109,10 +113,10 @@ func (s *MemoryService) SearchAll(ctx context.Context, workspaceID, query string
 	}
 
 	rows, err := s.queries.SearchAllMemories(ctx, db.SearchAllMemoriesParams{
-		WorkspaceID: workspaceUUID,
-		Column2:     vec,
+		WorkspaceID: uuidToPg(workspaceUUID),
+		Column2:     vectorToPg(vec),
 		Column3:     nil,
-		Limit:       int64(limit),
+		Limit:       int32(limit),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("search all memories: %w", err)
@@ -141,7 +145,10 @@ func (s *MemoryService) DeleteAgentMemory(ctx context.Context, memoryID, agentID
 		return fmt.Errorf("invalid agent_id: %w", err)
 	}
 
-	_, err = s.queries.DeleteAgentMemory(ctx, memoryUUID, agentUUID)
+	_, err = s.queries.DeleteAgentMemory(ctx, db.DeleteAgentMemoryParams{
+		ID:      uuidToPg(memoryUUID),
+		AgentID: uuidToPg(agentUUID),
+	})
 	if err != nil {
 		return fmt.Errorf("delete agent memory: %w", err)
 	}
@@ -168,13 +175,18 @@ func (s *MemoryService) StoreTeamMemory(ctx context.Context, workspaceID string,
 		createdByUUID = &v
 	}
 
+	var createdByPg pgtype.UUID
+	if createdByUUID != nil {
+		createdByPg = uuidToPg(*createdByUUID)
+	}
+
 	row, err := s.queries.CreateTeamMemory(ctx, db.CreateTeamMemoryParams{
-		WorkspaceID: workspaceUUID,
+		WorkspaceID: uuidToPg(workspaceUUID),
 		MemoryType:  string(memType),
 		Content:     content,
-		Embedding:   vec,
+		Embedding:   vectorToPg(vec),
 		Metadata:    []byte("{}"),
-		CreatedBy:   createdByUUID,
+		CreatedBy:   createdByPg,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create team memory: %w", err)
@@ -193,20 +205,59 @@ func (s *MemoryService) ListTeamMemories(ctx context.Context, workspaceID string
 		return nil, fmt.Errorf("invalid workspace_id: %w", err)
 	}
 
-	rows, err := s.queries.ListTeamMemories(ctx, workspaceUUID)
+	rows, err := s.queries.ListTeamMemories(ctx, uuidToPg(workspaceUUID))
 	if err != nil {
 		return nil, fmt.Errorf("list team memories: %w", err)
 	}
 	result := make([]TeamMemory, len(rows))
 	for i, r := range rows {
+		createdBy := ""
+		if r.CreatedBy.Valid {
+			createdBy = uuid.UUID(r.CreatedBy.Bytes).String()
+		}
 		result[i] = TeamMemory{
 			ID:          r.ID.String(),
 			WorkspaceID: r.WorkspaceID.String(),
 			MemoryType:  MemoryType(r.MemoryType),
 			Content:     r.Content,
-			CreatedBy:   r.CreatedBy.String,
+			CreatedBy:   createdBy,
 			CreatedAt:   r.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
 		}
 	}
 	return result, nil
+}
+
+// MultiStrategyRecall uses the FusionRetriever to combine semantic, keyword, graph,
+// and temporal retrieval strategies with Reciprocal Rank Fusion.
+func (s *MemoryService) MultiStrategyRecall(ctx context.Context, agentID, workspaceID, query string, opts RetrieveOptions) ([]MemoryEntry, error) {
+	// Set defaults
+	if opts.Limit == 0 {
+		opts.Limit = 20
+	}
+
+	// Set agent ID if not provided
+	if agentID != "" {
+		opts.AgentID = agentID
+	}
+
+	// Retrieve using fusion retriever
+	memories, err := s.fusion.Retrieve(ctx, query, opts)
+	if err != nil {
+		return nil, fmt.Errorf("fusion retrieve: %w", err)
+	}
+
+	// Convert to MemoryEntry format
+	entries := make([]MemoryEntry, len(memories))
+	for i, mem := range memories {
+		entries[i] = MemoryEntry{
+			ID:         mem.ID,
+			MemoryType: mem.MemoryType,
+			Content:    mem.Content,
+			AgentID:    mem.AgentID,
+			Score:      mem.Score,
+			CreatedAt:  mem.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		}
+	}
+
+	return entries, nil
 }

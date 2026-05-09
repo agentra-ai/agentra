@@ -45,5 +45,6 @@ func ContinuousCapture(ctx context.Context, svc *memory.MemoryService, step *Tra
 		return nil
 	}
 
-	return svc.StoreAgentMemory(ctx, step.AgentID, step.WorkspaceID, memory.MemoryTypeContext, step.OutputText, true)
+	_, err := svc.StoreAgentMemory(ctx, step.AgentID, step.WorkspaceID, memory.MemoryTypeContext, step.OutputText, true)
+	return err
 }
