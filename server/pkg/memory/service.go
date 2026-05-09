@@ -28,9 +28,19 @@ func (s *MemoryService) StoreAgentMemory(ctx context.Context, agentID, workspace
 	if err != nil {
 		return nil, fmt.Errorf("embed: %w", err)
 	}
+
+	agentUUID, err := uuid.Parse(agentID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid agent_id: %w", err)
+	}
+	workspaceUUID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid workspace_id: %w", err)
+	}
+
 	row, err := s.queries.CreateAgentMemory(ctx, db.CreateAgentMemoryParams{
-		AgentID:     uuid.MustParse(agentID),
-		WorkspaceID: uuid.MustParse(workspaceID),
+		AgentID:     agentUUID,
+		WorkspaceID: workspaceUUID,
 		MemoryType:  string(memType),
 		Content:     content,
 		Embedding:   vec,
@@ -38,7 +48,7 @@ func (s *MemoryService) StoreAgentMemory(ctx context.Context, agentID, workspace
 		IsPrivate:   isPrivate,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create agent memory: %w", err)
 	}
 	return &StoreResult{
 		ID:        row.ID.String(),
@@ -53,15 +63,25 @@ func (s *MemoryService) RecallAgentMemories(ctx context.Context, agentID, worksp
 	if err != nil {
 		return nil, fmt.Errorf("embed: %w", err)
 	}
+
+	agentUUID, err := uuid.Parse(agentID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid agent_id: %w", err)
+	}
+	workspaceUUID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid workspace_id: %w", err)
+	}
+
 	rows, err := s.queries.SearchAgentMemories(ctx, db.SearchAgentMemoriesParams{
-		AgentID:     uuid.MustParse(agentID),
+		AgentID:     agentUUID,
 		Column2:     vec,
-		WorkspaceID: uuid.MustParse(workspaceID),
+		WorkspaceID: workspaceUUID,
 		Column4:     memTypes,
 		Limit:       int64(limit),
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("search agent memories: %w", err)
 	}
 	entries := make([]MemoryEntry, len(rows))
 	for i, r := range rows {
@@ -82,14 +102,20 @@ func (s *MemoryService) SearchAll(ctx context.Context, workspaceID, query string
 	if err != nil {
 		return nil, fmt.Errorf("embed: %w", err)
 	}
+
+	workspaceUUID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid workspace_id: %w", err)
+	}
+
 	rows, err := s.queries.SearchAllMemories(ctx, db.SearchAllMemoriesParams{
-		WorkspaceID: uuid.MustParse(workspaceID),
+		WorkspaceID: workspaceUUID,
 		Column2:     vec,
 		Column3:     nil,
 		Limit:       int64(limit),
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("search all memories: %w", err)
 	}
 	entries := make([]MemoryEntry, len(rows))
 	for i, r := range rows {
@@ -106,8 +132,20 @@ func (s *MemoryService) SearchAll(ctx context.Context, workspaceID, query string
 }
 
 func (s *MemoryService) DeleteAgentMemory(ctx context.Context, memoryID, agentID string) error {
-	_, err := s.queries.DeleteAgentMemory(ctx, uuid.MustParse(memoryID), uuid.MustParse(agentID))
-	return err
+	memoryUUID, err := uuid.Parse(memoryID)
+	if err != nil {
+		return fmt.Errorf("invalid memory_id: %w", err)
+	}
+	agentUUID, err := uuid.Parse(agentID)
+	if err != nil {
+		return fmt.Errorf("invalid agent_id: %w", err)
+	}
+
+	_, err = s.queries.DeleteAgentMemory(ctx, memoryUUID, agentUUID)
+	if err != nil {
+		return fmt.Errorf("delete agent memory: %w", err)
+	}
+	return nil
 }
 
 func (s *MemoryService) StoreTeamMemory(ctx context.Context, workspaceID string, memType MemoryType, content string, createdBy string) (*StoreResult, error) {
@@ -115,13 +153,23 @@ func (s *MemoryService) StoreTeamMemory(ctx context.Context, workspaceID string,
 	if err != nil {
 		return nil, fmt.Errorf("embed: %w", err)
 	}
+
+	workspaceUUID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid workspace_id: %w", err)
+	}
+
 	var createdByUUID *uuid.UUID
 	if createdBy != "" {
-		v := uuid.MustParse(createdBy)
+		v, err := uuid.Parse(createdBy)
+		if err != nil {
+			return nil, fmt.Errorf("invalid created_by: %w", err)
+		}
 		createdByUUID = &v
 	}
+
 	row, err := s.queries.CreateTeamMemory(ctx, db.CreateTeamMemoryParams{
-		WorkspaceID: uuid.MustParse(workspaceID),
+		WorkspaceID: workspaceUUID,
 		MemoryType:  string(memType),
 		Content:     content,
 		Embedding:   vec,
@@ -129,7 +177,7 @@ func (s *MemoryService) StoreTeamMemory(ctx context.Context, workspaceID string,
 		CreatedBy:   createdByUUID,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create team memory: %w", err)
 	}
 	return &StoreResult{
 		ID:        row.ID.String(),
@@ -140,9 +188,14 @@ func (s *MemoryService) StoreTeamMemory(ctx context.Context, workspaceID string,
 }
 
 func (s *MemoryService) ListTeamMemories(ctx context.Context, workspaceID string) ([]TeamMemory, error) {
-	rows, err := s.queries.ListTeamMemories(ctx, uuid.MustParse(workspaceID))
+	workspaceUUID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid workspace_id: %w", err)
+	}
+
+	rows, err := s.queries.ListTeamMemories(ctx, workspaceUUID)
+	if err != nil {
+		return nil, fmt.Errorf("list team memories: %w", err)
 	}
 	result := make([]TeamMemory, len(rows))
 	for i, r := range rows {
