@@ -133,7 +133,8 @@
     "apiKeyEncrypted": "Your API key is encrypted and never exposed",
     "settingsSaved": "Settings saved successfully",
     "saving": "Saving...",
-    "saveCloudRuntime": "Save Cloud Runtime"
+    "saveCloudRuntime": "Save Cloud Runtime",
+    "memory": "Memory"
   },
   "navigation": {
     "dashboard": "Dashboard",

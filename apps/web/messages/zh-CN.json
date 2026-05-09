@@ -133,7 +133,8 @@
     "apiKeyEncrypted": "您的 API 密钥已加密，绝不会暴露",
     "settingsSaved": "设置保存成功",
     "saving": "保存中...",
-    "saveCloudRuntime": "保存云端运行时"
+    "saveCloudRuntime": "保存云端运行时",
+    "memory": "记忆"
   },
   "navigation": {
     "dashboard": "仪表盘",
