@@ -1,0 +1,24 @@
+import { MemoryItem } from './MemoryItem'
+
+interface MemoryListProps {
+  memories: Array<{
+    id: string
+    memory_type: string
+    content: string
+    agent_id?: string
+    created_at: string
+  }>
+}
+
+export function MemoryList({ memories }: MemoryListProps) {
+  if (memories.length === 0) {
+    return <p className="text-muted-foreground text-sm">No memories yet.</p>
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {memories.map(m => (
+        <MemoryItem key={m.id} memory={m} />
+      ))}
+    </div>
+  )
+}
