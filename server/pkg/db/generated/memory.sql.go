@@ -219,7 +219,7 @@ func (q *Queries) ListTeamMemories(ctx context.Context, workspaceID pgtype.UUID)
 
 const searchAgentMemories = `-- name: SearchAgentMemories :many
 SELECT id, agent_id, memory_type, content, metadata, is_private, created_at,
-       1 - (embedding <=> $2::vector) AS score
+       (1 - (embedding <=> $2::vector))::float AS score
 FROM agent_memories
 WHERE agent_id = $1 AND workspace_id = $3
   AND ($4::text[] IS NULL OR memory_type = ANY($4))
@@ -243,7 +243,7 @@ type SearchAgentMemoriesRow struct {
 	Metadata   []byte             `json:"metadata"`
 	IsPrivate  pgtype.Bool        `json:"is_private"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	Score      int32              `json:"score"`
+	Score      float64            `json:"score"`
 }
 
 func (q *Queries) SearchAgentMemories(ctx context.Context, arg SearchAgentMemoriesParams) ([]SearchAgentMemoriesRow, error) {
@@ -283,7 +283,7 @@ func (q *Queries) SearchAgentMemories(ctx context.Context, arg SearchAgentMemori
 
 const searchAllMemories = `-- name: SearchAllMemories :many
 SELECT id, agent_id, memory_type, content, metadata, created_at,
-       1 - (embedding <=> $2::vector) AS score
+       (1 - (embedding <=> $2::vector))::float AS score
 FROM (
     SELECT id, agent_id, memory_type, content, metadata, created_at, embedding
     FROM agent_memories
@@ -312,7 +312,7 @@ type SearchAllMemoriesRow struct {
 	Content    string             `json:"content"`
 	Metadata   []byte             `json:"metadata"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	Score      int32              `json:"score"`
+	Score      float64            `json:"score"`
 }
 
 func (q *Queries) SearchAllMemories(ctx context.Context, arg SearchAllMemoriesParams) ([]SearchAllMemoriesRow, error) {
@@ -350,7 +350,7 @@ func (q *Queries) SearchAllMemories(ctx context.Context, arg SearchAllMemoriesPa
 
 const searchTeamMemories = `-- name: SearchTeamMemories :many
 SELECT id, memory_type, content, metadata, created_by, created_at,
-       1 - (embedding <=> $2::vector) AS score
+       (1 - (embedding <=> $2::vector))::float AS score
 FROM team_memory
 WHERE workspace_id = $1
   AND ($3::text[] IS NULL OR memory_type = ANY($3))
@@ -372,7 +372,7 @@ type SearchTeamMemoriesRow struct {
 	Metadata   []byte             `json:"metadata"`
 	CreatedBy  pgtype.UUID        `json:"created_by"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	Score      int32              `json:"score"`
+	Score      float64            `json:"score"`
 }
 
 func (q *Queries) SearchTeamMemories(ctx context.Context, arg SearchTeamMemoriesParams) ([]SearchTeamMemoriesRow, error) {
@@ -410,28 +410,30 @@ func (q *Queries) SearchTeamMemories(ctx context.Context, arg SearchTeamMemories
 
 const updateAgentMemory = `-- name: UpdateAgentMemory :one
 UPDATE agent_memories SET
-    content = COALESCE($3, content),
-    memory_type = COALESCE($4, memory_type),
-    is_private = COALESCE($5, is_private),
-    embedding = COALESCE($6, embedding),
+    content = COALESCE($4, content),
+    memory_type = COALESCE($5, memory_type),
+    is_private = COALESCE($6, is_private),
+    embedding = COALESCE($7, embedding),
     updated_at = now()
-WHERE id = $1 AND agent_id = $2
+WHERE id = $1 AND agent_id = $2 AND workspace_id = $3
 RETURNING id, agent_id, workspace_id, memory_type, content, embedding, metadata, is_private, created_at, updated_at
 `
 
 type UpdateAgentMemoryParams struct {
-	ID         pgtype.UUID     `json:"id"`
-	AgentID    pgtype.UUID     `json:"agent_id"`
-	Content    pgtype.Text     `json:"content"`
-	MemoryType pgtype.Text     `json:"memory_type"`
-	IsPrivate  pgtype.Bool     `json:"is_private"`
-	Embedding  pgvector.Vector `json:"embedding"`
+	ID          pgtype.UUID     `json:"id"`
+	AgentID     pgtype.UUID     `json:"agent_id"`
+	WorkspaceID pgtype.UUID     `json:"workspace_id"`
+	Content     pgtype.Text     `json:"content"`
+	MemoryType  pgtype.Text     `json:"memory_type"`
+	IsPrivate   pgtype.Bool     `json:"is_private"`
+	Embedding   pgvector.Vector `json:"embedding"`
 }
 
 func (q *Queries) UpdateAgentMemory(ctx context.Context, arg UpdateAgentMemoryParams) (AgentMemory, error) {
 	row := q.db.QueryRow(ctx, updateAgentMemory,
 		arg.ID,
 		arg.AgentID,
+		arg.WorkspaceID,
 		arg.Content,
 		arg.MemoryType,
 		arg.IsPrivate,
@@ -455,24 +457,26 @@ func (q *Queries) UpdateAgentMemory(ctx context.Context, arg UpdateAgentMemoryPa
 
 const updateTeamMemory = `-- name: UpdateTeamMemory :one
 UPDATE team_memory SET
-    content = COALESCE($2, content),
-    memory_type = COALESCE($3, memory_type),
-    embedding = COALESCE($4, embedding),
+    content = COALESCE($3, content),
+    memory_type = COALESCE($4, memory_type),
+    embedding = COALESCE($5, embedding),
     updated_at = now()
-WHERE id = $1
+WHERE id = $1 AND workspace_id = $2
 RETURNING id, workspace_id, memory_type, content, embedding, metadata, created_by, created_at, updated_at
 `
 
 type UpdateTeamMemoryParams struct {
-	ID         pgtype.UUID     `json:"id"`
-	Content    pgtype.Text     `json:"content"`
-	MemoryType pgtype.Text     `json:"memory_type"`
-	Embedding  pgvector.Vector `json:"embedding"`
+	ID          pgtype.UUID     `json:"id"`
+	WorkspaceID pgtype.UUID     `json:"workspace_id"`
+	Content     pgtype.Text     `json:"content"`
+	MemoryType  pgtype.Text     `json:"memory_type"`
+	Embedding   pgvector.Vector `json:"embedding"`
 }
 
 func (q *Queries) UpdateTeamMemory(ctx context.Context, arg UpdateTeamMemoryParams) (TeamMemory, error) {
 	row := q.db.QueryRow(ctx, updateTeamMemory,
 		arg.ID,
+		arg.WorkspaceID,
 		arg.Content,
 		arg.MemoryType,
 		arg.Embedding,
