@@ -6,6 +6,7 @@ package db
 
 import (
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/pgvector/pgvector-go"
 )
 
 type ActivityLog struct {
@@ -40,6 +41,19 @@ type Agent struct {
 	ArchivedAt         pgtype.Timestamptz `json:"archived_at"`
 	ArchivedBy         pgtype.UUID        `json:"archived_by"`
 	PreferredRuntime   string             `json:"preferred_runtime"`
+}
+
+type AgentMemory struct {
+	ID          pgtype.UUID        `json:"id"`
+	AgentID     pgtype.UUID        `json:"agent_id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	MemoryType  string             `json:"memory_type"`
+	Content     string             `json:"content"`
+	Embedding   pgvector.Vector    `json:"embedding"`
+	Metadata    []byte             `json:"metadata"`
+	IsPrivate   pgtype.Bool        `json:"is_private"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type AgentRuntime struct {
@@ -301,6 +315,31 @@ type SkillFile struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+type TaskGraphEdge struct {
+	ID         pgtype.UUID        `json:"id"`
+	FromNodeID pgtype.UUID        `json:"from_node_id"`
+	ToNodeID   pgtype.UUID        `json:"to_node_id"`
+	EdgeType   string             `json:"edge_type"`
+	Metadata   []byte             `json:"metadata"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+type TaskGraphNode struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	IssueID     pgtype.UUID        `json:"issue_id"`
+	AgentID     pgtype.UUID        `json:"agent_id"`
+	NodeType    string             `json:"node_type"`
+	Status      string             `json:"status"`
+	Context     []byte             `json:"context"`
+	Result      []byte             `json:"result"`
+	PositionX   pgtype.Float8      `json:"position_x"`
+	PositionY   pgtype.Float8      `json:"position_y"`
+	Depth       pgtype.Int4        `json:"depth"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
 type TaskMessage struct {
 	ID        pgtype.UUID        `json:"id"`
 	TaskID    pgtype.UUID        `json:"task_id"`
@@ -311,6 +350,18 @@ type TaskMessage struct {
 	Input     []byte             `json:"input"`
 	Output    pgtype.Text        `json:"output"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type TeamMemory struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	MemoryType  string             `json:"memory_type"`
+	Content     string             `json:"content"`
+	Embedding   pgvector.Vector    `json:"embedding"`
+	Metadata    []byte             `json:"metadata"`
+	CreatedBy   pgtype.UUID        `json:"created_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type User struct {
