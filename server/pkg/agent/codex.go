@@ -140,41 +140,52 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 		}
 		c.notify("initialized")
 
-		// 2. Start thread
-		threadResult, err := c.request(runCtx, "thread/start", map[string]any{
-			"model":                    nilIfEmpty(opts.Model),
-			"modelProvider":            nil,
-			"profile":                  nil,
-			"cwd":                      opts.Cwd,
-			"approvalPolicy":           nil,
-			"sandbox":                  "workspace-write",
-			"config":                   nil,
-			"baseInstructions":         nil,
-			"developerInstructions":    nilIfEmpty(opts.SystemPrompt),
-			"compactPrompt":            nil,
-			"includeApplyPatchTool":    nil,
-			"experimentalRawEvents":    false,
-			"persistExtendedHistory":   true,
-		})
-		if err != nil {
-			finalStatus = "failed"
-			finalError = fmt.Sprintf("codex thread/start failed: %v", err)
-			resCh <- Result{Status: finalStatus, Error: finalError, DurationMs: time.Since(startTime).Milliseconds()}
-			return
-		}
+		// 2. Start or resume thread
+		var threadID string
+		var turnMethod string
+		if opts.ResumeSessionID != "" {
+			// Resume: use existing thread
+			threadID = opts.ResumeSessionID
+			turnMethod = "turn/continue"
+			b.cfg.Logger.Info("codex resuming thread", "thread_id", threadID)
+		} else {
+			// Start new thread
+			threadResult, err := c.request(runCtx, "thread/start", map[string]any{
+				"model":                    nilIfEmpty(opts.Model),
+				"modelProvider":            nil,
+				"profile":                  nil,
+				"cwd":                      opts.Cwd,
+				"approvalPolicy":           nil,
+				"sandbox":                  "workspace-write",
+				"config":                   nil,
+				"baseInstructions":         nil,
+				"developerInstructions":    nilIfEmpty(opts.SystemPrompt),
+				"compactPrompt":            nil,
+				"includeApplyPatchTool":    nil,
+				"experimentalRawEvents":    false,
+				"persistExtendedHistory":   true,
+			})
+			if err != nil {
+				finalStatus = "failed"
+				finalError = fmt.Sprintf("codex thread/start failed: %v", err)
+				resCh <- Result{Status: finalStatus, Error: finalError, DurationMs: time.Since(startTime).Milliseconds()}
+				return
+			}
 
-		threadID := extractThreadID(threadResult)
-		if threadID == "" {
-			finalStatus = "failed"
-			finalError = "codex thread/start returned no thread ID"
-			resCh <- Result{Status: finalStatus, Error: finalError, DurationMs: time.Since(startTime).Milliseconds()}
-			return
+			threadID = extractThreadID(threadResult)
+			if threadID == "" {
+				finalStatus = "failed"
+				finalError = "codex thread/start returned no thread ID"
+				resCh <- Result{Status: finalStatus, Error: finalError, DurationMs: time.Since(startTime).Milliseconds()}
+				return
+			}
+			turnMethod = "turn/start"
+			b.cfg.Logger.Info("codex thread started", "thread_id", threadID)
 		}
 		c.threadID = threadID
-		b.cfg.Logger.Info("codex thread started", "thread_id", threadID)
 
 		// 3. Send turn and wait for completion
-		_, err = c.request(runCtx, "turn/start", map[string]any{
+		_, err = c.request(runCtx, turnMethod, map[string]any{
 			"threadId": threadID,
 			"input": []map[string]any{
 				{"type": "text", "text": prompt},
@@ -182,7 +193,7 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 		})
 		if err != nil {
 			finalStatus = "failed"
-			finalError = fmt.Sprintf("codex turn/start failed: %v", err)
+			finalError = fmt.Sprintf("codex %s failed: %v", turnMethod, err)
 			resCh <- Result{Status: finalStatus, Error: finalError, DurationMs: time.Since(startTime).Milliseconds()}
 			return
 		}
