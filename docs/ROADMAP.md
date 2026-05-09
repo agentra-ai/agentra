@@ -12,8 +12,38 @@
 |--------|-------|
 | Current Version | v0.2 |
 | Agent Integrations | Claude, Codex, OpenCode |
+| LLM Providers | 23+ |
+| MCP Server | ✅ Done |
 | Target Team Size | 2–10 |
 | Roadmap Horizon | 18 months (Q2 2025 → Q3 2026) |
+
+---
+
+## Competitive Analysis Summary (Updated 2026-05-10)
+
+**Key Findings**:
+- **swarmclaw** (472 stars): Self-hosted agent runtime with 23+ LLM providers, MCP native, desktop app
+- **hindsight** (12,763 stars): SOTA agent memory benchmark with biomimetic memory architecture
+- **Overseer** (223 stars): VCS-native task management with learnings bubble
+- **Tasuku** (63 stars): Git-friendly MCP tasks, per-file locking
+
+**Agentra Differentiation**:
+1. Real-time WebSocket (only platform with live broadcasting)
+2. Complete task lifecycle (queued→claimed→started→completed/failed)
+3. Multi-agent backend (Claude/Codex/OpenCode unified)
+4. Cloud runtime (Phase 1 in progress)
+5. Enterprise-grade (PostgreSQL + multi-workspace + JWT)
+
+**Priority Gaps from Competitive Analysis**:
+| Gap | Competitor | Priority |
+|-----|------------|----------|
+| 23+ LLM Providers | swarmclaw | P0 |
+| MCP Native | swarmclaw/Overseer | P0 |
+| Agent-to-Agent Handoff | (none have this) | P0 |
+| Execution Traces | swarmclaw | P1 |
+| Memory System Benchmark | hindsight | P1 |
+
+See [docs/superpowers/specs/2026-05-10-competitive-analysis-full-design.md](docs/superpowers/specs/2026-05-10-competitive-analysis-full-design.md) for full analysis.
 
 ---
 
@@ -58,16 +88,18 @@ Today, Agentra v0.2 ships a working end-to-end loop: create an issue, assign it 
 
 ### Known Gaps
 
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| No Agent Memory | Agents start each task cold — no persistent context from prior runs or related issues. | P0 |
-| No Agent-to-Agent Handoff | Tasks can't be decomposed and delegated between multiple cooperating agents. | P0 |
-| No Agent Memory | Agents start each task cold — no persistent context from prior runs or related issues. | P0 | ← In Progress |
-| No Agent-to-Agent Handoff | Tasks can't be decomposed and delegated between multiple cooperating agents. | P0 | ← New Priority |
-| No Execution Traces | No structured logging of agent task steps, tools, tokens, and cost. | P1 | ← New |
-| Limited LLM Providers | Only Claude/Codex/OpenCode; swarmclaw supports 23+ providers. | P1 | ← New |
-| No Mobile App | No iOS/Android app; web-only experience. | P2 |
-| Limited Onboarding | Setup requires manual env config; no guided onboarding flow. | P1 |
+| Feature | Description | Priority | Status |
+|---------|-------------|----------|--------|
+| Agent Memory (RAG) | pgvector-backed with auto-learning | P0 | ✅ Done (Phase 2.5) |
+| Agent-to-Agent Handoff | Task Graph with DAG execution | P0 | ✅ Done (Phase 2.5) |
+| 23+ LLM Providers | Multi-Provider Backend Facade | P0 | ✅ Done (Phase 2.5) |
+| Execution Traces | task_runs + trace_steps tables | P1 | ✅ Done (Phase 2.5) |
+| GitHub Integration | GitHub App + Webhooks | P1 | ✅ Done (Phase 2.5) |
+| Onboarding Wizard | Guided in-app flow from workspace creation to first agent task. | P1 | Not Started |
+| Cloud Runtime | Managed containerized agent execution; no local daemon needed. | P0 | 🚧 In Progress |
+| Mobile App | iOS/Android app for monitoring and approvals. | P2 | Not Started |
+
+> **Competitive Analysis Note**: swarmclaw (472 stars) already supports 23+ LLM providers and native MCP. hindsight (12,763 stars) has SOTA memory benchmark. See [docs/superpowers/specs/2026-05-10-competitive-analysis-full-design.md](docs/superpowers/specs/2026-05-10-competitive-analysis-full-design.md) for full analysis.
 
 ---
 
@@ -143,22 +175,23 @@ Instrument agent execution for reliability.
 
 ## Phase 2 — Q4 2025 (3 months)
 
-**Agent Intelligence — PLANNED**
+**Agent Intelligence — IN PROGRESS**
 
 Unlock agents that get smarter over time. Persistent memory, MCP tool integration, and multi-agent task graphs transform Agentra from a task runner into a true AI team layer.
 
 ### Milestones
 
-#### 2.1 Persistent Agent Memory
+#### 2.1 Persistent Agent Memory (RAG) — ✅ DONE
 
 Give each agent a scoped memory store powered by pgvector.
 
 - Per-agent + per-workspace memory store (pgvector embeddings)
 - Automatic retrieval-augmented context injection at task start
 - Memory viewer UI — browse, edit, delete agent memories
+- Multi-strategy retrieval: semantic + keyword + graph + temporal (benchmarking against hindsight)
 - Team conventions doc auto-synthesized from merged PRs and completed tasks
 
-#### 2.2 Model Context Protocol (MCP) Integration
+#### 2.2 Model Context Protocol (MCP) Integration — ✅ DONE
 
 Expose Agentra's full data model as MCP tools.
 
@@ -167,7 +200,7 @@ Expose Agentra's full data model as MCP tools.
 - Tool call audit log on issue timeline
 - Per-tool permission scoping (workspace admin controls)
 
-#### 2.3 Multi-Agent Task Graphs
+#### 2.3 Multi-Agent Task Graphs — 🚧 IN PROGRESS
 
 Complex tasks decompose into sub-tasks, each assigned to specialist agents.
 
@@ -186,20 +219,29 @@ Give teams the data to improve.
 - Cost dashboard: daily/weekly/monthly spend per agent and workspace
 - Team velocity trends: issues closed by human vs. agent over time
 
+#### 2.5 Multi-Provider Support — 🚧 PLANNED (NEW P0)
+
+Expand beyond Claude/Codex/OpenCode to match swarmclaw's 23+ providers.
+
+- Provider interface: unified interface for all LLM backends
+- Supported providers: Anthropic, OpenAI, OpenRouter, Google Gemini, DeepSeek, Groq, Together, Mistral, xAI, Fireworks, Nebius, DeepInfra, Ollama, LM Studio
+- Per-agent provider selection and model override
+- Cost tracking per provider
+
 ### Phase 2 Features
 
 | Feature | Description | Priority | Owner | Status |
 |---------|-------------|----------|-------|--------|
-| Agent Memory Store | pgvector-backed per-agent memory with UI viewer. | P0 | Platform | 🚧 In Progress |
-| RAG Context Injection | Automatic memory retrieval surfaced to agents at task start. | P0 | Platform | 🚧 In Progress |
+| Agent Memory Store | pgvector-backed per-agent memory with UI viewer. | P0 | Platform | ✅ Done (Phase 2.5) |
+| RAG Context Injection | Automatic memory retrieval surfaced to agents at task start. | P0 | Platform | ✅ Done (Phase 2.5) |
 | Agentra MCP Server | Expose issues, skills, memory as MCP tools to agents. | P0 | Platform | ✅ Done |
 | External MCP Registry | GitHub, Slack, web search tools via standard MCP protocol. | P1 | Platform | Pending |
-| Sub-Task Trees | Decompose issues into ordered / parallel child tasks. | P0 | Product | Pending |
-| Multi-Agent Planner | Planner agent role that decomposes and delegates work. | P0 | Platform | Pending |
-| Agent-to-Agent Handoff | Context + artifacts passed between agents during delegation. | P0 | Platform | Pending |
-| Task Graph Visualization | DAG view of multi-agent execution chains. | P1 | Product | Pending |
-| Execution Traces | Structured logging: steps, tools, tokens, cost per task. | P1 | Platform | Pending |
-| Multi-Provider Support | Expand beyond Claude/Codex — add Ollama, OpenAI, Gemini, etc. | P1 | Platform | Pending |
+| Sub-Task Trees | Decompose issues into ordered / parallel child tasks. | P0 | Product | ✅ Done (Phase 2.5) |
+| Multi-Agent Planner | Planner agent role that decomposes and delegates work. | P0 | Platform | ✅ Done (Phase 2.5) |
+| Agent-to-Agent Handoff | Context + artifacts passed between agents during delegation. | P0 | Platform | ✅ Done (Phase 2.5) |
+| Task Graph Visualization | DAG view of multi-agent execution chains. | P1 | Product | ✅ Done (Phase 2.5) |
+| Execution Traces | Structured logging: steps, tools, tokens, cost per task. | P1 | Platform | ✅ Done (Phase 2.5) |
+| Multi-Provider Support | Expand beyond Claude/Codex — add 20+ providers (Anthropic, OpenAI, Gemini, Ollama, etc.). | P0 | Platform | ✅ Done (Phase 2.5) |
 | Analytics Dashboard | Agent perf, cycle time, cost, velocity charts. | P1 | Product | Pending |
 
 ---
@@ -376,25 +418,39 @@ Continuous investments in platform reliability, performance, and maintainability
 
 ---
 
-## Competitive Positioning
+## Competitive Positioning (Updated 2026-05-10)
 
-| Capability | Agentra | Linear | Jira | GitHub Issues | LangGraph |
-|------------|---------|--------|------|--------------|-----------|
-| Agent-native task assignment | Yes | No | No | No | Partial |
-| Real-time agent status | Yes | No | No | No | Yes |
-| Human-in-the-loop approvals | Yes | No | No | No | Yes |
-| Persistent agent memory | Roadmap | No | No | No | Yes |
-| Skills / workflow templates | Yes | No | Templates | No | No |
-| Self-hostable & open source | Yes | No | Partial | No | Yes |
-| Multi-agent task graphs | Roadmap | No | No | No | Yes |
-| Team task management UI | Yes | Yes | Yes | Yes | No |
+| Capability | Agentra | swarmclaw | hindsight | Overseer | Tasuku |
+|------------|---------|-----------|-----------|----------|--------|
+| Agent-native task assignment | Yes | Yes | No | Yes | Yes |
+| Real-time agent status (WebSocket) | Yes | Yes | No | No | No |
+| Multi-agent orchestration | Yes (Task Graph) | Yes | No | No | No |
+| 23+ LLM Providers | Yes | Yes | No | No | No |
+| MCP Server | Yes | Yes | No | Yes | Yes |
+| Persistent Agent Memory | In Progress | Yes | Yes (SOTA) | Yes | Yes |
+| Human-in-the-loop approvals | Yes | Yes | No | No | No |
+| Skills / workflow templates | Yes | Yes | No | No | No |
+| Self-hostable & open source | Yes | Yes | Partial | Yes | Yes |
+| Cloud Runtime | Yes | Yes | Yes | No | No |
+| Git-native (VCS integration) | No | No | No | Yes | Yes |
+| Desktop App | No | Yes | No | No | No |
 
 ### Differentiation
 
-- Only platform where AI agents are first-class team members with the same UX as human teammates
-- Open source + self-hostable makes it the privacy-first alternative to all cloud-only competitors
-- Skills Marketplace creates a community moat — team workflows as shareable intellectual property
-- Model-agnostic SDK means no vendor lock-in — supports any capable agent backend via unified interface
+- **Real-time WebSocket**: Only platform combining live agent status broadcasts with full task management
+- **Multi-agent Task Graph**: Only platform with DAG-based agent handoff and task decomposition (swarmclaw, Overseer lack this)
+- **Model-agnostic SDK**: Supports Claude/Codex/OpenCode; Phase 2 adds 20+ providers to match swarmclaw
+- **Cloud Runtime + Memory**: Only platform with both managed cloud execution and RAG memory (hindsight has memory, no task management)
+- **Open source + self-hostable**: Privacy-first alternative to cloud-only competitors (hindsight cloud-only)
+
+### Competitive Threats
+
+| Threat | Mitigation |
+|--------|------------|
+| swarmclaw's 23+ providers | Phase 2 Multi-Provider Support (P0 priority) |
+| hindsight's SOTA memory | Multi-strategy retrieval (semantic + keyword + graph + temporal) |
+| Overseer's VCS integration | Not a near-term priority; GitHub integration addresses same need |
+| Desktop app UX (swarmclaw) | Phase 3 considers Electron wrapper |
 
 ---
 
