@@ -62,9 +62,10 @@ Today, Agentra v0.2 ships a working end-to-end loop: create an issue, assign it 
 |---------|-------------|----------|
 | No Agent Memory | Agents start each task cold — no persistent context from prior runs or related issues. | P0 |
 | No Agent-to-Agent Handoff | Tasks can't be decomposed and delegated between multiple cooperating agents. | P0 |
-| No Analytics / Insights | No visibility into agent success rates, cycle times, cost, or team velocity. | P1 |
-| No Cloud Runtime | Only local daemon supported; no managed cloud execution environment. | P1 |
-| No MCP Integration | Model Context Protocol not yet exposed — agents can't dynamically call tools. | P1 |
+| No Agent Memory | Agents start each task cold — no persistent context from prior runs or related issues. | P0 | ← In Progress |
+| No Agent-to-Agent Handoff | Tasks can't be decomposed and delegated between multiple cooperating agents. | P0 | ← New Priority |
+| No Execution Traces | No structured logging of agent task steps, tools, tokens, and cost. | P1 | ← New |
+| Limited LLM Providers | Only Claude/Codex/OpenCode; swarmclaw supports 23+ providers. | P1 | ← New |
 | No Mobile App | No iOS/Android app; web-only experience. | P2 |
 | Limited Onboarding | Setup requires manual env config; no guided onboarding flow. | P1 |
 
@@ -187,16 +188,19 @@ Give teams the data to improve.
 
 ### Phase 2 Features
 
-| Feature | Description | Priority | Owner |
-|---------|-------------|----------|-------|
-| Agent Memory Store | pgvector-backed per-agent memory with UI viewer. | P0 | Platform |
-| RAG Context Injection | Automatic memory retrieval surfaced to agents at task start. | P0 | Platform |
-| Agentra MCP Server | Expose issues, skills, memory as MCP tools to agents. | P0 | Platform |
-| External MCP Registry | GitHub, Slack, web search tools via standard MCP protocol. | P1 | Platform |
-| Sub-Task Trees | Decompose issues into ordered / parallel child tasks. | P0 | Product |
-| Multi-Agent Planner | Planner agent role that decomposes and delegates work. | P0 | Platform |
-| Task Graph Visualization | DAG view of multi-agent execution chains. | P1 | Product |
-| Analytics Dashboard | Agent perf, cycle time, cost, velocity charts. | P1 | Product |
+| Feature | Description | Priority | Owner | Status |
+|---------|-------------|----------|-------|--------|
+| Agent Memory Store | pgvector-backed per-agent memory with UI viewer. | P0 | Platform | 🚧 In Progress |
+| RAG Context Injection | Automatic memory retrieval surfaced to agents at task start. | P0 | Platform | 🚧 In Progress |
+| Agentra MCP Server | Expose issues, skills, memory as MCP tools to agents. | P0 | Platform | ✅ Done |
+| External MCP Registry | GitHub, Slack, web search tools via standard MCP protocol. | P1 | Platform | Pending |
+| Sub-Task Trees | Decompose issues into ordered / parallel child tasks. | P0 | Product | Pending |
+| Multi-Agent Planner | Planner agent role that decomposes and delegates work. | P0 | Platform | Pending |
+| Agent-to-Agent Handoff | Context + artifacts passed between agents during delegation. | P0 | Platform | Pending |
+| Task Graph Visualization | DAG view of multi-agent execution chains. | P1 | Product | Pending |
+| Execution Traces | Structured logging: steps, tools, tokens, cost per task. | P1 | Platform | Pending |
+| Multi-Provider Support | Expand beyond Claude/Codex — add Ollama, OpenAI, Gemini, etc. | P1 | Platform | Pending |
+| Analytics Dashboard | Agent perf, cycle time, cost, velocity charts. | P1 | Product | Pending |
 
 ---
 

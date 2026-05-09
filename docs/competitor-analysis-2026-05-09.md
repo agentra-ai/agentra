@@ -314,6 +314,29 @@ User Input → Supervisor Agent → Agent Registry
 
 ---
 
+### 7.4 新竞品发现 (2026-05)
+
+| 项目 | Stars | 关键特性 |
+|------|-------|----------|
+| [swarmclaw](https://github.com/swarmclawai/swarmclaw) | 471 | 自托管 runtime, MCP tools, agent memory, 23+ LLM providers |
+| [hindsight](https://github.com/vectorize-io/hindsight) | 12k | Agent Memory That Learns |
+| [dispatch](https://github.com/rezzedai/dispatch) | - | MCP task server for Claude Code |
+| [mem0-mcp](https://github.com/coleam00/mcp-mem0) | - | MCP server for long term agent memory |
+| [agentmemo-mcp](https://github.com/andrewpetecoleman-cloud/agentmemo-mcp) | - | MCP + approval gateway |
+
+**swarmclaw 是最强竞品** - 与 Agentra 高度重叠 (self-hosted, multi-agent, MCP tools)，且已有 agent memory 内置，支持 23+ LLM providers。
+
+### 7.5 建议的改进方向
+
+| 优先级 | 改进 | 理由 |
+|--------|------|------|
+| P0 | **Agent-to-Agent Handoff** | 竞品普遍缺失，任务分解是 multi-agent 的核心 |
+| P0 | **23+ LLM Providers** | swarmclaw 已实现，Agentra 目前仅支持 Claude/Codex/OpenCode |
+| P1 | **Execution Traces** | 结构性日志，调试和成本分析的基础 |
+| P1 | **Memory → MCP 暴露** | Memory tools 通过 MCP Server 暴露给 agents |
+
+---
+
 ## 八、参考资料
 
 - [Agentra ROADMAP.md](ROADMAP.md)
@@ -323,3 +346,6 @@ User Input → Supervisor Agent → Agent Registry
 - [Beekeeper - GitHub](https://github.com/i-am-bee/beekeeper)
 - [Moo Tasks - GitHub](https://github.com/dizlexic/moo-tasks)
 - [AI-teams-controller - GitHub](https://github.com/hungson175/AI-teams-controller-public)
+- [swarmclaw - GitHub](https://github.com/swarmclawai/swarmclaw)
+- [hindsight - GitHub](https://github.com/vectorize-io/hindsight)
+- [dispatch - GitHub](https://github.com/rezzedai/dispatch)
