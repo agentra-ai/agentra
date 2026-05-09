@@ -133,6 +133,16 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 	r.Post("/auth/verify-code", h.VerifyCode)
 	r.Get("/api/files/{key}", h.GetPublicFile)
 
+	// GitHub OAuth (public)
+	githubOAuth := handler.NewGitHubOAuthHandler(
+		os.Getenv("GITHUB_CLIENT_ID"),
+		os.Getenv("GITHUB_CLIENT_SECRET"),
+		os.Getenv("GITHUB_REDIRECT_URL"),
+	)
+	r.Route("/github/oauth", func(r chi.Router) {
+		githubOAuth.RegisterRoutes(r)
+	})
+
 	// Daemon API routes (all require a valid token)
 	r.Route("/api/daemon", func(r chi.Router) {
 		r.Use(middleware.Auth(queries))
