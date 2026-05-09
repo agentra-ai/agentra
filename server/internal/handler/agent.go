@@ -30,6 +30,9 @@ type AgentResponse struct {
 	Skills             []SkillResponse `json:"skills"`
 	Tools              any             `json:"tools"`
 	Triggers           any             `json:"triggers"`
+	Provider           string          `json:"provider"`
+	ModelOverride      *string         `json:"model_override"`
+	ProviderConfig     any             `json:"provider_config"`
 	CreatedAt          string          `json:"created_at"`
 	UpdatedAt          string          `json:"updated_at"`
 	ArchivedAt         *string         `json:"archived_at"`
@@ -61,6 +64,14 @@ func agentToResponse(a db.Agent) AgentResponse {
 		triggers = []any{}
 	}
 
+	var providerConfig any
+	if a.ProviderConfig != nil {
+		json.Unmarshal(a.ProviderConfig, &providerConfig)
+	}
+	if providerConfig == nil {
+		providerConfig = map[string]any{}
+	}
+
 	return AgentResponse{
 		ID:                 uuidToString(a.ID),
 		WorkspaceID:        uuidToString(a.WorkspaceID),
@@ -78,6 +89,9 @@ func agentToResponse(a db.Agent) AgentResponse {
 		Skills:             []SkillResponse{},
 		Tools:              tools,
 		Triggers:           triggers,
+		Provider:           a.Provider,
+		ModelOverride:      textToPtr(a.ModelOverride),
+		ProviderConfig:     providerConfig,
 		CreatedAt:          timestampToString(a.CreatedAt),
 		UpdatedAt:          timestampToString(a.UpdatedAt),
 		ArchivedAt:         timestampToPtr(a.ArchivedAt),
@@ -226,6 +240,9 @@ type CreateAgentRequest struct {
 	MaxConcurrentTasks int32   `json:"max_concurrent_tasks"`
 	Tools              any     `json:"tools"`
 	Triggers           any     `json:"triggers"`
+	Provider           string  `json:"provider"`
+	ModelOverride      string  `json:"model_override"`
+	ProviderConfig     any     `json:"provider_config"`
 }
 
 func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
@@ -281,6 +298,11 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		triggers = defaultAgentTriggers()
 	}
 
+	providerConfig, _ := json.Marshal(req.ProviderConfig)
+	if req.ProviderConfig == nil {
+		providerConfig = []byte("{}")
+	}
+
 	agent, err := h.Queries.CreateAgent(r.Context(), db.CreateAgentParams{
 		WorkspaceID:        parseUUID(workspaceID),
 		Name:               req.Name,
@@ -295,6 +317,9 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		OwnerID:            parseUUID(ownerID),
 		Tools:              tools,
 		Triggers:           triggers,
+		Provider:           req.Provider,
+		ModelOverride:       req.ModelOverride,
+		ProviderConfig:     providerConfig,
 	})
 	if err != nil {
 		slog.Warn("create agent failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID)...)
@@ -326,6 +351,9 @@ type UpdateAgentRequest struct {
 	MaxConcurrentTasks *int32  `json:"max_concurrent_tasks"`
 	Tools              any     `json:"tools"`
 	Triggers           any     `json:"triggers"`
+	Provider           *string `json:"provider"`
+	ModelOverride      *string `json:"model_override"`
+	ProviderConfig     any     `json:"provider_config"`
 }
 
 // canManageAgent checks whether the current user can update or archive an agent.
@@ -409,6 +437,16 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	if req.Triggers != nil {
 		triggers, _ := json.Marshal(req.Triggers)
 		params.Triggers = triggers
+	}
+	if req.Provider != nil {
+		params.Provider = pgtype.Text{String: *req.Provider, Valid: true}
+	}
+	if req.ModelOverride != nil {
+		params.ModelOverride = pgtype.Text{String: *req.ModelOverride, Valid: true}
+	}
+	if req.ProviderConfig != nil {
+		providerConfig, _ := json.Marshal(req.ProviderConfig)
+		params.ProviderConfig = providerConfig
 	}
 
 	agent, err := h.Queries.UpdateAgent(r.Context(), params)

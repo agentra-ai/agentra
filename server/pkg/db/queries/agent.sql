@@ -20,8 +20,8 @@ WHERE id = $1 AND workspace_id = $2;
 INSERT INTO agent (
     workspace_id, name, description, avatar_url, runtime_mode,
     runtime_config, runtime_id, visibility, max_concurrent_tasks, owner_id,
-    tools, triggers, instructions
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    tools, triggers, instructions, provider, model_override, provider_config
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 RETURNING *;
 
 -- name: UpdateAgent :one
@@ -38,6 +38,9 @@ UPDATE agent SET
     tools = COALESCE(sqlc.narg('tools'), tools),
     triggers = COALESCE(sqlc.narg('triggers'), triggers),
     instructions = COALESCE(sqlc.narg('instructions'), instructions),
+    provider = COALESCE(sqlc.narg('provider'), provider),
+    model_override = COALESCE(sqlc.narg('model_override'), model_override),
+    provider_config = COALESCE(sqlc.narg('provider_config'), provider_config),
     updated_at = now()
 WHERE id = $1
 RETURNING *;
