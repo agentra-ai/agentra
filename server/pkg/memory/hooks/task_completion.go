@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/agentra-ai/agentra/server/pkg/memory"
-	"github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
 
 type TaskCompletionHook struct {
@@ -17,7 +17,7 @@ func NewTaskCompletionHook(ms *memory.MemoryService) *TaskCompletionHook {
 }
 
 // OnTaskComplete extracts learnings from completed task and stores them.
-func (h *TaskCompletionHook) OnTaskComplete(ctx context.Context, task *db.AgentTaskQueue, result string) error {
+func (h *TaskCompletionHook) OnTaskComplete(ctx context.Context, taskAgentID, taskIssueID uuid.UUID, workspaceID string, result string) error {
 	// Skip if no result content
 	if result == "" {
 		return nil
@@ -39,8 +39,8 @@ func (h *TaskCompletionHook) OnTaskComplete(ctx context.Context, task *db.AgentT
 		content := strings.Join(learnings, "; ")
 		_, err := h.memorySvc.StoreAgentMemory(
 			ctx,
-			task.AgentID.String(),
-			task.WorkspaceID.String(),
+			taskAgentID.String(),
+			workspaceID,
 			memory.MemoryTypeLearning,
 			content,
 			true,
@@ -53,8 +53,8 @@ func (h *TaskCompletionHook) OnTaskComplete(ctx context.Context, task *db.AgentT
 	// Also store the raw task result as task_result type
 	_, err := h.memorySvc.StoreAgentMemory(
 		ctx,
-		task.AgentID.String(),
-		task.WorkspaceID.String(),
+		taskAgentID.String(),
+		workspaceID,
 		memory.MemoryTypeTaskResult,
 		truncate(result, 1000),
 		true,
