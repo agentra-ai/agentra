@@ -1,0 +1,31 @@
+{
+  "name": "create-agentra",
+  "version": "1.0.0",
+  "description": "Create a new Agentra project in seconds",
+  "type": "module",
+  "bin": {
+    "create-agentra": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.7.0",
+    "kolorist": "^1.8.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "agentra",
+    "ai",
+    "task-management",
+    "claude",
+    "agent"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agentra-ai/agentra"
+  }
+}

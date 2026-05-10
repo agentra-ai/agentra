@@ -1,0 +1,48 @@
+#!/usr/bin/env node
+// post-merge: auto-transition issue to Done on PR merge
+
+const { execSync } = require('child_process');
+
+try {
+  const mergeMsg = execSync('git log -1 --format="%s%n%b" HEAD', { encoding: 'utf8' });
+  const prMatch = mergeMsg.match(/#(\d+)/);
+  if (!prMatch) process.exit(0);
+
+  const prNumber = prMatch[1];
+  let prData;
+  try {
+    prData = JSON.parse(execSync(
+      `gh pr view ${prNumber} --json number,url,state,title,body,mergedAt,headRefName`,
+      { encoding: 'utf8' }
+    ));
+  } catch (e) {
+    process.exit(0); // not a PR context or gh not available
+  }
+
+  const allText = [prData.title, prData.body, prData.headRefName].join(' ');
+  const issueMatch = allText.match(/(AGENTRA-\d+)/i);
+  if (!issueMatch) process.exit(0);
+
+  const apiUrl = process.env.AGENTRA_API_URL || 'http://localhost:8080';
+  const token = process.env.AGENTRA_API_TOKEN;
+
+  const body = JSON.stringify({
+    issueId: issueMatch[1].toUpperCase(),
+    prNumber,
+    prUrl: prData.url,
+    prState: prData.state.toLowerCase(),
+    prTitle: prData.title,
+    mergedAt: prData.mergedAt || null,
+  });
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  fetch(`${apiUrl}/api/git/link-pr`, {
+    method: 'POST',
+    headers,
+    body,
+  }).catch(() => {});
+} catch (e) {
+  process.exit(0);
+}

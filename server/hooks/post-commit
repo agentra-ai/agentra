@@ -1,0 +1,32 @@
+#!/usr/bin/env node
+// post-commit: link commit SHA to Agentra issue
+
+const { execSync } = require('child_process');
+
+try {
+  const branch = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
+  const match = branch.match(/(AGENTRA-\d+)/i);
+  if (!match) process.exit(0);
+
+  const taskId = match[1].toUpperCase();
+  const logOutput = execSync('git log -1 --format="%H %s" HEAD', { encoding: 'utf8' }).trim();
+  const spaceIdx = logOutput.indexOf(' ');
+  const sha = logOutput.substring(0, spaceIdx);
+  const message = logOutput.substring(spaceIdx + 1);
+
+  const apiUrl = process.env.AGENTRA_API_URL || 'http://localhost:8080';
+  const token = process.env.AGENTRA_API_TOKEN;
+
+  const body = JSON.stringify({ issueId: taskId, sha, message, branch });
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  fetch(`${apiUrl}/api/git/link-commit`, {
+    method: 'POST',
+    headers,
+    body,
+  }).catch(() => {}); // fire-and-forget, never block
+} catch (e) {
+  process.exit(0);
+}

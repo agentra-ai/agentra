@@ -1,0 +1,24 @@
+#!/usr/bin/env node
+// prepare-commit-msg: auto-prepend [AGENTRA-123] to commit message
+
+const { execSync } = require('child_process');
+
+try {
+  const branch = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
+  const match = branch.match(/(AGENTRA-\d+)/i);
+  if (!match) process.exit(0);
+
+  const taskId = match[1].toUpperCase();
+  const msgFile = process.argv[2];
+  const commitSource = process.argv[3]; // merge|squash|commit|template
+
+  if (['merge', 'squash'].includes(commitSource)) process.exit(0);
+
+  const fs = require('fs');
+  let msg = fs.readFileSync(msgFile, 'utf8');
+  if (msg.startsWith(`[${taskId}]`)) process.exit(0);
+
+  fs.writeFileSync(msgFile, `[${taskId}] ${msg}`);
+} catch (e) {
+  process.exit(0); // never block git
+}
