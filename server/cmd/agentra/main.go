@@ -12,6 +12,16 @@ var (
 	commit  = "unknown"
 )
 
+var gitCmd = &cobra.Command{
+	Use:   "git",
+	Short: "Git integration commands",
+	Long:  `Git integration for Agentra.
+
+Commands:
+  hooks    Install or uninstall git hooks
+`,
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "agentra",
 	Short: "Agentra CLI — local agent runtime and management tool",
@@ -60,6 +70,7 @@ func init() {
 	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(skillCmd)
 	rootCmd.AddCommand(runtimeCmd)
+	rootCmd.AddCommand(gitCmd)
 }
 
 func main() {
