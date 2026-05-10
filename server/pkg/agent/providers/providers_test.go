@@ -4,8 +4,6 @@ import (
 	"context"
 	"net/http"
 	"testing"
-
-	"github.com/agentra-ai/agentra/server/pkg/agent"
 )
 
 func TestAnthropicProvider_Name(t *testing.T) {
@@ -170,7 +168,7 @@ func TestProviderInterface_ExecuteReturnsSession(t *testing.T) {
 func TestTokenUsageInResult(t *testing.T) {
 	t.Parallel()
 	// Verify TokenUsage struct has all expected fields
-	usage := &agent.TokenUsage{
+	usage := &TokenUsage{
 		InputTokens:     100,
 		OutputTokens:    50,
 		CacheReadTokens: 25,

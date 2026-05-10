@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agentra-ai/agentra/server/pkg/agent"
 )
 
 const openAIDefaultEndpoint = "https://api.openai.com/v1/chat/completions"
@@ -66,7 +65,7 @@ func (p *OpenAIProvider) Supports(model Model) bool {
 }
 
 // Execute runs a prompt via the OpenAI Chat Completions API.
-func (p *OpenAIProvider) Execute(ctx context.Context, prompt string, opts ExecOptions) (*agent.Session, error) {
+func (p *OpenAIProvider) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
 	model := opts.Model
 	if model == "" {
 		model = "gpt-4o-mini"
@@ -79,8 +78,8 @@ func (p *OpenAIProvider) Execute(ctx context.Context, prompt string, opts ExecOp
 
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 
-	msgCh := make(chan agent.Message, 256)
-	resCh := make(chan agent.Result, 1)
+	msgCh := make(chan Message, 256)
+	resCh := make(chan Result, 1)
 
 	go func() {
 		defer cancel()
@@ -101,7 +100,7 @@ func (p *OpenAIProvider) Execute(ctx context.Context, prompt string, opts ExecOp
 
 		body, err := json.Marshal(reqBody)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
 			return
 		}
 
@@ -112,7 +111,7 @@ func (p *OpenAIProvider) Execute(ctx context.Context, prompt string, opts ExecOp
 
 		req, err := http.NewRequestWithContext(runCtx, "POST", endpoint, strings.NewReader(string(body)))
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
 			return
 		}
 
@@ -122,7 +121,7 @@ func (p *OpenAIProvider) Execute(ctx context.Context, prompt string, opts ExecOp
 		client := &http.Client{Timeout: timeout}
 		resp, err := client.Do(req)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
 			return
 		}
 		defer resp.Body.Close()
@@ -130,18 +129,18 @@ func (p *OpenAIProvider) Execute(ctx context.Context, prompt string, opts ExecOp
 		// Read body once into buffer, then handle both error and success cases
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("read response: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("read response: %v", err)}
 			return
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, string(bodyBytes))}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, truncateErrorBody(bodyBytes))}
 			return
 		}
 
 		var openaiResp openaiResponse
 		if err := json.Unmarshal(bodyBytes, &openaiResp); err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("parse response: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("parse response: %v", err)}
 			return
 		}
 
@@ -150,16 +149,16 @@ func (p *OpenAIProvider) Execute(ctx context.Context, prompt string, opts ExecOp
 		for _, choice := range openaiResp.Choices {
 			if choice.Message.Content != "" {
 				output.WriteString(choice.Message.Content)
-				trySend(msgCh, agent.Message{Type: agent.MessageText, Content: choice.Message.Content})
+				trySend(msgCh, Message{Type: MessageText, Content: choice.Message.Content})
 			}
 		}
 
-		tokenUsage := &agent.TokenUsage{
+		tokenUsage := &TokenUsage{
 			InputTokens:  int64(openaiResp.Usage.PromptTokens),
 			OutputTokens: int64(openaiResp.Usage.CompletionTokens),
 		}
 
-		resCh <- agent.Result{
+		resCh <- Result{
 			Status:     "completed",
 			Output:     output.String(),
 			DurationMs: duration.Milliseconds(),
@@ -168,7 +167,7 @@ func (p *OpenAIProvider) Execute(ctx context.Context, prompt string, opts ExecOp
 		}
 	}()
 
-	return &agent.Session{Messages: msgCh, Result: resCh}, nil
+	return &Session{Messages: msgCh, Result: resCh}, nil
 }
 
 // OpenAI request/response types
@@ -201,7 +200,7 @@ type openaiResponse struct {
 }
 
 // StreamExecute streams results via SSE from OpenAI.
-func (p *OpenAIProvider) StreamExecute(ctx context.Context, prompt string, opts ExecOptions) (*agent.Session, error) {
+func (p *OpenAIProvider) StreamExecute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
 	model := opts.Model
 	if model == "" {
 		model = "gpt-4o-mini"
@@ -214,8 +213,8 @@ func (p *OpenAIProvider) StreamExecute(ctx context.Context, prompt string, opts 
 
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 
-	msgCh := make(chan agent.Message, 256)
-	resCh := make(chan agent.Result, 1)
+	msgCh := make(chan Message, 256)
+	resCh := make(chan Result, 1)
 
 	go func() {
 		defer cancel()
@@ -237,7 +236,7 @@ func (p *OpenAIProvider) StreamExecute(ctx context.Context, prompt string, opts 
 
 		body, err := json.Marshal(reqBody)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
 			return
 		}
 
@@ -248,7 +247,7 @@ func (p *OpenAIProvider) StreamExecute(ctx context.Context, prompt string, opts 
 
 		req, err := http.NewRequestWithContext(runCtx, "POST", endpoint, strings.NewReader(string(body)))
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
 			return
 		}
 
@@ -258,14 +257,14 @@ func (p *OpenAIProvider) StreamExecute(ctx context.Context, prompt string, opts 
 		client := &http.Client{Timeout: timeout}
 		resp, err := client.Do(req)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
 			return
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			bodyBytes, _ := io.ReadAll(resp.Body)
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, string(bodyBytes))}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, truncateErrorBody(bodyBytes))}
 			return
 		}
 
@@ -298,7 +297,7 @@ func (p *OpenAIProvider) StreamExecute(ctx context.Context, prompt string, opts 
 			for _, choice := range event.Choices {
 				if choice.Delta.Content != "" {
 					output.WriteString(choice.Delta.Content)
-					trySend(msgCh, agent.Message{Type: agent.MessageText, Content: choice.Delta.Content})
+					trySend(msgCh, Message{Type: MessageText, Content: choice.Delta.Content})
 				}
 			}
 			if event.ID != "" {
@@ -307,7 +306,7 @@ func (p *OpenAIProvider) StreamExecute(ctx context.Context, prompt string, opts 
 		}
 
 		duration := time.Since(startTime)
-		resCh <- agent.Result{
+		resCh <- Result{
 			Status:     "completed",
 			Output:     output.String(),
 			DurationMs: duration.Milliseconds(),
@@ -315,7 +314,7 @@ func (p *OpenAIProvider) StreamExecute(ctx context.Context, prompt string, opts 
 		}
 	}()
 
-	return &agent.Session{Messages: msgCh, Result: resCh}, nil
+	return &Session{Messages: msgCh, Result: resCh}, nil
 }
 
 type openaiStreamEvent struct {

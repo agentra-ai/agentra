@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	db "github.com/agentra-ai/agentra/pkg/db/generated"
+	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
 
 type SyncService struct {

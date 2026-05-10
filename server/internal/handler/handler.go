@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
+	"github.com/agentra-ai/agentra/pkg/taskgraph"
 	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/handlerutil"
@@ -50,21 +51,23 @@ type dbExecutor interface {
 }
 
 type Handler struct {
-	Queries      *db.Queries
-	DB           dbExecutor
-	TxStarter    txStarter
-	Hub          *realtime.Hub
-	Bus          *events.Bus
-	TaskService  *service.TaskService
-	TraceService *service.TraceService
-	EmailService *service.EmailService
-	PingStore    *PingStore
-	UpdateStore  *UpdateStore
-	Storage      storage.FileStorage
-	CFSigner     *auth.CloudFrontSigner
+	Queries        *db.Queries
+	DB             dbExecutor
+	TxStarter      txStarter
+	Hub            *realtime.Hub
+	Bus            *events.Bus
+	TaskService    *service.TaskService
+	TraceService   *service.TraceService
+	EmailService   *service.EmailService
+	GraphStore     *taskgraph.GraphStore
+	PlannerService *service.PlannerService
+	PingStore      *PingStore
+	UpdateStore    *UpdateStore
+	Storage        storage.FileStorage
+	CFSigner       *auth.CloudFrontSigner
 }
 
-func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *events.Bus, emailService *service.EmailService, store storage.FileStorage, cfSigner *auth.CloudFrontSigner) *Handler {
+func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *events.Bus, graphStore *taskgraph.GraphStore, plannerSvc *service.PlannerService, emailService *service.EmailService, store storage.FileStorage, cfSigner *auth.CloudFrontSigner) *Handler {
 	var executor dbExecutor
 	if candidate, ok := txStarter.(dbExecutor); ok {
 		executor = candidate
@@ -74,18 +77,20 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 	taskSvc := service.NewTaskService(queries, hub, bus, traceSvc)
 
 	return &Handler{
-		Queries:      queries,
-		DB:           executor,
-		TxStarter:    txStarter,
-		Hub:          hub,
-		Bus:          bus,
-		TaskService:  taskSvc,
-		TraceService: traceSvc,
-		EmailService: emailService,
-		PingStore:    NewPingStore(),
-		UpdateStore:  NewUpdateStore(),
-		Storage:      store,
-		CFSigner:     cfSigner,
+		Queries:        queries,
+		DB:             executor,
+		TxStarter:      txStarter,
+		Hub:            hub,
+		Bus:            bus,
+		TaskService:    taskSvc,
+		TraceService:   traceSvc,
+		GraphStore:     graphStore,
+		PlannerService: plannerSvc,
+		EmailService:   emailService,
+		PingStore:      NewPingStore(),
+		UpdateStore:    NewUpdateStore(),
+		Storage:        store,
+		CFSigner:       cfSigner,
 	}
 }
 

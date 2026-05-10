@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agentra-ai/agentra/server/pkg/agent"
 )
 
 const ollamaDefaultEndpoint = "http://localhost:11434/api/chat"
@@ -101,7 +100,7 @@ func (p *OllamaProvider) ListModels(ctx context.Context) ([]string, error) {
 }
 
 // Execute runs a prompt via the Ollama Chat API.
-func (p *OllamaProvider) Execute(ctx context.Context, prompt string, opts ExecOptions) (*agent.Session, error) {
+func (p *OllamaProvider) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
 	model := opts.Model
 	if model == "" {
 		model = "llama3"
@@ -114,8 +113,8 @@ func (p *OllamaProvider) Execute(ctx context.Context, prompt string, opts ExecOp
 
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 
-	msgCh := make(chan agent.Message, 256)
-	resCh := make(chan agent.Result, 1)
+	msgCh := make(chan Message, 256)
+	resCh := make(chan Result, 1)
 
 	go func() {
 		defer cancel()
@@ -136,7 +135,7 @@ func (p *OllamaProvider) Execute(ctx context.Context, prompt string, opts ExecOp
 
 		body, err := json.Marshal(reqBody)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
 			return
 		}
 
@@ -147,7 +146,7 @@ func (p *OllamaProvider) Execute(ctx context.Context, prompt string, opts ExecOp
 
 		req, err := http.NewRequestWithContext(runCtx, "POST", endpoint, strings.NewReader(string(body)))
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
 			return
 		}
 
@@ -159,37 +158,35 @@ func (p *OllamaProvider) Execute(ctx context.Context, prompt string, opts ExecOp
 		client := &http.Client{Timeout: timeout}
 		resp, err := client.Do(req)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
 			return
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			bodyBytes, _ := io.ReadAll(resp.Body)
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, string(bodyBytes))}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, truncateErrorBody(bodyBytes))}
 			return
 		}
 
 		respBody, err := io.ReadAll(resp.Body)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("read response: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("read response: %v", err)}
 			return
 		}
 
 		var ollamaResp ollamaResponse
 		if err := json.Unmarshal(respBody, &ollamaResp); err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("parse response: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("parse response: %v", err)}
 			return
 		}
 
 		duration := time.Since(startTime)
 		var output strings.Builder
-		for _, msg := range ollamaResp.Message.Content {
-			output.WriteString(msg)
-			trySend(msgCh, agent.Message{Type: agent.MessageText, Content: msg})
-		}
+		output.WriteString(ollamaResp.Message.Content)
+		trySend(msgCh, Message{Type: MessageText, Content: ollamaResp.Message.Content})
 
-		resCh <- agent.Result{
+		resCh <- Result{
 			Status:     "completed",
 			Output:     output.String(),
 			DurationMs: duration.Milliseconds(),
@@ -197,11 +194,11 @@ func (p *OllamaProvider) Execute(ctx context.Context, prompt string, opts ExecOp
 		}
 	}()
 
-	return &agent.Session{Messages: msgCh, Result: resCh}, nil
+	return &Session{Messages: msgCh, Result: resCh}, nil
 }
 
 // StreamExecute streams results via SSE from Ollama.
-func (p *OllamaProvider) StreamExecute(ctx context.Context, prompt string, opts ExecOptions) (*agent.Session, error) {
+func (p *OllamaProvider) StreamExecute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
 	model := opts.Model
 	if model == "" {
 		model = "llama3"
@@ -214,8 +211,8 @@ func (p *OllamaProvider) StreamExecute(ctx context.Context, prompt string, opts 
 
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 
-	msgCh := make(chan agent.Message, 256)
-	resCh := make(chan agent.Result, 1)
+	msgCh := make(chan Message, 256)
+	resCh := make(chan Result, 1)
 
 	go func() {
 		defer cancel()
@@ -236,7 +233,7 @@ func (p *OllamaProvider) StreamExecute(ctx context.Context, prompt string, opts 
 
 		body, err := json.Marshal(reqBody)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
 			return
 		}
 
@@ -247,7 +244,7 @@ func (p *OllamaProvider) StreamExecute(ctx context.Context, prompt string, opts 
 
 		req, err := http.NewRequestWithContext(runCtx, "POST", endpoint, strings.NewReader(string(body)))
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
 			return
 		}
 
@@ -259,14 +256,14 @@ func (p *OllamaProvider) StreamExecute(ctx context.Context, prompt string, opts 
 		client := &http.Client{Timeout: timeout}
 		resp, err := client.Do(req)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
 			return
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			bodyBytes, _ := io.ReadAll(resp.Body)
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, string(bodyBytes))}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, truncateErrorBody(bodyBytes))}
 			return
 		}
 
@@ -290,11 +287,11 @@ func (p *OllamaProvider) StreamExecute(ctx context.Context, prompt string, opts 
 
 			if event.Message.Content != "" {
 				output.WriteString(event.Message.Content)
-				trySend(msgCh, agent.Message{Type: agent.MessageText, Content: event.Message.Content})
+				trySend(msgCh, Message{Type: MessageText, Content: event.Message.Content})
 			}
 			if event.Done {
 				duration := time.Since(startTime)
-				resCh <- agent.Result{
+				resCh <- Result{
 					Status:     "completed",
 					Output:     output.String(),
 					DurationMs: duration.Milliseconds(),
@@ -305,14 +302,14 @@ func (p *OllamaProvider) StreamExecute(ctx context.Context, prompt string, opts 
 		}
 
 		duration := time.Since(startTime)
-		resCh <- agent.Result{
+		resCh <- Result{
 			Status:     "completed",
 			Output:     output.String(),
 			DurationMs: duration.Milliseconds(),
 		}
 	}()
 
-	return &agent.Session{Messages: msgCh, Result: resCh}, nil
+	return &Session{Messages: msgCh, Result: resCh}, nil
 }
 
 // Ollama request/response types
@@ -328,10 +325,10 @@ type ollamaMessage struct {
 }
 
 type ollamaResponse struct {
-	Model      string   `json:"model"`
-	Message    struct {
-		Role    string   `json:"role"`
-		Content []string `json:"content"`
+	Model   string `json:"model"`
+	Message struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
 	} `json:"message"`
 	Done bool `json:"done"`
 }

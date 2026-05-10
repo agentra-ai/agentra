@@ -18,6 +18,7 @@ type RetrieveOptions struct {
 	Limit       int          // max results to return
 	MemoryTypes []MemoryType // filter by memory types (empty = all)
 	AgentID     string       // filter by agent (empty = any)
+	WorkspaceID string       // required for workspace-scoped retrieval
 	TimeRange   *TimeRange   // optional time filter
 }
 

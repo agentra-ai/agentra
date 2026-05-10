@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agentra-ai/agentra/server/pkg/agent"
 )
 
 const anthropicEndpoint = "https://api.anthropic.com/v1/messages"
@@ -26,16 +25,9 @@ var _ Provider = (*AnthropicProvider)(nil)
 
 // NewAnthropicProvider creates a new Anthropic API provider.
 func NewAnthropicProvider(cfg APIConfig) *AnthropicProvider {
-	logger := slog.Default()
-	if cfg.Extra != nil {
-		if l, ok := cfg.Extra["logger"]; ok {
-			logger = slog.Default()
-			_ = l // suppress unused warning
-		}
-	}
 	return &AnthropicProvider{
 		apiKey: cfg.APIKey,
-		logger: logger,
+		logger: slog.Default(),
 	}
 }
 
@@ -63,7 +55,7 @@ func (p *AnthropicProvider) Supports(model Model) bool {
 }
 
 // Execute runs a prompt via the Anthropic Messages API.
-func (p *AnthropicProvider) Execute(ctx context.Context, prompt string, opts ExecOptions) (*agent.Session, error) {
+func (p *AnthropicProvider) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
 	model := opts.Model
 	if model == "" {
 		model = "claude-3-5-sonnet-20241022"
@@ -76,8 +68,8 @@ func (p *AnthropicProvider) Execute(ctx context.Context, prompt string, opts Exe
 
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 
-	msgCh := make(chan agent.Message, 256)
-	resCh := make(chan agent.Result, 1)
+	msgCh := make(chan Message, 256)
+	resCh := make(chan Result, 1)
 
 	go func() {
 		defer cancel()
@@ -95,14 +87,14 @@ func (p *AnthropicProvider) Execute(ctx context.Context, prompt string, opts Exe
 
 		body, err := json.Marshal(reqBody)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
 			return
 		}
 
 		endpoint := anthropicEndpoint
 		req, err := http.NewRequestWithContext(runCtx, "POST", endpoint, strings.NewReader(string(body)))
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
 			return
 		}
 
@@ -113,7 +105,7 @@ func (p *AnthropicProvider) Execute(ctx context.Context, prompt string, opts Exe
 		client := &http.Client{Timeout: timeout}
 		resp, err := client.Do(req)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
 			return
 		}
 		defer resp.Body.Close()
@@ -121,19 +113,19 @@ func (p *AnthropicProvider) Execute(ctx context.Context, prompt string, opts Exe
 		// Read body once into buffer, then handle both error and success cases
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("read response: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("read response: %v", err)}
 			return
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, string(bodyBytes))}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, truncateErrorBody(bodyBytes))}
 			return
 		}
 
 		// Parse response from buffered bytes
 		var anthropicResp anthropicResponse
 		if err := json.Unmarshal(bodyBytes, &anthropicResp); err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("parse response: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("parse response: %v", err)}
 			return
 		}
 
@@ -142,18 +134,18 @@ func (p *AnthropicProvider) Execute(ctx context.Context, prompt string, opts Exe
 		for _, block := range anthropicResp.Content {
 			if block.Type == "text" {
 				output.WriteString(block.Text)
-				trySend(msgCh, agent.Message{Type: agent.MessageText, Content: block.Text})
+				trySend(msgCh, Message{Type: MessageText, Content: block.Text})
 			}
 		}
 
-		tokenUsage := &agent.TokenUsage{
+		tokenUsage := &TokenUsage{
 			InputTokens:     anthropicResp.Usage.InputTokens,
 			OutputTokens:    anthropicResp.Usage.OutputTokens,
 			CacheReadTokens: anthropicResp.Usage.CacheRead,
 			CacheWriteTokens: anthropicResp.Usage.CacheCreate,
 		}
 
-		resCh <- agent.Result{
+		resCh <- Result{
 			Status:     "completed",
 			Output:     output.String(),
 			DurationMs: duration.Milliseconds(),
@@ -161,7 +153,7 @@ func (p *AnthropicProvider) Execute(ctx context.Context, prompt string, opts Exe
 		}
 	}()
 
-	return &agent.Session{Messages: msgCh, Result: resCh}, nil
+	return &Session{Messages: msgCh, Result: resCh}, nil
 }
 
 // Anthropic request/response types
@@ -198,7 +190,7 @@ type anthropicResponse struct {
 
 // StreamExecute runs a prompt and streams results via SSE.
 // This is an alternative to Execute that provides real-time streaming.
-func (p *AnthropicProvider) StreamExecute(ctx context.Context, prompt string, opts ExecOptions) (*agent.Session, error) {
+func (p *AnthropicProvider) StreamExecute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
 	model := opts.Model
 	if model == "" {
 		model = "claude-3-5-sonnet-20241022"
@@ -211,8 +203,8 @@ func (p *AnthropicProvider) StreamExecute(ctx context.Context, prompt string, op
 
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 
-	msgCh := make(chan agent.Message, 256)
-	resCh := make(chan agent.Result, 1)
+	msgCh := make(chan Message, 256)
+	resCh := make(chan Result, 1)
 
 	go func() {
 		defer cancel()
@@ -230,13 +222,13 @@ func (p *AnthropicProvider) StreamExecute(ctx context.Context, prompt string, op
 
 		body, err := json.Marshal(reqBody)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
 			return
 		}
 
 		req, err := http.NewRequestWithContext(runCtx, "POST", anthropicEndpoint, strings.NewReader(string(body)))
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
 			return
 		}
 
@@ -248,14 +240,14 @@ func (p *AnthropicProvider) StreamExecute(ctx context.Context, prompt string, op
 		client := &http.Client{Timeout: timeout}
 		resp, err := client.Do(req)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
 			return
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			bodyBytes, _ := io.ReadAll(resp.Body)
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, string(bodyBytes))}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, truncateErrorBody(bodyBytes))}
 			return
 		}
 
@@ -265,7 +257,7 @@ func (p *AnthropicProvider) StreamExecute(ctx context.Context, prompt string, op
 
 		for {
 			line, err := reader.ReadString('\n')
-			if err != err {
+			if err != nil {
 				break
 			}
 			line = strings.TrimSpace(line)
@@ -282,14 +274,14 @@ func (p *AnthropicProvider) StreamExecute(ctx context.Context, prompt string, op
 			switch event.Type {
 			case "content_block_start":
 				if event.ContentBlock.Type == "thinking" {
-					trySend(msgCh, agent.Message{Type: agent.MessageStatus, Status: "thinking"})
+					trySend(msgCh, Message{Type: MessageStatus, Status: "thinking"})
 				}
 			case "content_block_delta":
 				if event.Delta.Type == "text_delta" {
 					output.WriteString(event.Delta.Text)
-					trySend(msgCh, agent.Message{Type: agent.MessageText, Content: event.Delta.Text})
+					trySend(msgCh, Message{Type: MessageText, Content: event.Delta.Text})
 				} else if event.Delta.Type == "thinking_delta" {
-					trySend(msgCh, agent.Message{Type: agent.MessageThinking, Content: event.Delta.Text})
+					trySend(msgCh, Message{Type: MessageThinking, Content: event.Delta.Text})
 				}
 			case "message_delta":
 				if event.Usage != nil {
@@ -297,7 +289,7 @@ func (p *AnthropicProvider) StreamExecute(ctx context.Context, prompt string, op
 				}
 			case "message_stop":
 				duration := time.Since(startTime)
-				resCh <- agent.Result{
+				resCh <- Result{
 					Status:     "completed",
 					Output:     output.String(),
 					DurationMs: duration.Milliseconds(),
@@ -309,7 +301,7 @@ func (p *AnthropicProvider) StreamExecute(ctx context.Context, prompt string, op
 
 		// Fallback: if we exit loop without message_stop, use accumulated output
 		duration := time.Since(startTime)
-		resCh <- agent.Result{
+		resCh <- Result{
 			Status:     "completed",
 			Output:     output.String(),
 			DurationMs: duration.Milliseconds(),
@@ -317,7 +309,7 @@ func (p *AnthropicProvider) StreamExecute(ctx context.Context, prompt string, op
 		}
 	}()
 
-	return &agent.Session{Messages: msgCh, Result: resCh}, nil
+	return &Session{Messages: msgCh, Result: resCh}, nil
 }
 
 type anthropicStreamEvent struct {
@@ -336,10 +328,18 @@ type anthropicStreamEvent struct {
 	} `json:"usage,omitempty"`
 }
 
-func trySend(ch chan<- agent.Message, msg agent.Message) {
+func trySend(ch chan<- Message, msg Message) {
 	select {
 	case ch <- msg:
 	default:
-		// Channel full — drop message
+		slog.Warn("provider: message dropped, channel full", "type", string(msg.Type))
 	}
+}
+
+func truncateErrorBody(body []byte) string {
+	const maxLen = 500
+	if len(body) > maxLen {
+		return string(body[:maxLen]) + "..."
+	}
+	return string(body)
 }

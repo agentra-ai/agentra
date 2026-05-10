@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/agentra-ai/agentra/pkg/mcp"
+	"github.com/agentra-ai/agentra/server/pkg/mcp"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )

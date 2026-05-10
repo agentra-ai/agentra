@@ -23,6 +23,7 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/storage"
 	"github.com/agentra-ai/agentra/server/internal/util"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
+	"github.com/agentra-ai/agentra/pkg/taskgraph"
 )
 
 func allowedOrigins() []string {
@@ -92,7 +93,9 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 	}
 
 	cfSigner := auth.NewCloudFrontSignerFromEnv()
-	h := handler.New(queries, pool, hub, bus, emailSvc, fileStorage, cfSigner)
+	graphStore := taskgraph.NewGraphStore(pool)
+	plannerSvc := service.NewPlannerService(queries, graphStore)
+	h := handler.New(queries, pool, hub, bus, graphStore, plannerSvc, emailSvc, fileStorage, cfSigner)
 
 	// Wire up GatewayHub callbacks to TaskService
 	setGatewayCallbacks(hub, h)
@@ -237,12 +240,22 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 					r.Post("/reactions", h.AddIssueReaction)
 					r.Delete("/reactions", h.RemoveIssueReaction)
 					r.Get("/attachments", h.ListAttachments)
+					r.Post("/auto-decompose", h.AutoDecomposeIssue)
 				})
 			})
 
 			// Attachments
 			r.Get("/api/attachments/{id}", h.GetAttachmentByID)
 			r.Delete("/api/attachments/{id}", h.DeleteAttachment)
+
+			// Git hooks API
+			r.Route("/api/git", func(r chi.Router) {
+				r.Post("/link-commit", h.LinkCommit)
+				r.Post("/link-pr", h.LinkPR)
+				r.Post("/link-branch", h.LinkBranch)
+				r.Get("/active-task", h.GetActiveTask)
+				r.Get("/issue-links/{issueId}", h.GetIssueLinks)
+			})
 
 			// Comments
 			r.Route("/api/comments/{commentId}", func(r chi.Router) {

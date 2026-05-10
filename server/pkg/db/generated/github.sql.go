@@ -57,9 +57,9 @@ func (q *Queries) CreateInstallation(ctx context.Context, arg CreateInstallation
 }
 
 const createIssueLink = `-- name: CreateIssueLink :one
-INSERT INTO github_issue_links (issue_id, repository, pr_number, commit_sha, branch_name)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, issue_id, repository, pr_number, commit_sha, branch_name, created_at
+INSERT INTO issue_git_links (issue_id, repository, pr_number, commit_sha, branch_name, link_type)
+VALUES ($1, $2, $3, $4, $5, 'pr')
+RETURNING id, issue_id, repository, pr_number, commit_sha, branch_name, created_at, link_type, sha, message, authored_at, pr_state, merged_at, pr_title, branch
 `
 
 type CreateIssueLinkParams struct {
@@ -70,7 +70,7 @@ type CreateIssueLinkParams struct {
 	BranchName pgtype.Text `json:"branch_name"`
 }
 
-func (q *Queries) CreateIssueLink(ctx context.Context, arg CreateIssueLinkParams) (GithubIssueLink, error) {
+func (q *Queries) CreateIssueLink(ctx context.Context, arg CreateIssueLinkParams) (IssueGitLink, error) {
 	row := q.db.QueryRow(ctx, createIssueLink,
 		arg.IssueID,
 		arg.Repository,
@@ -78,7 +78,7 @@ func (q *Queries) CreateIssueLink(ctx context.Context, arg CreateIssueLinkParams
 		arg.CommitSha,
 		arg.BranchName,
 	)
-	var i GithubIssueLink
+	var i IssueGitLink
 	err := row.Scan(
 		&i.ID,
 		&i.IssueID,
@@ -87,6 +87,14 @@ func (q *Queries) CreateIssueLink(ctx context.Context, arg CreateIssueLinkParams
 		&i.CommitSha,
 		&i.BranchName,
 		&i.CreatedAt,
+		&i.LinkType,
+		&i.Sha,
+		&i.Message,
+		&i.AuthoredAt,
+		&i.PrState,
+		&i.MergedAt,
+		&i.PrTitle,
+		&i.Branch,
 	)
 	return i, err
 }
@@ -101,12 +109,12 @@ func (q *Queries) DeleteInstallation(ctx context.Context, id pgtype.UUID) error 
 }
 
 const deleteIssueLink = `-- name: DeleteIssueLink :one
-DELETE FROM github_issue_links WHERE id = $1 RETURNING id, issue_id, repository, pr_number, commit_sha, branch_name, created_at
+DELETE FROM issue_git_links WHERE id = $1 RETURNING id, issue_id, repository, pr_number, commit_sha, branch_name, created_at, link_type, sha, message, authored_at, pr_state, merged_at, pr_title, branch
 `
 
-func (q *Queries) DeleteIssueLink(ctx context.Context, id pgtype.UUID) (GithubIssueLink, error) {
+func (q *Queries) DeleteIssueLink(ctx context.Context, id pgtype.UUID) (IssueGitLink, error) {
 	row := q.db.QueryRow(ctx, deleteIssueLink, id)
-	var i GithubIssueLink
+	var i IssueGitLink
 	err := row.Scan(
 		&i.ID,
 		&i.IssueID,
@@ -115,8 +123,96 @@ func (q *Queries) DeleteIssueLink(ctx context.Context, id pgtype.UUID) (GithubIs
 		&i.CommitSha,
 		&i.BranchName,
 		&i.CreatedAt,
+		&i.LinkType,
+		&i.Sha,
+		&i.Message,
+		&i.AuthoredAt,
+		&i.PrState,
+		&i.MergedAt,
+		&i.PrTitle,
+		&i.Branch,
 	)
 	return i, err
+}
+
+const getCommitsByIssue = `-- name: GetCommitsByIssue :many
+SELECT id, issue_id, repository, pr_number, commit_sha, branch_name, created_at, link_type, sha, message, authored_at, pr_state, merged_at, pr_title, branch FROM issue_git_links WHERE issue_id = $1 AND link_type = 'commit'
+`
+
+func (q *Queries) GetCommitsByIssue(ctx context.Context, issueID pgtype.UUID) ([]IssueGitLink, error) {
+	rows, err := q.db.Query(ctx, getCommitsByIssue, issueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []IssueGitLink{}
+	for rows.Next() {
+		var i IssueGitLink
+		if err := rows.Scan(
+			&i.ID,
+			&i.IssueID,
+			&i.Repository,
+			&i.PrNumber,
+			&i.CommitSha,
+			&i.BranchName,
+			&i.CreatedAt,
+			&i.LinkType,
+			&i.Sha,
+			&i.Message,
+			&i.AuthoredAt,
+			&i.PrState,
+			&i.MergedAt,
+			&i.PrTitle,
+			&i.Branch,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getGitLinksByIssue = `-- name: GetGitLinksByIssue :many
+SELECT id, issue_id, repository, pr_number, commit_sha, branch_name, created_at, link_type, sha, message, authored_at, pr_state, merged_at, pr_title, branch FROM issue_git_links WHERE issue_id = $1
+`
+
+func (q *Queries) GetGitLinksByIssue(ctx context.Context, issueID pgtype.UUID) ([]IssueGitLink, error) {
+	rows, err := q.db.Query(ctx, getGitLinksByIssue, issueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []IssueGitLink{}
+	for rows.Next() {
+		var i IssueGitLink
+		if err := rows.Scan(
+			&i.ID,
+			&i.IssueID,
+			&i.Repository,
+			&i.PrNumber,
+			&i.CommitSha,
+			&i.BranchName,
+			&i.CreatedAt,
+			&i.LinkType,
+			&i.Sha,
+			&i.Message,
+			&i.AuthoredAt,
+			&i.PrState,
+			&i.MergedAt,
+			&i.PrTitle,
+			&i.Branch,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getInstallation = `-- name: GetInstallation :one
@@ -143,18 +239,18 @@ func (q *Queries) GetInstallation(ctx context.Context, workspaceID pgtype.UUID) 
 }
 
 const getIssueLinks = `-- name: GetIssueLinks :many
-SELECT id, issue_id, repository, pr_number, commit_sha, branch_name, created_at FROM github_issue_links WHERE issue_id = $1
+SELECT id, issue_id, repository, pr_number, commit_sha, branch_name, created_at, link_type, sha, message, authored_at, pr_state, merged_at, pr_title, branch FROM issue_git_links WHERE issue_id = $1
 `
 
-func (q *Queries) GetIssueLinks(ctx context.Context, issueID pgtype.UUID) ([]GithubIssueLink, error) {
+func (q *Queries) GetIssueLinks(ctx context.Context, issueID pgtype.UUID) ([]IssueGitLink, error) {
 	rows, err := q.db.Query(ctx, getIssueLinks, issueID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []GithubIssueLink{}
+	items := []IssueGitLink{}
 	for rows.Next() {
-		var i GithubIssueLink
+		var i IssueGitLink
 		if err := rows.Scan(
 			&i.ID,
 			&i.IssueID,
@@ -163,6 +259,14 @@ func (q *Queries) GetIssueLinks(ctx context.Context, issueID pgtype.UUID) ([]Git
 			&i.CommitSha,
 			&i.BranchName,
 			&i.CreatedAt,
+			&i.LinkType,
+			&i.Sha,
+			&i.Message,
+			&i.AuthoredAt,
+			&i.PrState,
+			&i.MergedAt,
+			&i.PrTitle,
+			&i.Branch,
 		); err != nil {
 			return nil, err
 		}
@@ -172,6 +276,129 @@ func (q *Queries) GetIssueLinks(ctx context.Context, issueID pgtype.UUID) ([]Git
 		return nil, err
 	}
 	return items, nil
+}
+
+const linkBranch = `-- name: LinkBranch :one
+INSERT INTO issue_git_links (issue_id, branch, link_type)
+VALUES ($1, $2, 'branch')
+ON CONFLICT DO NOTHING
+RETURNING id, issue_id, repository, pr_number, commit_sha, branch_name, created_at, link_type, sha, message, authored_at, pr_state, merged_at, pr_title, branch
+`
+
+type LinkBranchParams struct {
+	IssueID pgtype.UUID `json:"issue_id"`
+	Branch  pgtype.Text `json:"branch"`
+}
+
+func (q *Queries) LinkBranch(ctx context.Context, arg LinkBranchParams) (IssueGitLink, error) {
+	row := q.db.QueryRow(ctx, linkBranch, arg.IssueID, arg.Branch)
+	var i IssueGitLink
+	err := row.Scan(
+		&i.ID,
+		&i.IssueID,
+		&i.Repository,
+		&i.PrNumber,
+		&i.CommitSha,
+		&i.BranchName,
+		&i.CreatedAt,
+		&i.LinkType,
+		&i.Sha,
+		&i.Message,
+		&i.AuthoredAt,
+		&i.PrState,
+		&i.MergedAt,
+		&i.PrTitle,
+		&i.Branch,
+	)
+	return i, err
+}
+
+const linkCommit = `-- name: LinkCommit :one
+INSERT INTO issue_git_links (issue_id, sha, message, branch, link_type)
+VALUES ($1, $2, $3, $4, 'commit')
+ON CONFLICT DO NOTHING
+RETURNING id, issue_id, repository, pr_number, commit_sha, branch_name, created_at, link_type, sha, message, authored_at, pr_state, merged_at, pr_title, branch
+`
+
+type LinkCommitParams struct {
+	IssueID pgtype.UUID `json:"issue_id"`
+	Sha     pgtype.Text `json:"sha"`
+	Message pgtype.Text `json:"message"`
+	Branch  pgtype.Text `json:"branch"`
+}
+
+func (q *Queries) LinkCommit(ctx context.Context, arg LinkCommitParams) (IssueGitLink, error) {
+	row := q.db.QueryRow(ctx, linkCommit,
+		arg.IssueID,
+		arg.Sha,
+		arg.Message,
+		arg.Branch,
+	)
+	var i IssueGitLink
+	err := row.Scan(
+		&i.ID,
+		&i.IssueID,
+		&i.Repository,
+		&i.PrNumber,
+		&i.CommitSha,
+		&i.BranchName,
+		&i.CreatedAt,
+		&i.LinkType,
+		&i.Sha,
+		&i.Message,
+		&i.AuthoredAt,
+		&i.PrState,
+		&i.MergedAt,
+		&i.PrTitle,
+		&i.Branch,
+	)
+	return i, err
+}
+
+const linkPR = `-- name: LinkPR :one
+INSERT INTO issue_git_links (issue_id, repository, pr_number, pr_state, pr_title, merged_at, link_type)
+VALUES ($1, $2, $3, $4, $5, $6, 'pr')
+ON CONFLICT DO NOTHING
+RETURNING id, issue_id, repository, pr_number, commit_sha, branch_name, created_at, link_type, sha, message, authored_at, pr_state, merged_at, pr_title, branch
+`
+
+type LinkPRParams struct {
+	IssueID    pgtype.UUID        `json:"issue_id"`
+	Repository string             `json:"repository"`
+	PrNumber   pgtype.Int4        `json:"pr_number"`
+	PrState    pgtype.Text        `json:"pr_state"`
+	PrTitle    pgtype.Text        `json:"pr_title"`
+	MergedAt   pgtype.Timestamptz `json:"merged_at"`
+}
+
+func (q *Queries) LinkPR(ctx context.Context, arg LinkPRParams) (IssueGitLink, error) {
+	row := q.db.QueryRow(ctx, linkPR,
+		arg.IssueID,
+		arg.Repository,
+		arg.PrNumber,
+		arg.PrState,
+		arg.PrTitle,
+		arg.MergedAt,
+	)
+	var i IssueGitLink
+	err := row.Scan(
+		&i.ID,
+		&i.IssueID,
+		&i.Repository,
+		&i.PrNumber,
+		&i.CommitSha,
+		&i.BranchName,
+		&i.CreatedAt,
+		&i.LinkType,
+		&i.Sha,
+		&i.Message,
+		&i.AuthoredAt,
+		&i.PrState,
+		&i.MergedAt,
+		&i.PrTitle,
+		&i.Branch,
+	)
+	return i, err
 }
 
 const updateInstallationToken = `-- name: UpdateInstallationToken :one
@@ -216,12 +443,12 @@ func (q *Queries) UpdateInstallationToken(ctx context.Context, arg UpdateInstall
 }
 
 const updateIssueLink = `-- name: UpdateIssueLink :one
-UPDATE github_issue_links SET
+UPDATE issue_git_links SET
     pr_number = COALESCE($2, pr_number),
     commit_sha = COALESCE($3, commit_sha),
     branch_name = COALESCE($4, branch_name)
 WHERE id = $1
-RETURNING id, issue_id, repository, pr_number, commit_sha, branch_name, created_at
+RETURNING id, issue_id, repository, pr_number, commit_sha, branch_name, created_at, link_type, sha, message, authored_at, pr_state, merged_at, pr_title, branch
 `
 
 type UpdateIssueLinkParams struct {
@@ -231,14 +458,14 @@ type UpdateIssueLinkParams struct {
 	BranchName pgtype.Text `json:"branch_name"`
 }
 
-func (q *Queries) UpdateIssueLink(ctx context.Context, arg UpdateIssueLinkParams) (GithubIssueLink, error) {
+func (q *Queries) UpdateIssueLink(ctx context.Context, arg UpdateIssueLinkParams) (IssueGitLink, error) {
 	row := q.db.QueryRow(ctx, updateIssueLink,
 		arg.ID,
 		arg.PrNumber,
 		arg.CommitSha,
 		arg.BranchName,
 	)
-	var i GithubIssueLink
+	var i IssueGitLink
 	err := row.Scan(
 		&i.ID,
 		&i.IssueID,
@@ -247,6 +474,36 @@ func (q *Queries) UpdateIssueLink(ctx context.Context, arg UpdateIssueLinkParams
 		&i.CommitSha,
 		&i.BranchName,
 		&i.CreatedAt,
+		&i.LinkType,
+		&i.Sha,
+		&i.Message,
+		&i.AuthoredAt,
+		&i.PrState,
+		&i.MergedAt,
+		&i.PrTitle,
+		&i.Branch,
 	)
 	return i, err
+}
+
+const updatePRState = `-- name: UpdatePRState :exec
+UPDATE issue_git_links SET pr_state = $2, merged_at = $3
+WHERE issue_id = $1 AND pr_number = $4 AND link_type = 'pr'
+`
+
+type UpdatePRStateParams struct {
+	IssueID  pgtype.UUID        `json:"issue_id"`
+	PrState  pgtype.Text        `json:"pr_state"`
+	MergedAt pgtype.Timestamptz `json:"merged_at"`
+	PrNumber pgtype.Int4        `json:"pr_number"`
+}
+
+func (q *Queries) UpdatePRState(ctx context.Context, arg UpdatePRStateParams) error {
+	_, err := q.db.Exec(ctx, updatePRState,
+		arg.IssueID,
+		arg.PrState,
+		arg.MergedAt,
+		arg.PrNumber,
+	)
+	return err
 }

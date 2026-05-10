@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agentra-ai/agentra/server/pkg/agent"
 )
 
 const openRouterDefaultEndpoint = "https://openrouter.ai/api/v1/chat/completions"
@@ -60,7 +59,7 @@ func (p *OpenRouterProvider) Supports(model Model) bool {
 }
 
 // Execute runs a prompt via the OpenRouter API.
-func (p *OpenRouterProvider) Execute(ctx context.Context, prompt string, opts ExecOptions) (*agent.Session, error) {
+func (p *OpenRouterProvider) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
 	model := opts.Model
 	if model == "" {
 		model = "anthropic/claude-3.5-sonnet"
@@ -73,8 +72,8 @@ func (p *OpenRouterProvider) Execute(ctx context.Context, prompt string, opts Ex
 
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 
-	msgCh := make(chan agent.Message, 256)
-	resCh := make(chan agent.Result, 1)
+	msgCh := make(chan Message, 256)
+	resCh := make(chan Result, 1)
 
 	go func() {
 		defer cancel()
@@ -95,7 +94,7 @@ func (p *OpenRouterProvider) Execute(ctx context.Context, prompt string, opts Ex
 
 		body, err := json.Marshal(reqBody)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
 			return
 		}
 
@@ -106,7 +105,7 @@ func (p *OpenRouterProvider) Execute(ctx context.Context, prompt string, opts Ex
 
 		req, err := http.NewRequestWithContext(runCtx, "POST", endpoint, strings.NewReader(string(body)))
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
 			return
 		}
 
@@ -118,7 +117,7 @@ func (p *OpenRouterProvider) Execute(ctx context.Context, prompt string, opts Ex
 		client := &http.Client{Timeout: timeout}
 		resp, err := client.Do(req)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
 			return
 		}
 		defer resp.Body.Close()
@@ -126,18 +125,18 @@ func (p *OpenRouterProvider) Execute(ctx context.Context, prompt string, opts Ex
 		// Read body once into buffer, then handle both error and success cases
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("read response: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("read response: %v", err)}
 			return
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, string(bodyBytes))}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, truncateErrorBody(bodyBytes))}
 			return
 		}
 
 		var openaiResp openaiResponse
 		if err := json.Unmarshal(bodyBytes, &openaiResp); err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("parse response: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("parse response: %v", err)}
 			return
 		}
 
@@ -146,16 +145,16 @@ func (p *OpenRouterProvider) Execute(ctx context.Context, prompt string, opts Ex
 		for _, choice := range openaiResp.Choices {
 			if choice.Message.Content != "" {
 				output.WriteString(choice.Message.Content)
-				trySend(msgCh, agent.Message{Type: agent.MessageText, Content: choice.Message.Content})
+				trySend(msgCh, Message{Type: MessageText, Content: choice.Message.Content})
 			}
 		}
 
-		tokenUsage := &agent.TokenUsage{
+		tokenUsage := &TokenUsage{
 			InputTokens:  int64(openaiResp.Usage.PromptTokens),
 			OutputTokens: int64(openaiResp.Usage.CompletionTokens),
 		}
 
-		resCh <- agent.Result{
+		resCh <- Result{
 			Status:     "completed",
 			Output:     output.String(),
 			DurationMs: duration.Milliseconds(),
@@ -164,11 +163,11 @@ func (p *OpenRouterProvider) Execute(ctx context.Context, prompt string, opts Ex
 		}
 	}()
 
-	return &agent.Session{Messages: msgCh, Result: resCh}, nil
+	return &Session{Messages: msgCh, Result: resCh}, nil
 }
 
 // StreamExecute streams results via SSE from OpenRouter.
-func (p *OpenRouterProvider) StreamExecute(ctx context.Context, prompt string, opts ExecOptions) (*agent.Session, error) {
+func (p *OpenRouterProvider) StreamExecute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
 	model := opts.Model
 	if model == "" {
 		model = "anthropic/claude-3.5-sonnet"
@@ -181,8 +180,8 @@ func (p *OpenRouterProvider) StreamExecute(ctx context.Context, prompt string, o
 
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 
-	msgCh := make(chan agent.Message, 256)
-	resCh := make(chan agent.Result, 1)
+	msgCh := make(chan Message, 256)
+	resCh := make(chan Result, 1)
 
 	go func() {
 		defer cancel()
@@ -204,7 +203,7 @@ func (p *OpenRouterProvider) StreamExecute(ctx context.Context, prompt string, o
 
 		body, err := json.Marshal(reqBody)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("marshal request: %v", err)}
 			return
 		}
 
@@ -215,7 +214,7 @@ func (p *OpenRouterProvider) StreamExecute(ctx context.Context, prompt string, o
 
 		req, err := http.NewRequestWithContext(runCtx, "POST", endpoint, strings.NewReader(string(body)))
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("create request: %v", err)}
 			return
 		}
 
@@ -227,14 +226,14 @@ func (p *OpenRouterProvider) StreamExecute(ctx context.Context, prompt string, o
 		client := &http.Client{Timeout: timeout}
 		resp, err := client.Do(req)
 		if err != nil {
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("request failed: %v", err)}
 			return
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			bodyBytes, _ := io.ReadAll(resp.Body)
-			resCh <- agent.Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, string(bodyBytes))}
+			resCh <- Result{Status: "failed", Error: fmt.Sprintf("API error %d: %s", resp.StatusCode, truncateErrorBody(bodyBytes))}
 			return
 		}
 
@@ -267,7 +266,7 @@ func (p *OpenRouterProvider) StreamExecute(ctx context.Context, prompt string, o
 			for _, choice := range event.Choices {
 				if choice.Delta.Content != "" {
 					output.WriteString(choice.Delta.Content)
-					trySend(msgCh, agent.Message{Type: agent.MessageText, Content: choice.Delta.Content})
+					trySend(msgCh, Message{Type: MessageText, Content: choice.Delta.Content})
 				}
 			}
 			if event.ID != "" {
@@ -276,7 +275,7 @@ func (p *OpenRouterProvider) StreamExecute(ctx context.Context, prompt string, o
 		}
 
 		duration := time.Since(startTime)
-		resCh <- agent.Result{
+		resCh <- Result{
 			Status:     "completed",
 			Output:     output.String(),
 			DurationMs: duration.Milliseconds(),
@@ -284,5 +283,5 @@ func (p *OpenRouterProvider) StreamExecute(ctx context.Context, prompt string, o
 		}
 	}()
 
-	return &agent.Session{Messages: msgCh, Result: resCh}, nil
+	return &Session{Messages: msgCh, Result: resCh}, nil
 }

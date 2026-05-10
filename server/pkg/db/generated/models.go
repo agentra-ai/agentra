@@ -46,6 +46,16 @@ type Agent struct {
 	ProviderConfig     []byte             `json:"provider_config"`
 }
 
+type AgentDelegationPolicy struct {
+	ID            pgtype.UUID        `json:"id"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	FromAgentID   pgtype.UUID        `json:"from_agent_id"`
+	ToAgentType   string             `json:"to_agent_type"`
+	MaxDepth      pgtype.Int4        `json:"max_depth"`
+	AllowParallel pgtype.Bool        `json:"allow_parallel"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
 type AgentMemory struct {
 	ID          pgtype.UUID        `json:"id"`
 	AgentID     pgtype.UUID        `json:"agent_id"`
@@ -187,6 +197,24 @@ type DaemonToken struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type ExecutionTrace struct {
+	ID        pgtype.UUID        `json:"id"`
+	TaskID    pgtype.UUID        `json:"task_id"`
+	AgentID   pgtype.UUID        `json:"agent_id"`
+	IssueID   pgtype.UUID        `json:"issue_id"`
+	Provider  string             `json:"provider"`
+	Model     string             `json:"model"`
+	Steps     []byte             `json:"steps"`
+	Tools     []byte             `json:"tools"`
+	Tokens    []byte             `json:"tokens"`
+	Cost      pgtype.Numeric     `json:"cost"`
+	StartTime pgtype.Timestamptz `json:"start_time"`
+	EndTime   pgtype.Timestamptz `json:"end_time"`
+	Status    string             `json:"status"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type GithubInstallation struct {
 	ID             pgtype.UUID        `json:"id"`
 	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
@@ -199,16 +227,6 @@ type GithubInstallation struct {
 	Repositories   []byte             `json:"repositories"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-}
-
-type GithubIssueLink struct {
-	ID         pgtype.UUID        `json:"id"`
-	IssueID    pgtype.UUID        `json:"issue_id"`
-	Repository string             `json:"repository"`
-	PrNumber   pgtype.Int4        `json:"pr_number"`
-	CommitSha  pgtype.Text        `json:"commit_sha"`
-	BranchName pgtype.Text        `json:"branch_name"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type InboxItem struct {
@@ -255,6 +273,24 @@ type IssueDependency struct {
 	IssueID          pgtype.UUID `json:"issue_id"`
 	DependsOnIssueID pgtype.UUID `json:"depends_on_issue_id"`
 	Type             string      `json:"type"`
+}
+
+type IssueGitLink struct {
+	ID         pgtype.UUID        `json:"id"`
+	IssueID    pgtype.UUID        `json:"issue_id"`
+	Repository string             `json:"repository"`
+	PrNumber   pgtype.Int4        `json:"pr_number"`
+	CommitSha  pgtype.Text        `json:"commit_sha"`
+	BranchName pgtype.Text        `json:"branch_name"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	LinkType   string             `json:"link_type"`
+	Sha        pgtype.Text        `json:"sha"`
+	Message    pgtype.Text        `json:"message"`
+	AuthoredAt pgtype.Timestamptz `json:"authored_at"`
+	PrState    pgtype.Text        `json:"pr_state"`
+	MergedAt   pgtype.Timestamptz `json:"merged_at"`
+	PrTitle    pgtype.Text        `json:"pr_title"`
+	Branch     pgtype.Text        `json:"branch"`
 }
 
 type IssueLabel struct {

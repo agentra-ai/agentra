@@ -17,6 +17,7 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/realtime"
 	"github.com/agentra-ai/agentra/server/internal/service"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
+	"github.com/agentra-ai/agentra/pkg/taskgraph"
 )
 
 var testHandler *Handler
@@ -53,7 +54,9 @@ func TestMain(m *testing.M) {
 	go hub.Run()
 	bus := events.New()
 	emailSvc := service.NewEmailService()
-	testHandler = New(queries, pool, hub, bus, emailSvc, nil, nil)
+	graphStore := taskgraph.NewGraphStore(pool)
+	plannerSvc := service.NewPlannerService(queries, graphStore)
+	testHandler = New(queries, pool, hub, bus, graphStore, plannerSvc, emailSvc, nil, nil)
 	testPool = pool
 
 	testUserID, testWorkspaceID, err = setupHandlerTestFixture(ctx, pool)

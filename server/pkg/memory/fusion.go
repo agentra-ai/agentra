@@ -38,7 +38,8 @@ func (r *FusionRetriever) Name() string {
 	return "fusion"
 }
 
-// Retrieve combines results from all retrievers using RRF.
+// Retrieve combines results from all retrievers using per-retriever ranks for RRF.
+// Each retriever returns a sorted list; rank is the position within that list.
 func (r *FusionRetriever) Retrieve(ctx context.Context, query string, opts RetrieveOptions) ([]Memory, error) {
 	limit := opts.Limit
 	if limit <= 0 {
@@ -61,12 +62,14 @@ func (r *FusionRetriever) Retrieve(ctx context.Context, query string, opts Retri
 		Limit:       opts.Limit,
 		MemoryTypes: memTypes,
 		AgentID:     opts.AgentID,
+		WorkspaceID: opts.WorkspaceID,
 		TimeRange:   timeRange,
 	}
 
 	// Run all retrievers in parallel
 	var wg sync.WaitGroup
 	type retrievalResult struct {
+		name string
 		mems []retrievers.Memory
 		err  error
 	}
@@ -78,67 +81,61 @@ func (r *FusionRetriever) Retrieve(ctx context.Context, query string, opts Retri
 
 	wg.Add(4)
 
-	// Semantic retrieval
 	go func() {
 		defer wg.Done()
 		mems, err := r.semantic.Retrieve(ctx, query, rops)
-		semanticCh <- retrievalResult{mems: mems, err: err}
+		semanticCh <- retrievalResult{name: "semantic", mems: mems, err: err}
 	}()
 
-	// Keyword retrieval
 	go func() {
 		defer wg.Done()
 		mems, err := r.keyword.Retrieve(ctx, query, rops)
-		keywordCh <- retrievalResult{mems: mems, err: err}
+		keywordCh <- retrievalResult{name: "keyword", mems: mems, err: err}
 	}()
 
-	// Graph retrieval
 	go func() {
 		defer wg.Done()
 		mems, err := r.graph.Retrieve(ctx, query, rops)
-		graphCh <- retrievalResult{mems: mems, err: err}
+		graphCh <- retrievalResult{name: "graph", mems: mems, err: err}
 	}()
 
-	// Temporal retrieval
 	go func() {
 		defer wg.Done()
 		mems, err := r.temporal.Retrieve(ctx, query, rops)
-		temporalCh <- retrievalResult{mems: mems, err: err}
+		temporalCh <- retrievalResult{name: "temporal", mems: mems, err: err}
 	}()
 
 	wg.Wait()
-
 	close(semanticCh)
 	close(keywordCh)
 	close(graphCh)
 	close(temporalCh)
 
-	// Collect results
-	var allResults []retrievers.Memory
-
+	// Collect per-retriever result lists for rank-aware RRF
+	var retrieverLists [][]retrievers.Memory
 	for ch := range semanticCh {
 		if ch.err == nil {
-			allResults = append(allResults, ch.mems...)
+			retrieverLists = append(retrieverLists, ch.mems)
 		}
 	}
 	for ch := range keywordCh {
 		if ch.err == nil {
-			allResults = append(allResults, ch.mems...)
+			retrieverLists = append(retrieverLists, ch.mems)
 		}
 	}
 	for ch := range graphCh {
 		if ch.err == nil {
-			allResults = append(allResults, ch.mems...)
+			retrieverLists = append(retrieverLists, ch.mems)
 		}
 	}
 	for ch := range temporalCh {
 		if ch.err == nil {
-			allResults = append(allResults, ch.mems...)
+			retrieverLists = append(retrieverLists, ch.mems)
 		}
 	}
 
-	// Apply RRF fusion
-	fused := rrfFusion(allResults, 60) // standard k=60 for RRF
+	// Apply RRF fusion with proper per-retriever ranks
+	fused := rrfFusion(retrieverLists, 60)
 
 	// Convert back to memory.Memory
 	memoryResults := make([]Memory, len(fused))
@@ -153,7 +150,6 @@ func (r *FusionRetriever) Retrieve(ctx context.Context, query string, opts Retri
 		}
 	}
 
-	// Limit results
 	if len(memoryResults) > limit {
 		memoryResults = memoryResults[:limit]
 	}
@@ -161,57 +157,59 @@ func (r *FusionRetriever) Retrieve(ctx context.Context, query string, opts Retri
 	return memoryResults, nil
 }
 
-// rrfFusion performs Reciprocal Rank Fusion on a list of memories from multiple sources.
-// k is the ranking constant (typically 60).
-func rrfFusion(memories []retrievers.Memory, k int) []retrievers.Memory {
-	if len(memories) == 0 {
+// rrfFusion performs Reciprocal Rank Fusion across multiple retriever result lists.
+// Each retriever's list is assumed to be sorted by relevance (best first).
+// RRF score = Σ 1/(k + position_in_retriever_list), summed across all retrievers
+// that returned this memory. k is typically 60.
+func rrfFusion(perRetrieverResults [][]retrievers.Memory, k int) []retrievers.Memory {
+	if len(perRetrieverResults) == 0 {
 		return nil
 	}
 
-	// Group by ID
-	type memEntry struct {
-		memory  retrievers.Memory
-		rank    int
+	// rrfScores accumulates RRF scores per memory ID.
+	// bestMemory holds the highest-scoring instance of each memory.
+	type entry struct {
+		memory    retrievers.Memory
+		rrfScore  float64
+		seenFrom  int // number of retrievers that returned this memory
 	}
-	idToEntries := make(map[string][]memEntry)
-	idToBestMemory := make(map[string]retrievers.Memory)
+	memoryMap := make(map[string]*entry)
 
-	for _, mem := range memories {
-		if _, exists := idToBestMemory[mem.ID]; !exists {
-			idToBestMemory[mem.ID] = mem
+	for _, retrieverList := range perRetrieverResults {
+		for pos, mem := range retrieverList {
+			rank := pos + 1 // 1-based rank within this retriever
+			e, exists := memoryMap[mem.ID]
+			if !exists {
+				memoryMap[mem.ID] = &entry{
+					memory:   mem,
+					rrfScore: 1.0 / float64(rank+k),
+					seenFrom: 1,
+				}
+			} else {
+				e.rrfScore += 1.0 / float64(rank+k)
+				e.seenFrom++
+				// Keep the best-scoring instance (from whichever retriever ranked it highest)
+				if mem.Score > e.memory.Score {
+					e.memory = mem
+				}
+			}
 		}
-		// Track all ranks for this memory
-		idToEntries[mem.ID] = append(idToEntries[mem.ID], memEntry{memory: mem, rank: len(idToEntries[mem.ID])})
 	}
 
-	// Calculate RRF score for each memory
-	type scoredMem struct {
-		memory  retrievers.Memory
-		score   float64
+	// Flatten and sort by RRF score descending
+	result := make([]retrievers.Memory, 0, len(memoryMap))
+	for _, e := range memoryMap {
+		e.memory.Score = e.rrfScore
+		result = append(result, e.memory)
 	}
-	var scored []scoredMem
 
-	for id, entries := range idToEntries {
-		var rrfScore float64
-		for _, entry := range entries {
-			rrfScore += 1.0 / float64(entry.rank+k)
+	sort.Slice(result, func(i, j int) bool {
+		// Tie-break: prefer memories found by more retrievers
+		if result[i].Score == result[j].Score {
+			return memoryMap[result[i].ID].seenFrom > memoryMap[result[j].ID].seenFrom
 		}
-		scored = append(scored, scoredMem{
-			memory: idToBestMemory[id],
-			score:  rrfScore,
-		})
-	}
-
-	// Sort by RRF score descending
-	sort.Slice(scored, func(i, j int) bool {
-		return scored[i].score > scored[j].score
+		return result[i].Score > result[j].Score
 	})
-
-	result := make([]retrievers.Memory, len(scored))
-	for i, s := range scored {
-		result[i] = s.memory
-		result[i].Score = s.score
-	}
 
 	return result
 }
@@ -222,24 +220,21 @@ type SemanticRetriever struct {
 	embedder *EmbeddingClient
 }
 
-// NewSemanticRetriever creates a new semantic (vector) retriever.
 func NewSemanticRetriever(pool *pgxpool.Pool, embedder *EmbeddingClient) *SemanticRetriever {
 	return &SemanticRetriever{pool: pool, embedder: embedder}
 }
 
-// Name returns the identifier for this retriever.
 func (r *SemanticRetriever) Name() string {
 	return "semantic"
 }
 
-// Retrieve performs vector similarity search on memory content.
 func (r *SemanticRetriever) Retrieve(ctx context.Context, query string, opts retrievers.RetrieveOptions) ([]retrievers.Memory, error) {
 	vec, err := r.embedder.Embed(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	limit := int32(opts.Limit)
+	limit := opts.Limit
 	if limit <= 0 {
 		limit = 20
 	}
@@ -256,14 +251,17 @@ func (r *SemanticRetriever) Retrieve(ctx context.Context, query string, opts ret
 		agentUUID = uuid.Nil
 	}
 
-	workspaceID := uuid.Nil // TODO: get from context
+	wsUUID, err := uuid.Parse(opts.WorkspaceID)
+	if err != nil {
+		wsUUID = uuid.Nil
+	}
 
 	params := db.SearchAgentMemoriesParams{
 		AgentID:     uuidToPg(agentUUID),
 		Column2:     vectorToPg(vec),
-		WorkspaceID: uuidToPg(workspaceID),
+		WorkspaceID: uuidToPg(wsUUID),
 		Column4:     memTypes,
-		Limit:       limit,
+		Limit:       int32(limit),
 	}
 
 	rows, err := queries.SearchAgentMemories(ctx, params)

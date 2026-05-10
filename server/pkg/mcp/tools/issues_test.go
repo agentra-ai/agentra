@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/agentra-ai/agentra/pkg/mcp"
+	"github.com/agentra-ai/agentra/server/pkg/mcp"
 )
 
 func TestIssueListParams(t *testing.T) {

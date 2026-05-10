@@ -19,15 +19,15 @@ RETURNING *;
 DELETE FROM github_installations WHERE id = $1;
 
 -- name: CreateIssueLink :one
-INSERT INTO github_issue_links (issue_id, repository, pr_number, commit_sha, branch_name)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO issue_git_links (issue_id, repository, pr_number, commit_sha, branch_name, link_type)
+VALUES ($1, $2, $3, $4, $5, 'pr')
 RETURNING *;
 
 -- name: GetIssueLinks :many
-SELECT * FROM github_issue_links WHERE issue_id = $1;
+SELECT * FROM issue_git_links WHERE issue_id = $1;
 
 -- name: UpdateIssueLink :one
-UPDATE github_issue_links SET
+UPDATE issue_git_links SET
     pr_number = COALESCE($2, pr_number),
     commit_sha = COALESCE($3, commit_sha),
     branch_name = COALESCE($4, branch_name)
@@ -35,4 +35,32 @@ WHERE id = $1
 RETURNING *;
 
 -- name: DeleteIssueLink :one
-DELETE FROM github_issue_links WHERE id = $1 RETURNING *;
+DELETE FROM issue_git_links WHERE id = $1 RETURNING *;
+
+-- name: LinkCommit :one
+INSERT INTO issue_git_links (issue_id, sha, message, branch, link_type)
+VALUES ($1, $2, $3, $4, 'commit')
+ON CONFLICT DO NOTHING
+RETURNING *;
+
+-- name: GetCommitsByIssue :many
+SELECT * FROM issue_git_links WHERE issue_id = $1 AND link_type = 'commit';
+
+-- name: LinkPR :one
+INSERT INTO issue_git_links (issue_id, repository, pr_number, pr_state, pr_title, merged_at, link_type)
+VALUES ($1, $2, $3, $4, $5, $6, 'pr')
+ON CONFLICT DO NOTHING
+RETURNING *;
+
+-- name: UpdatePRState :exec
+UPDATE issue_git_links SET pr_state = $2, merged_at = $3
+WHERE issue_id = $1 AND pr_number = $4 AND link_type = 'pr';
+
+-- name: LinkBranch :one
+INSERT INTO issue_git_links (issue_id, branch, link_type)
+VALUES ($1, $2, 'branch')
+ON CONFLICT DO NOTHING
+RETURNING *;
+
+-- name: GetGitLinksByIssue :many
+SELECT * FROM issue_git_links WHERE issue_id = $1;

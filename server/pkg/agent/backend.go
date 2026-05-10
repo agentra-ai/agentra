@@ -3,8 +3,18 @@ package agent
 import (
 	"context"
 	"fmt"
-	"github.com/agentra-ai/agentra/server/pkg/agent/providers"
+
+	"github.com/agentra-ai/agentra/server/pkg/agent/types"
+	agentproviders "github.com/agentra-ai/agentra/server/pkg/agent/providers"
 )
+
+// ExtendedBackend is a Backend that exposes metadata about its provider.
+type ExtendedBackend interface {
+	Backend
+	ProviderType() ProviderType
+	Model() string
+	Capabilities() *Capabilities
+}
 
 // ProviderType identifies the type of backend.
 type ProviderType string
@@ -20,14 +30,6 @@ const (
 	ProviderOpenRouter ProviderType = "openrouter"
 )
 
-// Backend is the unified interface for executing prompts via coding agents.
-type Backend interface {
-	Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error)
-	ProviderType() ProviderType
-	Model() string
-	Capabilities() *Capabilities
-}
-
 // Capabilities describes what a backend supports.
 type Capabilities struct {
 	Streaming     bool
@@ -39,15 +41,15 @@ type Capabilities struct {
 // BackendFacade provides a unified interface across all provider types.
 type BackendFacade struct {
 	cliBackends  map[ProviderType]Backend
-	apiProviders map[ProviderType]providers.Provider
-	default      ProviderType
+	apiProviders map[ProviderType]agentproviders.Provider
+	defaultType  ProviderType
 }
 
 func NewBackendFacade(defaultProvider ProviderType) *BackendFacade {
 	return &BackendFacade{
 		cliBackends:  make(map[ProviderType]Backend),
-		apiProviders: make(map[ProviderType]providers.Provider),
-		default:      defaultProvider,
+		apiProviders: make(map[ProviderType]agentproviders.Provider),
+		defaultType:  defaultProvider,
 	}
 }
 
@@ -57,26 +59,20 @@ func (f *BackendFacade) RegisterCLIBackend(p ProviderType, b Backend) {
 }
 
 // RegisterAPIProvider registers an API-based provider (OpenAI, Anthropic, Ollama).
-func (f *BackendFacade) RegisterAPIProvider(p ProviderType, provider providers.Provider) {
+func (f *BackendFacade) RegisterAPIProvider(p ProviderType, provider agentproviders.Provider) {
 	f.apiProviders[p] = provider
 }
 
 // Execute delegates to the appropriate backend.
-func (f *BackendFacade) Execute(ctx context.Context, p ProviderType, prompt string, opts ExecOptions) (*Session, error) {
+func (f *BackendFacade) Execute(ctx context.Context, p ProviderType, prompt string, opts types.ExecOptions) (*types.Session, error) {
 	if backend, ok := f.cliBackends[p]; ok {
 		return backend.Execute(ctx, prompt, opts)
 	}
 	if provider, ok := f.apiProviders[p]; ok {
-		return provider.Execute(ctx, prompt, providers.ExecOptions{
-			Cwd:          opts.Cwd,
-			Model:        opts.Model,
-			SystemPrompt: opts.SystemPrompt,
-			MaxTurns:     opts.MaxTurns,
-			Timeout:      opts.Timeout,
-		})
+		return provider.Execute(ctx, prompt, opts)
 	}
 	// Fallback to default
-	if backend, ok := f.cliBackends[f.default]; ok {
+	if backend, ok := f.cliBackends[f.defaultType]; ok {
 		return backend.Execute(ctx, prompt, opts)
 	}
 	return nil, fmt.Errorf("no backend available for provider %s", p)

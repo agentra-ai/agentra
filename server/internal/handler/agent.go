@@ -318,7 +318,7 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		Tools:              tools,
 		Triggers:           triggers,
 		Provider:           req.Provider,
-		ModelOverride:       req.ModelOverride,
+		ModelOverride:       pgtype.Text{String: req.ModelOverride, Valid: req.ModelOverride != ""},
 		ProviderConfig:     providerConfig,
 	})
 	if err != nil {

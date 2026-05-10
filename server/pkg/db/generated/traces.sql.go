@@ -70,6 +70,49 @@ func (q *Queries) CompleteTaskRun(ctx context.Context, arg CompleteTaskRunParams
 	return i, err
 }
 
+const createExecutionTrace = `-- name: CreateExecutionTrace :one
+INSERT INTO execution_traces (task_id, agent_id, issue_id, provider, model, status, start_time)
+VALUES ($1, $2, $3, $4, $5, 'running', NOW())
+RETURNING id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at
+`
+
+type CreateExecutionTraceParams struct {
+	TaskID   pgtype.UUID `json:"task_id"`
+	AgentID  pgtype.UUID `json:"agent_id"`
+	IssueID  pgtype.UUID `json:"issue_id"`
+	Provider string      `json:"provider"`
+	Model    string      `json:"model"`
+}
+
+func (q *Queries) CreateExecutionTrace(ctx context.Context, arg CreateExecutionTraceParams) (ExecutionTrace, error) {
+	row := q.db.QueryRow(ctx, createExecutionTrace,
+		arg.TaskID,
+		arg.AgentID,
+		arg.IssueID,
+		arg.Provider,
+		arg.Model,
+	)
+	var i ExecutionTrace
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.AgentID,
+		&i.IssueID,
+		&i.Provider,
+		&i.Model,
+		&i.Steps,
+		&i.Tools,
+		&i.Tokens,
+		&i.Cost,
+		&i.StartTime,
+		&i.EndTime,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createTaskRun = `-- name: CreateTaskRun :one
 INSERT INTO task_runs (task_id, agent_id, status, started_at)
 VALUES ($1, $2, 'running', NOW())
@@ -99,6 +142,97 @@ func (q *Queries) CreateTaskRun(ctx context.Context, arg CreateTaskRunParams) (T
 		&i.Output,
 		&i.Error,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const endExecutionTrace = `-- name: EndExecutionTrace :one
+UPDATE execution_traces SET
+    status = $2,
+    end_time = NOW(),
+    updated_at = NOW()
+WHERE id = $1 AND status = 'running'
+RETURNING id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at
+`
+
+type EndExecutionTraceParams struct {
+	ID     pgtype.UUID `json:"id"`
+	Status string      `json:"status"`
+}
+
+func (q *Queries) EndExecutionTrace(ctx context.Context, arg EndExecutionTraceParams) (ExecutionTrace, error) {
+	row := q.db.QueryRow(ctx, endExecutionTrace, arg.ID, arg.Status)
+	var i ExecutionTrace
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.AgentID,
+		&i.IssueID,
+		&i.Provider,
+		&i.Model,
+		&i.Steps,
+		&i.Tools,
+		&i.Tokens,
+		&i.Cost,
+		&i.StartTime,
+		&i.EndTime,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getExecutionTrace = `-- name: GetExecutionTrace :one
+SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at FROM execution_traces WHERE id = $1
+`
+
+func (q *Queries) GetExecutionTrace(ctx context.Context, id pgtype.UUID) (ExecutionTrace, error) {
+	row := q.db.QueryRow(ctx, getExecutionTrace, id)
+	var i ExecutionTrace
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.AgentID,
+		&i.IssueID,
+		&i.Provider,
+		&i.Model,
+		&i.Steps,
+		&i.Tools,
+		&i.Tokens,
+		&i.Cost,
+		&i.StartTime,
+		&i.EndTime,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getExecutionTraceByTask = `-- name: GetExecutionTraceByTask :one
+SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at FROM execution_traces WHERE task_id = $1 ORDER BY created_at DESC LIMIT 1
+`
+
+func (q *Queries) GetExecutionTraceByTask(ctx context.Context, taskID pgtype.UUID) (ExecutionTrace, error) {
+	row := q.db.QueryRow(ctx, getExecutionTraceByTask, taskID)
+	var i ExecutionTrace
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.AgentID,
+		&i.IssueID,
+		&i.Provider,
+		&i.Model,
+		&i.Steps,
+		&i.Tools,
+		&i.Tokens,
+		&i.Cost,
+		&i.StartTime,
+		&i.EndTime,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -167,6 +301,91 @@ func (q *Queries) GetTraceAnalytics(ctx context.Context, arg GetTraceAnalyticsPa
 		&i.FailedCount,
 	)
 	return i, err
+}
+
+const listExecutionTracesByAgent = `-- name: ListExecutionTracesByAgent :many
+SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at FROM execution_traces WHERE agent_id = $1 ORDER BY start_time DESC LIMIT $2
+`
+
+type ListExecutionTracesByAgentParams struct {
+	AgentID pgtype.UUID `json:"agent_id"`
+	Limit   int32       `json:"limit"`
+}
+
+func (q *Queries) ListExecutionTracesByAgent(ctx context.Context, arg ListExecutionTracesByAgentParams) ([]ExecutionTrace, error) {
+	rows, err := q.db.Query(ctx, listExecutionTracesByAgent, arg.AgentID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExecutionTrace{}
+	for rows.Next() {
+		var i ExecutionTrace
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskID,
+			&i.AgentID,
+			&i.IssueID,
+			&i.Provider,
+			&i.Model,
+			&i.Steps,
+			&i.Tools,
+			&i.Tokens,
+			&i.Cost,
+			&i.StartTime,
+			&i.EndTime,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listExecutionTracesByIssue = `-- name: ListExecutionTracesByIssue :many
+SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at FROM execution_traces WHERE issue_id = $1 ORDER BY start_time DESC
+`
+
+func (q *Queries) ListExecutionTracesByIssue(ctx context.Context, issueID pgtype.UUID) ([]ExecutionTrace, error) {
+	rows, err := q.db.Query(ctx, listExecutionTracesByIssue, issueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExecutionTrace{}
+	for rows.Next() {
+		var i ExecutionTrace
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskID,
+			&i.AgentID,
+			&i.IssueID,
+			&i.Provider,
+			&i.Model,
+			&i.Steps,
+			&i.Tools,
+			&i.Tokens,
+			&i.Cost,
+			&i.StartTime,
+			&i.EndTime,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listTaskRuns = `-- name: ListTaskRuns :many
@@ -289,6 +508,40 @@ func (q *Queries) ListTraceSteps(ctx context.Context, taskRunID pgtype.UUID) ([]
 	return items, nil
 }
 
+const recordToolCall = `-- name: RecordToolCall :exec
+UPDATE execution_traces SET
+    tools = tools || $2::jsonb,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type RecordToolCallParams struct {
+	ID      pgtype.UUID `json:"id"`
+	Column2 []byte      `json:"column_2"`
+}
+
+func (q *Queries) RecordToolCall(ctx context.Context, arg RecordToolCallParams) error {
+	_, err := q.db.Exec(ctx, recordToolCall, arg.ID, arg.Column2)
+	return err
+}
+
+const recordTraceStep = `-- name: RecordTraceStep :exec
+UPDATE execution_traces SET
+    steps = steps || $2::jsonb,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type RecordTraceStepParams struct {
+	ID      pgtype.UUID `json:"id"`
+	Column2 []byte      `json:"column_2"`
+}
+
+func (q *Queries) RecordTraceStep(ctx context.Context, arg RecordTraceStepParams) error {
+	_, err := q.db.Exec(ctx, recordTraceStep, arg.ID, arg.Column2)
+	return err
+}
+
 const recordTraceSteps = `-- name: RecordTraceSteps :many
 INSERT INTO trace_steps (task_run_id, step_number, timestamp, action, tool, input_text, output_text, tokens_used, duration_ms, metadata)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -350,4 +603,23 @@ func (q *Queries) RecordTraceSteps(ctx context.Context, arg RecordTraceStepsPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateTraceTokens = `-- name: UpdateTraceTokens :exec
+UPDATE execution_traces SET
+    tokens = $2,
+    cost = $3,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateTraceTokensParams struct {
+	ID     pgtype.UUID    `json:"id"`
+	Tokens []byte         `json:"tokens"`
+	Cost   pgtype.Numeric `json:"cost"`
+}
+
+func (q *Queries) UpdateTraceTokens(ctx context.Context, arg UpdateTraceTokensParams) error {
+	_, err := q.db.Exec(ctx, updateTraceTokens, arg.ID, arg.Tokens, arg.Cost)
+	return err
 }

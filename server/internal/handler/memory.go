@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
-	"github.com/agentra-ai/agentra/pkg/memory"
+	"github.com/agentra-ai/agentra/server/pkg/memory"
 )
 
 type MemoryHandler struct {
@@ -32,7 +32,7 @@ func (h *MemoryHandler) ListMemories(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, memories)
+	writeJSON(w, http.StatusOK, memories)
 }
 
 func (h *MemoryHandler) CreateMemory(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +58,7 @@ func (h *MemoryHandler) CreateMemory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, result)
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *MemoryHandler) ListAgentMemories(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +69,7 @@ func (h *MemoryHandler) ListAgentMemories(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, memories)
+	writeJSON(w, http.StatusOK, memories)
 }
 
 func (h *MemoryHandler) UpdateMemory(w http.ResponseWriter, r *http.Request) {
@@ -87,7 +87,7 @@ func (h *MemoryHandler) DeleteMemory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, map[string]bool{"deleted": true})
+	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
 }
 
 func (h *MemoryHandler) SearchMemories(w http.ResponseWriter, r *http.Request) {
@@ -98,14 +98,5 @@ func (h *MemoryHandler) SearchMemories(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, map[string]any{"memories": results})
-}
-
-func writeJSON(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, code int, msg string) {
-	writeJSON(w, map[string]any{"error": msg})
+	writeJSON(w, http.StatusOK, map[string]any{"memories": results})
 }
