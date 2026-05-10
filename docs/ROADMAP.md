@@ -107,7 +107,9 @@ Today, Agentra v0.2 ships a working end-to-end loop: create an issue, assign it 
 | One-Command Install | `npx create-agentra` / `brew install agentra` / embedded SQLite mode | P0 | 📐 Designed ([spec](docs/superpowers/specs/2026-05-10-one-command-install-design.md)) |
 | GitHub Integration | GitHub OAuth App + webhooks + PR/commit linking | P1 | 🚧 In Progress |
 | Git-Native Hooks | Auto-link commits via prepare-commit-msg + post-merge hooks (agent-tasks has this) | P1 | ✅ Done ([spec](docs/superpowers/specs/2026-05-10-git-native-hooks-design.md)) |
-| Provider Breadth (7→15) | Add DeepSeek, Groq, Together, Mistral, xAI, Gemini API, more | P1 | Not Started |
+| Provider Breadth (7→15) | Add DeepSeek, Groq, Together, Mistral, xAI, Gemini API, more | P1 | ✅ Done |
+| Real-Time DAG Visualization | Interactive ReactFlow DAG view on issue detail page | P2 | ✅ Done |
+| Pre-Defined Specialist Agents | 6 templates (Frontend, Backend, Test, Security, DevOps, Tech Writer) | P2 | ✅ Done |
 | Onboarding Wizard | Guided in-app flow from workspace to first agent task | P1 | Not Started |
 | Cloud Runtime | Managed containerized agent execution | P0 | 🚧 In Progress |
 | Mobile App | React Native iOS/Android for monitoring and approvals | P2 | Not Started |
