@@ -2,6 +2,7 @@ package retrievers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -50,15 +51,18 @@ func (r *KeywordRetriever) retrieveAgentMemories(ctx context.Context, query stri
 
 	agentUUID, err := uuid.Parse(opts.AgentID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid agent_id: %w", err)
 	}
 
-	workspaceID := uuid.Nil // TODO: get from context
+	wsUUID, err := uuid.Parse(opts.WorkspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid workspace_id: %w", err)
+	}
 
 	params := db.SearchAgentMemoriesBM25Params{
 		AgentID:        uuidToPg(agentUUID),
 		PlaintoTsquery: query,
-		WorkspaceID:    uuidToPg(workspaceID),
+		WorkspaceID:    uuidToPg(wsUUID),
 		Column4:        memTypes,
 		Limit:          limit,
 	}
@@ -86,10 +90,9 @@ func (r *KeywordRetriever) retrieveAgentMemories(ctx context.Context, query stri
 func (r *KeywordRetriever) retrieveAllMemories(ctx context.Context, query string, opts RetrieveOptions, limit int32, memTypes []string) ([]Memory, error) {
 	queries := db.New(r.pool)
 
-	// TODO: Get workspaceID from opts or context
-	wsUUID, err := uuid.Parse("") // placeholder
+	wsUUID, err := uuid.Parse(opts.WorkspaceID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid workspace_id: %w", err)
 	}
 
 	params := db.SearchAllMemoriesBM25Params{
