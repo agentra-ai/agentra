@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
-	db "github.com/agentra-ai/agentra/pkg/db/generated"
+	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
 
 type GitHubHandler struct {
@@ -26,7 +26,7 @@ func (h *GitHubHandler) RegisterRoutes(r chi.Router) {
 
 func (h *GitHubHandler) ListInstallations(w http.ResponseWriter, r *http.Request) {
 	workspaceID := chi.URLParam(r, "id")
-	inst, err := h.queries.GetInstallation(r.Context(), uuid.MustParse(workspaceID))
+	inst, err := h.queries.GetInstallation(r.Context(), pgtype.UUID{Bytes: uuid.MustParse(workspaceID), Valid: true})
 	if err != nil {
 		http.Error(w, "not found", 404)
 		return
@@ -45,13 +45,13 @@ func (h *GitHubHandler) ConnectGitHub(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(r.Body).Decode(&req)
 
 	inst, err := h.queries.CreateInstallation(r.Context(), db.CreateInstallationParams{
-		WorkspaceID:    uuid.MustParse(workspaceID),
+		WorkspaceID:    pgtype.UUID{Bytes: uuid.MustParse(workspaceID), Valid: true},
 		InstallationID: req.InstallationID,
 		AccountLogin:  req.AccountLogin,
 		AccountType:   req.AccountType,
 		AccessToken:   req.AccessToken,
-		RefreshToken:  pgtype.Text{Status: pgtype.Null},
-		TokenExpiresAt: pgtype.Timestamptz{Status: pgtype.Null},
+		RefreshToken:  pgtype.Text{},
+		TokenExpiresAt: pgtype.Timestamptz{},
 		Repositories:  []byte("[]"),
 	})
 	if err != nil {
@@ -63,7 +63,7 @@ func (h *GitHubHandler) ConnectGitHub(w http.ResponseWriter, r *http.Request) {
 
 func (h *GitHubHandler) DisconnectGitHub(w http.ResponseWriter, r *http.Request) {
 	workspaceID := chi.URLParam(r, "id")
-	inst, err := h.queries.GetInstallation(r.Context(), uuid.MustParse(workspaceID))
+	inst, err := h.queries.GetInstallation(r.Context(), pgtype.UUID{Bytes: uuid.MustParse(workspaceID), Valid: true})
 	if err != nil {
 		http.Error(w, "not found", 404)
 		return

@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
@@ -30,7 +31,7 @@ func (h *TraceHandler) GetTaskTrace(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "id")
 	runID := r.URL.Query().Get("run_id")
 
-	steps, err := h.queries.ListTraceSteps(r.Context(), uuid.MustParse(runID))
+	steps, err := h.queries.ListTraceSteps(r.Context(), pgtype.UUID{Bytes: uuid.MustParse(runID), Valid: true})
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -47,7 +48,7 @@ func (h *TraceHandler) GetTaskTraceSummary(w http.ResponseWriter, r *http.Reques
 	taskID := chi.URLParam(r, "id")
 	runID := r.URL.Query().Get("run_id")
 
-	steps, err := h.queries.ListTraceSteps(r.Context(), uuid.MustParse(runID))
+	steps, err := h.queries.ListTraceSteps(r.Context(), pgtype.UUID{Bytes: uuid.MustParse(runID), Valid: true})
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -64,7 +65,7 @@ func (h *TraceHandler) ListAgentTraces(w http.ResponseWriter, r *http.Request) {
 	agentID := chi.URLParam(r, "id")
 	limit := int32(50)
 
-	runs, err := h.queries.ListTaskRuns(r.Context(), uuid.MustParse(agentID), limit)
+	runs, err := h.queries.ListTaskRuns(r.Context(), db.ListTaskRunsParams{AgentID: pgtype.UUID{Bytes: uuid.MustParse(agentID), Valid: true}, Limit: limit})
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -77,7 +78,14 @@ func (h *TraceHandler) GetTraceAnalytics(w http.ResponseWriter, r *http.Request)
 	agentID := r.URL.Query().Get("agent_id")
 	period := r.URL.Query().Get("period")
 
-	analytics, err := h.queries.GetTraceAnalytics(r.Context(), uuid.MustParse(agentID), period)
+	var interval pgtype.Interval
+	if period != "" {
+		interval.Scan(period)
+	}
+	analytics, err := h.queries.GetTraceAnalytics(r.Context(), db.GetTraceAnalyticsParams{
+		AgentID: pgtype.UUID{Bytes: uuid.MustParse(agentID), Valid: true},
+		Column2: interval,
+	})
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
