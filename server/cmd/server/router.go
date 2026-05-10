@@ -204,6 +204,8 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 				})
 				// Owner-only access
 				r.With(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner")).Delete("/", h.DeleteWorkspace)
+				// Goal-first execute endpoint
+				r.Post("/execute", h.ExecuteGoal)
 			})
 		})
 

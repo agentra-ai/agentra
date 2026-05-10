@@ -568,6 +568,14 @@ func resolveAPIKey(provider string) string {
 		return os.Getenv("OPENROUTER_API_KEY")
 	case "ollama":
 		return "" // ollama is local, no key needed
+	case "deepseek":
+		return os.Getenv("DEEPSEEK_API_KEY")
+	case "groq":
+		return os.Getenv("GROQ_API_KEY")
+	case "together":
+		return os.Getenv("TOGETHER_API_KEY")
+	case "mistral":
+		return os.Getenv("MISTRAL_API_KEY")
 	default:
 		return ""
 	}

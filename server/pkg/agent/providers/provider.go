@@ -63,6 +63,14 @@ func NewProvider(providerType string, cfg APIConfig) (Provider, error) {
 		return NewOpenRouterProvider(cfg), nil
 	case "ollama":
 		return NewOllamaProvider(cfg), nil
+	case "deepseek":
+		return NewDeepSeekProvider(cfg), nil
+	case "groq":
+		return NewGroqProvider(cfg), nil
+	case "together":
+		return NewTogetherProvider(cfg), nil
+	case "mistral":
+		return NewMistralProvider(cfg), nil
 	default:
 		return nil, fmt.Errorf("unknown provider type: %q", providerType)
 	}

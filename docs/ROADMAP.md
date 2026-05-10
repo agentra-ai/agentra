@@ -103,10 +103,10 @@ Today, Agentra v0.2 ships a working end-to-end loop: create an issue, assign it 
 | Agent-to-Agent Handoff | Task Graph with DAG execution + handoff protocol | P0 | ✅ Done |
 | Multi-Provider Support | 7 providers (3 CLI + 4 API) via Backend Facade | P0 | ✅ Done |
 | Execution Traces | execution_traces table + TaskService integration | P1 | ✅ Done |
-| Goal → DAG Auto-decomposition | LLM auto-decompose issue into task graph (open-multi-agent has this) | P0 | 📐 Designed ([spec](docs/superpowers/specs/2026-05-10-goal-to-dag-auto-decomposition-design.md)) |
+| Goal → DAG Auto-decomposition | LLM auto-decompose issue into task graph (open-multi-agent has this) | P0 | ✅ Done ([spec](docs/superpowers/specs/2026-05-10-goal-to-dag-auto-decomposition-design.md)) |
 | One-Command Install | `npx create-agentra` / `brew install agentra` / embedded SQLite mode | P0 | 📐 Designed ([spec](docs/superpowers/specs/2026-05-10-one-command-install-design.md)) |
 | GitHub Integration | GitHub OAuth App + webhooks + PR/commit linking | P1 | 🚧 In Progress |
-| Git-Native Hooks | Auto-link commits via prepare-commit-msg + post-merge hooks (agent-tasks has this) | P1 | 📐 Designed ([spec](docs/superpowers/specs/2026-05-10-git-native-hooks-design.md)) |
+| Git-Native Hooks | Auto-link commits via prepare-commit-msg + post-merge hooks (agent-tasks has this) | P1 | ✅ Done ([spec](docs/superpowers/specs/2026-05-10-git-native-hooks-design.md)) |
 | Provider Breadth (7→15) | Add DeepSeek, Groq, Together, Mistral, xAI, Gemini API, more | P1 | Not Started |
 | Onboarding Wizard | Guided in-app flow from workspace to first agent task | P1 | Not Started |
 | Cloud Runtime | Managed containerized agent execution | P0 | 🚧 In Progress |
@@ -257,9 +257,9 @@ Expand beyond Claude/Codex/OpenCode to match swarmclaw's 23+ providers.
 | Execution Traces | Structured logging: steps, tools, tokens, cost per task. | P1 | Platform | ✅ Done (Phase 2.5) |
 | Multi-Provider Support | 7 providers (3 CLI + 4 API) via Backend Facade. | P0 | Platform | ✅ Done (Phase 2.5) |
 | Analytics Dashboard | Agent perf, cycle time, cost, velocity charts. | P1 | Product | Pending |
-| Goal → DAG Auto-Decomposition | LLM auto-decomposes issue into task graph (learn from open-multi-agent). | P0 | Platform | 📐 Designed ([spec](docs/superpowers/specs/2026-05-10-goal-to-dag-auto-decomposition-design.md)) |
+| Goal → DAG Auto-Decomposition | LLM auto-decomposes issue into task graph (learn from open-multi-agent). | P0 | Platform | ✅ Done ([spec](docs/superpowers/specs/2026-05-10-goal-to-dag-auto-decomposition-design.md)) |
 | One-Command Install | `npx create-agentra` / `brew install agentra` zero-config setup. | P0 | DX | 📐 Designed ([spec](docs/superpowers/specs/2026-05-10-one-command-install-design.md)) |
-| Git-Native Hooks | Auto-link commits to tasks; `post-merge` auto-completes tasks. | P1 | Platform | 📐 Designed ([spec](docs/superpowers/specs/2026-05-10-git-native-hooks-design.md)) |
+| Git-Native Hooks | Auto-link commits to tasks; `post-merge` auto-completes tasks. | P1 | Platform | ✅ Done ([spec](docs/superpowers/specs/2026-05-10-git-native-hooks-design.md)) |
 
 ---
 
@@ -450,7 +450,7 @@ Continuous investments in platform reliability, performance, and maintainability
 | Skills / workflow templates | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Self-hostable & open source | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Cloud Runtime | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| Git-native (VCS integration) | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| Git-native (VCS integration) | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | Persistent task UI | ✅ | ❌ | ❌ | ✅ (Dashboard) | ❌ | ❌ | ❌ |
 | One-command install | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Multi-workspace | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
