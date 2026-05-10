@@ -64,7 +64,7 @@ import { StatusIcon, PriorityIcon, DueDatePicker, AssigneePicker, canAssignAgent
 import { CommentCard } from "./comment-card";
 import { CommentInput } from "./comment-input";
 import { AgentLiveCard, TaskRunHistory } from "./agent-live-card";
-import { SubtaskTree } from "@/features/taskgraph/components";
+import { SubtaskTree, GraphView, AutoDecomposeButton } from "@/features/taskgraph/components";
 import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
@@ -677,6 +677,13 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
 
           {/* Task Graph */}
           <div className="mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-semibold">Task Graph</h2>
+              <AutoDecomposeButton issueId={id} />
+            </div>
+            <div className="mb-4">
+              <GraphView issueId={id} />
+            </div>
             <SubtaskTree issueId={id} />
           </div>
 

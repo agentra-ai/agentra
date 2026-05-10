@@ -25,4 +25,13 @@ export const taskGraphApi = {
   deleteNode: async (id: string) => {
     await fetch(`/api/graph/nodes/${id}`, { method: "DELETE" });
   },
+
+  autoDecompose: async (issueId: string, opts?: { provider?: string; model?: string; maxNodes?: number; additionalContext?: string }) => {
+    const res = await fetch(`/api/issues/${issueId}/auto-decompose`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts || {}),
+    });
+    return res.json();
+  },
 };

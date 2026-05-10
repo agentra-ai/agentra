@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { taskGraphApi } from "../api/taskGraphApi";
 
 interface GraphNode {
   id: string;
@@ -31,6 +32,7 @@ interface TaskGraphState {
   fetchGraph: (issueId: string) => Promise<void>;
   updateNode: (id: string, data: Partial<GraphNode>) => Promise<void>;
   deleteNode: (id: string) => Promise<void>;
+  decomposeGraph: (issueId: string, opts?: { provider?: string; model?: string; maxNodes?: number; additionalContext?: string }) => Promise<any>;
 }
 
 export const useTaskGraph = create<TaskGraphState>((set) => ({
@@ -71,6 +73,23 @@ export const useTaskGraph = create<TaskGraphState>((set) => ({
       set((state) => ({ nodes: state.nodes.filter((n) => n.id !== id) }));
     } catch (e: any) {
       set({ error: e.message });
+    }
+  },
+
+  decomposeGraph: async (issueId: string, opts?: { provider?: string; model?: string; maxNodes?: number; additionalContext?: string }) => {
+    set({ isLoading: true, error: null });
+    try {
+      const res = await taskGraphApi.autoDecompose(issueId, opts);
+      if (res.error) throw new Error(res.error);
+      set((state) => ({
+        nodes: res.nodes || state.nodes,
+        edges: res.edges || state.edges,
+        isLoading: false,
+      }));
+      return res;
+    } catch (e: any) {
+      set({ error: e.message, isLoading: false });
+      throw e;
     }
   },
 }));

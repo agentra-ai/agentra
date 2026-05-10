@@ -31,6 +31,7 @@ import {
   Settings,
   Camera,
   Archive,
+  Sparkles,
 } from "lucide-react";
 import type {
   Agent,
@@ -80,6 +81,7 @@ import { useRuntimeStore } from "@/features/runtimes";
 import { useIssueStore } from "@/features/issues";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
+import { CreateFromTemplateDialog } from "@/features/agents/components/SpecialistAgentTemplates";
 
 
 // ---------------------------------------------------------------------------
@@ -1564,6 +1566,7 @@ export default function AgentsPage() {
   const [selectedId, setSelectedId] = useState<string>("");
   const [showArchived, setShowArchived] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [showCreateTemplate, setShowCreateTemplate] = useState(false);
   const runtimes = useRuntimeStore((s) => s.runtimes);
   const fetchRuntimes = useRuntimeStore((s) => s.fetchRuntimes);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
@@ -1697,6 +1700,14 @@ export default function AgentsPage() {
               >
                 <Plus className="h-4 w-4 text-muted-foreground" />
               </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setShowCreateTemplate(true)}
+                title="Create from template"
+              >
+                <Sparkles className="h-4 w-4 text-muted-foreground" />
+              </Button>
             </div>
           </div>
           {filteredAgents.length === 0 ? (
@@ -1767,6 +1778,16 @@ export default function AgentsPage() {
           onCreate={handleCreate}
         />
       )}
+
+      <CreateFromTemplateDialog
+        open={showCreateTemplate}
+        onOpenChange={setShowCreateTemplate}
+        runtimes={runtimes}
+        onCreated={(agentId) => {
+          setSelectedId(agentId);
+          refreshAgents();
+        }}
+      />
     </ResizablePanelGroup>
   );
 }
