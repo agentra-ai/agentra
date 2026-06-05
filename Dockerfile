@@ -37,6 +37,9 @@ RUN pnpm install --frozen-lockfile
 
 COPY apps/web/ ./apps/web/
 
+# Propagate .env so Next.js can inline NEXT_PUBLIC_* into the client bundle
+COPY .env .env
+
 ARG REMOTE_API_URL=http://server:8080
 ENV REMOTE_API_URL=${REMOTE_API_URL}
 
