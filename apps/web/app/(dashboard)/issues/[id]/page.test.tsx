@@ -2,6 +2,9 @@ import { Suspense, forwardRef, useRef, useState, useImperativeHandle } from "rea
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { NextIntlClientProvider } from "next-intl";
+import { messages } from "@/i18n";
+import type { Message } from "@/i18n";
 import type { Issue, Comment, TimelineEntry } from "@/shared/types";
 
 // Mock next/navigation
@@ -240,9 +243,11 @@ async function renderPage(id = "issue-1") {
   let result: ReturnType<typeof render>;
   await act(async () => {
     result = render(
-      <Suspense fallback={<div>Suspense loading...</div>}>
-        <IssueDetailPage params={Promise.resolve({ id })} />
-      </Suspense>,
+      <NextIntlClientProvider locale="en" messages={messages.en as Message}>
+        <Suspense fallback={<div>Suspense loading...</div>}>
+          <IssueDetailPage params={Promise.resolve({ id })} />
+        </Suspense>
+      </NextIntlClientProvider>,
     );
   });
   return result!;
