@@ -119,7 +119,7 @@ RUN pnpm --filter @agentra/web build
 | 位置 | 是否含 `.env` 内容 | 备注 |
 |------|-------------------|------|
 | `web-builder` 中间层 | 是（builder 镜像内 `/src/apps/web/.env`） | 临时层，CI 本地生成，不分发 |
-| `web-runtime` 镜像 | 否 | 仅 `COPY --from=web-builder` 3 个白名单路径 |
+| `web-runtime` 镜像 | 否（Dockerfile web-runtime 阶段 `RUN rm -f /app/apps/web/.env` 显式剔除 next standalone 引入的副本） | 仅 `COPY --from=web-builder` 3 个白名单路径；next build 的 file-tracing 会把 .env 打进 `.next/standalone/`，必须用 `RUN rm` 二次剔除 |
 | client bundle (JS) | 仅 `NEXT_PUBLIC_*` | Next.js inline 规则只处理此前缀 |
 | server bundle (SSR) | `.env` 文件不在 runtime image 中 | SSR 读 `process.env.NEXT_PUBLIC_*` 仍为 `undefined`，与改动前一致 |
 
@@ -203,6 +203,7 @@ docker compose up -d web
 | secrets 误 inline 进 client bundle | 极低 | Next.js inline 规则只处理 `NEXT_PUBLIC_*` 前缀 |
 | 未来某次 `COPY` 改成通配符导致 `.env` 泄漏 | 极低 | PR review 留意；本 spec 不引入 |
 | 主机 `.env` 与 Docker `.env` 不一致引发困惑 | 低 | 文档化两条路径；本 spec 不引入新耦合 |
+| next build 的 file-tracing 把 .env 打进 .next/standalone/ | 低（修复后） | web-runtime 阶段 `RUN rm -f /app/apps/web/.env` 显式剔除；已加 |
 
 ---
 

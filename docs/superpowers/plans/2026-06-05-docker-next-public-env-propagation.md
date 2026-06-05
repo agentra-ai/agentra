@@ -4,7 +4,7 @@
 
 **Goal:** Make `.env`'s 4 `NEXT_PUBLIC_*` variables reach the Next.js client bundle during Docker `web` build, so the `agentra` CLI login callback flow no longer fails with "无效的回调地址".
 
-**Architecture:** Two minimal config changes (`.dockerignore` + `Dockerfile`). `.env` enters the build context, gets `COPY`-ed into the `web-builder` intermediate layer, and Next.js auto-loads it during `next build`. Runtime image and client bundle boundaries ensure `.env` secrets don't leak.
+**Architecture:** Two minimal config changes (`.dockerignore` + `Dockerfile`). `.env` enters the build context, gets `COPY`-ed into the `web-builder` intermediate layer, and Next.js auto-loads it during `next build`. The `web-runtime` stage explicitly `RUN rm -f` removes the `.env` that next build's file-tracing bundles into `.next/standalone/` to keep secrets out of the published image. Client bundle boundary ensures `.env` secrets don't leak via JS.
 
 **Tech Stack:** Docker Compose, Next.js 16, Alpine-based multi-stage Dockerfile
 
