@@ -23,7 +23,7 @@ Next.js 把 `NEXT_PUBLIC_*` 在 `next build` 期间 inline 到 client bundle。�
 
 | 决策 | 选择 | 理由 |
 |------|------|------|
-| 传播方式 | `COPY .env .env` 进 web-builder 阶段 | 沿用 Next.js 自动加载 `.env` 的默认行为，改动最小 |
+| 传播方式 | `COPY .env apps/web/.env` 进 web-builder 阶段 | 沿用 Next.js 自动加载 `.env` 的默认行为，改动最小。必须把文件放在 Next.js 项目根（`apps/web/`），而不是 WORKDIR（`/src`），因为 `loadEnvConfig` 不会沿目录树上溯 |
 | 卫生边界 | `.env` 只进 builder 中间层，不进 `web-runtime` 镜像 | `web-runtime` 只 `COPY --from=web-builder` 3 个白名单路径；client bundle 只 inline `NEXT_PUBLIC_*` 前缀 |
 | 范围 | 4 个 `NEXT_PUBLIC_*` 全部修 | 4 个同根问题一起处理，不只修 callback |
 | 主机 CLI | 不在 spec 改动范围 | 用户确认 CLI 从主机跑；主机侧走自己的 env，不依赖 Docker `.env` |
@@ -49,7 +49,7 @@ Next.js 把 `NEXT_PUBLIC_*` 在 `next build` 期间 inline 到 client bundle。�
 .env
 ```
 
-**理由**：当前 `.env` 被显式排除在 build context 外。`Dockerfile` 里 `COPY .env .env` 在不删这一行的情况下不会生效（Docker 不会 COPY 被 `.dockerignore` 排除的文件）。
+**理由**：当前 `.env` 被显式排除在 build context 外。`Dockerfile` 里 `COPY .env apps/web/.env` 在不删这一行的情况下不会生效（Docker 不会 COPY 被 `.dockerignore` 排除的文件）。
 
 **风险评估**：低。`Dockerfile` 里所有 `COPY` 都使用具体文件/目录路径，**无**通配符（没有 `COPY . .` 这类指令）。`.env` 不会进任何未被显式引用的镜像层。
 
@@ -58,8 +58,13 @@ Next.js 把 `NEXT_PUBLIC_*` 在 `next build` 期间 inline 到 client bundle。�
 在 `COPY apps/web/ ./apps/web/` 之后新增一行：
 
 ```dockerfile
-# Propagate .env so Next.js can inline NEXT_PUBLIC_* into the client bundle
-COPY .env .env
+# Propagate .env so Next.js can inline NEXT_PUBLIC_* into the client bundle.
+# Next.js's loadEnvConfig reads .env from the Next.js project root
+# (where next.config.ts lives, i.e. apps/web/), not from cwd, and does
+# not walk up the directory tree. The web-builder WORKDIR is /src, but
+# `pnpm --filter @agentra/web build` changes cwd to apps/web/, so the
+# file must land at apps/web/.env.
+COPY .env apps/web/.env
 ```
 
 **改动后的 `web-builder` 段**（参考结构）：
@@ -83,8 +88,13 @@ RUN pnpm install --frozen-lockfile
 
 COPY apps/web/ ./apps/web/
 
-# Propagate .env so Next.js can inline NEXT_PUBLIC_* into the client bundle
-COPY .env .env
+# Propagate .env so Next.js can inline NEXT_PUBLIC_* into the client bundle.
+# Next.js's loadEnvConfig reads .env from the Next.js project root
+# (where next.config.ts lives, i.e. apps/web/), not from cwd, and does
+# not walk up the directory tree. The web-builder WORKDIR is /src, but
+# `pnpm --filter @agentra/web build` changes cwd to apps/web/, so the
+# file must land at apps/web/.env.
+COPY .env apps/web/.env
 
 ARG REMOTE_API_URL=http://server:8080
 ENV REMOTE_API_URL=${REMOTE_API_URL}
@@ -93,14 +103,14 @@ RUN pnpm --filter @agentra/web build
 ```
 
 **效果**：
-- `web-builder` 阶段的工作目录 `/src` 下有 `.env`
-- `pnpm --filter @agentra/web build` 触发 `next build`，Next.js 按其默认行为自动加载 `/src/.env`
+- `web-builder` 阶段内 `.env` 落在 Next.js 项目根 `/src/apps/web/.env`（**不是** `/src/.env`）
+- `pnpm --filter @agentra/web build` 触发 `next build`，Next.js 的 `loadEnvConfig` 从 Next.js 项目根（即 `apps/web/`）加载 `.env`
 - 4 个 `NEXT_PUBLIC_*` 被 inline 到 client bundle
 - 其他变量（`JWT_SECRET`、`POSTGRES_PASSWORD`、`MINIO_SECRET_KEY`）被加载到 server-side 构建上下文，**不会**被 inline 到 client bundle
 
 ### 2.3 不改 `docker-compose.yml`
 
-不需要改 `web` service 的 `args:` 或 `environment:`。`COPY .env .env` 由 Dockerfile 自身完成。
+不需要改 `web` service 的 `args:` 或 `environment:`。`COPY .env apps/web/.env` 由 Dockerfile 自身完成。
 
 ---
 
@@ -108,7 +118,7 @@ RUN pnpm --filter @agentra/web build
 
 | 位置 | 是否含 `.env` 内容 | 备注 |
 |------|-------------------|------|
-| `web-builder` 中间层 | 是（builder 镜像内 `/src/.env`） | 临时层，CI 本地生成，不分发 |
+| `web-builder` 中间层 | 是（builder 镜像内 `/src/apps/web/.env`） | 临时层，CI 本地生成，不分发 |
 | `web-runtime` 镜像 | 否 | 仅 `COPY --from=web-builder` 3 个白名单路径 |
 | client bundle (JS) | 仅 `NEXT_PUBLIC_*` | Next.js inline 规则只处理此前缀 |
 | server bundle (SSR) | `.env` 文件不在 runtime image 中 | SSR 读 `process.env.NEXT_PUBLIC_*` 仍为 `undefined`，与改动前一致 |
@@ -180,7 +190,7 @@ docker compose up -d web
 
 效果：
 - `.dockerignore` 恢复排除 `.env`
-- `Dockerfile` 移除 `COPY .env .env`
+- `Dockerfile` 移除 `COPY .env apps/web/.env`
 - 回到改动前状态：4 个 `NEXT_PUBLIC_*` 在 client bundle 中都是 `undefined`，`validateCliCallback` 拒绝所有 callback URL
 
 ---

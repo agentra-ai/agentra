@@ -17,7 +17,7 @@
 | File | Action | Purpose |
 |------|--------|---------|
 | `.dockerignore` | Modify (delete 1 line) | Allow `.env` into build context |
-| `Dockerfile` | Modify (add 1 line) | `COPY .env .env` into `web-builder` stage |
+| `Dockerfile` | Modify (add 1 line) | `COPY .env apps/web/.env` into `web-builder` stage |
 | `docs/superpowers/specs/2026-06-05-...md` | Reference | Source of truth (already committed) |
 
 No new files. No code changes. No test infrastructure added (this is a build-config fix; verification is the build artifact itself).
@@ -107,7 +107,7 @@ Expected output: a single line like `XX: COPY apps/web/ ./apps/web/` where XX is
 
 If the output is empty, STOP — Dockerfile structure has changed; re-verify with a full read.
 
-- [ ] **Step 2: Insert `COPY .env .env` after the `COPY apps/web/ ./apps/web/` line**
+- [ ] **Step 2: Insert `COPY .env apps/web/.env` after the `COPY apps/web/ ./apps/web/` line**
 
 Use the Edit tool with the unique context (the surrounding `COPY` block in `web-builder`):
 
@@ -120,16 +120,21 @@ ARG REMOTE_API_URL=http://server:8080
 new_string:
 COPY apps/web/ ./apps/web/
 
-# Propagate .env so Next.js can inline NEXT_PUBLIC_* into the client bundle
-COPY .env .env
+# Propagate .env so Next.js can inline NEXT_PUBLIC_* into the client bundle.
+# Next.js's loadEnvConfig reads .env from the Next.js project root
+# (where next.config.ts lives, i.e. apps/web/), not from cwd, and does
+# not walk up the directory tree. The web-builder WORKDIR is /src, but
+# `pnpm --filter @agentra/web build` changes cwd to apps/web/, so the
+# file must land at apps/web/.env.
+COPY .env apps/web/.env
 
 ARG REMOTE_API_URL=http://server:8080
 ```
 
 - [ ] **Step 3: Verify the change**
 
-Run: `grep -n -A1 -B1 "COPY .env .env" Dockerfile`
-Expected output: shows the new `COPY .env .env` line, with `COPY apps/web/ ./apps/web/` two lines above and `ARG REMOTE_API_URL` two lines below, all within the `web-builder` stage.
+Run: `grep -n -A1 -B1 "COPY .env" Dockerfile`
+Expected output: shows the new `COPY .env apps/web/.env` line, with `COPY apps/web/ ./apps/web/` a few lines above and `ARG REMOTE_API_URL` two lines below, all within the `web-builder` stage.
 
 - [ ] **Step 4: Commit**
 
