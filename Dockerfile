@@ -95,6 +95,11 @@ COPY --from=web-builder /src/apps/web/.next/standalone ./
 COPY --from=web-builder /src/apps/web/.next/static ./apps/web/.next/static
 COPY --from=web-builder /src/apps/web/public ./apps/web/public
 
+# Remove .env that next build's file-tracing bundled into .next/standalone.
+# The build needs .env to inline NEXT_PUBLIC_* into the client bundle,
+# but the runtime doesn't — and .env contains secrets we don't want shipped.
+RUN rm -f /app/apps/web/.env
+
 EXPOSE 3000
 
 CMD ["node", "apps/web/server.js"]
