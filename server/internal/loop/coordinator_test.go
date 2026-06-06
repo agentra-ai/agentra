@@ -69,7 +69,7 @@ func TestDecideNextStage_ReviewRejectedToFix(t *testing.T) {
 
 func TestDecideNextStage_ReviewRejectedAtMaxIterationsToFail(t *testing.T) {
 	c := &Coordinator{}
-	l := &Loop{Status: StatusRunning, CurrentStage: sp(StageReview), Iteration: 4, MaxIterations: 5}
+	l := &Loop{Status: StatusRunning, CurrentStage: sp(StageReview), Iteration: 5, MaxIterations: 5}
 	result := &TaskResult{ReviewApproved: bptr(false), ReviewIssues: "still broken"}
 	d := c.decideNextStage(l, result)
 	if d.action != "fail" {

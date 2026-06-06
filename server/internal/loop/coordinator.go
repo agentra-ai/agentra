@@ -11,6 +11,7 @@ package loop
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -77,7 +78,7 @@ func (c *Coordinator) decideNextStage(l *Loop, lastResult *TaskResult) Decision 
 		return Decision{action: actionNoop}
 	}
 	if l.CurrentStage == nil {
-		return Decision{action: actionNoop}
+		return Decision{action: actionFail, reason: FailureUnrecoverable}
 	}
 
 	switch *l.CurrentStage {
@@ -95,7 +96,7 @@ func (c *Coordinator) decideNextStage(l *Loop, lastResult *TaskResult) Decision 
 			}
 			return d
 		}
-		if l.Iteration+1 >= l.MaxIterations {
+		if l.Iteration >= l.MaxIterations {
 			return Decision{action: actionFail, reason: FailureMaxIterations}
 		}
 		return Decision{action: actionCreateTask, taskType: taskTypeFix, iterationBump: 1}
@@ -132,7 +133,10 @@ func (c *Coordinator) processTaskCompleted(ctx context.Context, e events.Event) 
 
 	result := latestTaskResult(ctx, c.queries, task.ID)
 	if err := c.applyDecision(ctx, loop, c.decideNextStage(loop, result)); err != nil {
-		fmt.Printf("loop coordinator: apply decision failed: %v\n", err)
+		slog.Error("loop coordinator: apply decision failed",
+			"loop_id", loop.ID,
+			"task_id", task.ID,
+			"err", err)
 	}
 }
 
