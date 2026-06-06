@@ -510,7 +510,151 @@ agentra loop list [--status=running]
 
 ---
 
-## 12. 待确认 (open questions)
+## 12. 编排框架模式借鉴 (LangGraph / CrewAI)
+
+LangGraph 和 CrewAI 是当下多 agent 编排的两条主流路径。本节把它们的抽象拉出来,跟 v2 的设计做一一对应,说明 v2 借鉴了什么、丢掉了什么、为什么没直接用它们的 Python 实现。
+
+### 12.1 LangGraph 的核心抽象
+
+LangGraph 是 LangChain 出的图编排框架,核心模型是显式 StateGraph:
+
+| 抽象 | 含义 | v2 怎么对应 |
+|------|------|-------------|
+| **StateGraph** | 全局状态 + 转移规则的图 | `loops` 表 (`status` / `current_stage` / `iteration`) |
+| **Node** | 读 state 改 state 的纯函数 | 4 个 `StageExecutor` (`server/internal/loop/stages/*.go`) |
+| **Edge** | 节点间转移,可以条件分支 | Coordinator 里的 if/else(单一函数,无 DSL) |
+| **Checkpointing** | 每个 node 完成后 state 持久化,可中断/恢复 | `tasks.status` 流转 + DB 是 single source of truth |
+| **Human-in-the-loop** | 图运行到某点暂停,等外部信号 | `loops.status='paused'` + `pause/resume` REST |
+| **Streaming** | 节点执行过程实时推给前端 | 现有 `task:*` WS 事件自动覆盖 |
+| **Conditional edges** | 边条件可以是任意表达式 | Coordinator 里固定 4-5 个分支(plan→develop→review→fix/done/failed) |
+
+### 12.2 CrewAI 的核心抽象
+
+CrewAI 把多 agent 协作抽象成"剧组":
+
+| 抽象 | 含义 | v2 怎么对应 |
+|------|------|-------------|
+| **Crew** | 一组 agent + 一个 process | 1 个 `Loop`(1 张 loops 表行) |
+| **Agent** | role + goal + backstory + tools | 1 个 `task_type` + 1 份 system prompt(plan/develop/review/fix 各一份) |
+| **Task** | 分配给某个 agent 的具体工作,带 expected_output | `tasks` 表里 1 行(带 `task_type` + `expected_artifact_kind`) |
+| **Process** | 任务编排方式:sequential / hierarchical / consensual | v2 MVP 只有 sequential(状态机显式驱动) |
+| **Memory** | 短/长/实体/上下文 4 类记忆 | 不引入。stage 间上下文通过 `task_artifacts` 显式传递(可追溯、可调试) |
+| **Tools** | agent 可调用的函数 | 复用现有 `pkg/agent` tool 机制,每个 stage 的 tool 列表在 stage 注册时声明 |
+
+### 12.3 v2 借鉴 vs 不借鉴的清单
+
+| 模式 | 来源 | v2 处理 | 理由 |
+|------|------|---------|------|
+| 显式状态机 | LangGraph | ✅ 借鉴 | 我们 stage 之间的转移是有条件分支,显式状态机比 DAG 边条件更可读、可观测 |
+| Stage 是纯函数 | LangGraph | ✅ 借鉴 | StageExecutor 是 `(ctx, task) → (artifacts, error)`,无副作用靠 daemon 包装 |
+| 状态持久化 | LangGraph | ✅ 借鉴 | DB 是 single source of truth,Coordinator 崩了重启能恢复 |
+| Conditional edge | LangGraph | ⚠️ 简化 | 不用 LangGraph 的边条件 DSL,Coordinator 里就 4-5 个 if/else 分支,可读性更好 |
+| Human-in-the-loop | LangGraph | ✅ 借鉴 | pause/resume 命令对应 interrupt + resume 信号 |
+| Streaming | LangGraph | ✅ 借鉴 | 复用现有 `task:*` 事件,不加新事件类型 |
+| Role-based agent | CrewAI | ✅ 借鉴 | 每个 stage 一份 system prompt,角色差异显式可见 |
+| Sequential process | CrewAI | ✅ 借鉴 | MVP 单线,4 个 stage 顺序跑 |
+| Hierarchical / consensual process | CrewAI | ❌ 不借鉴 | MVP 单一 Coordinator,不需要 manager/worker 分层 |
+| Memory layers | CrewAI | ❌ 不借鉴 | 引入会增加复杂度,stage 间上下文靠 `task_artifacts` 显式传递 |
+| Tool registry | CrewAI | ⚠️ 简化 | 不引入独立的 tool registry,tools 在每个 stage 的 prompt 模板附近直接声明 |
+| 边的可视化 | LangGraph Studio / CrewAI Studio | ❌ 不借鉴 | 状态机只有 4-5 个状态,文本展示就够;后续可加简单流程图 |
+
+### 12.4 为什么不用 LangGraph / CrewAI 直接
+
+| 维度 | LangGraph | CrewAI | 结论 |
+|------|-----------|--------|------|
+| 语言 | Python only | Python only | ❌ 都不支持 Go |
+| 官方 Go port | 无 | 无 | ❌ 都没出 |
+| 跟 Backend 接口兼容 | 绑定 LangChain 生态,需要适配 | 绑定自家 agent 抽象,需要适配 | ❌ 都要写 adapter 层 |
+| 部署复杂度 | 加 Python 微服务 | 加 Python 微服务 | ❌ agentra 是 Go-native,混语言破坏一致性 |
+| 图编排能力 | 强(复杂条件、并行、子图) | 弱(主要 sequential) | ⚠️ 我们用不到 LangGraph 的强项,CrewAI 能力相当 |
+| 团队学习成本 | 中(图概念) | 低(更直观) | ⚠️ 不算决定性 |
+| 维护风险 | LangChain API 经常 breaking | CrewAI 还在快速迭代 | ⚠️ 都不稳定 |
+
+**核心判断**:我们 4 个 stage 的状态机很简单,LangGraph 的图编排能力用不上(用上反而是 over-engineering);CrewAI 的 sequential 模式我们直接实现 ~300 行就够。引入 Python 服务带来的语言混用、部署复杂度、维护风险,远超收益。
+
+### 12.5 Go 生态编排方案对比
+
+调研了 Go 生态的多 agent / workflow 编排方案:
+
+| 选项 | 定位 | 优势 | 劣势 | v2 选不选 |
+|------|------|------|------|-----------|
+| **Temporal** | 生产级 workflow 引擎 | retries / timeouts / signals / versioning 全部现成;多语言 SDK | 加 Temporal server 依赖(独立进程);学习曲线陡;对 4 stage 杀鸡用牛刀 | ❌ MVP 不上,长期可考虑 |
+| **Inngest** | Function-as-a-Service 风格 workflow | Go SDK 体验好;事件驱动;managed 服务 | 第三方 vendor;定价不透明 | ❌ MVP 不上 |
+| **Cadence (Uber)** | 类似 Temporal | Go-native 早;成熟 | 社区比 Temporal 小;部署也重 | ❌ MVP 不上 |
+| **Restate** | 比 Temporal 轻量 | 单 binary 部署;Go SDK 简洁 | 生态新;生产案例少 | ⚠️ 观望 |
+| **Hatchet** | 分布式任务队列 + workflow | Go SDK 好;开源 | 主打任务队列,不是为 LLM 编排设计 | ❌ 场景不匹配 |
+| **自定义 Coordinator + 事件总线** | 跟现有架构一致 | 零新依赖;~300 行;DB 持久化;跟现有 WS 事件打通 | 自己写 retry/timeout 边界(其实已经由 `tasks` 表 retry 提供) | ✅ **v2 选这个** |
+
+**v2 选自定义的理由**:
+1. **零新基础设施依赖**。Temporal / Inngest / Cadence 都需要独立 server,跟 agentra 的"一 docker compose 跑起来"理念冲突。
+2. **跟现有事件流打通**。Coordinator 订阅 `task:completed` 事件就行,不用引入新消息总线。
+3. **代码量真的不大**。状态机 4-5 个转移,~300 行;比 adapter 层(把 LangGraph 翻译成 Go)还少。
+4. **后续可演进**。如果以后真要图编排,优先评估 Temporal(Go SDK 成熟,跟我们的 stack 最契合);自定义 Coordinator 不会成为障碍。
+
+### 12.6 实现细节:Coordinator 怎么消费 LangGraph-style 模式
+
+Coordinator 关键代码骨架(伪 Go):
+
+```go
+// server/internal/loop/coordinator.go
+package loop
+
+type Coordinator struct {
+    db        *sql.DB
+    events    *events.Bus
+    taskSvc   *service.TaskService
+    backend   agent.Backend  // 现有 Backend 接口
+}
+
+func (c *Coordinator) HandleTaskCompleted(ctx context.Context, evt events.TaskCompleted) error {
+    task, err := c.taskSvc.GetTask(ctx, evt.TaskID)
+    if err != nil { return err }
+
+    loop, err := c.getLoopByTaskID(ctx, task.LoopID)
+    if err != nil { return err }
+    if loop.Status != "running" { return nil }  // 用户暂停/取消后不再推进
+
+    next, err := c.decideNextStage(loop, task)  // 状态机转移
+    if err != nil { return c.failLoop(ctx, loop, err) }
+
+    switch next.action {
+    case "create_task":
+        return c.taskSvc.CreateTask(ctx, next.taskSpec)
+    case "complete":
+        return c.completeLoop(ctx, loop, next.prURL)
+    case "fail":
+        return c.failLoop(ctx, loop, next.reason)
+    }
+    return nil
+}
+
+func (c *Coordinator) decideNextStage(loop *Loop, lastTask *Task) (Decision, error) {
+    switch loop.CurrentStage {
+    case "plan":
+        return Decision{action: "create_task", taskSpec: developTask(loop)}, nil
+    case "develop":
+        return Decision{action: "create_task", taskSpec: reviewTask(loop)}, nil
+    case "review":
+        review := parseReviewArtifact(lastTask.Artifacts)
+        if review.Approved {
+            return Decision{action: "complete", prURL: ...}, nil
+        }
+        if loop.Iteration >= loop.MaxIterations {
+            return Decision{action: "fail", reason: "max_iterations_exceeded"}, nil
+        }
+        return Decision{action: "create_task", taskSpec: fixTask(loop, review.Issues)}, nil
+    case "fix":
+        return Decision{action: "create_task", taskSpec: reviewTask(loop)}, nil
+    }
+    return Decision{}, fmt.Errorf("unknown stage: %s", loop.CurrentStage)
+}
+```
+
+**这个 Coordinator 是 v2 借鉴 LangGraph 状态机 + CrewAI sequential process 的产物**,但用 Go 直接写,集成进现有 `internal/events` 订阅和 `internal/service.TaskService`,没有任何外部框架依赖。
+
+---
+
+## 13. 待确认 (open questions)
 
 实现 plan 阶段需要确认:
 
