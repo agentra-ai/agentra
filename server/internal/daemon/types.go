@@ -34,6 +34,7 @@ type Task struct {
 	PriorSessionID   string     `json:"prior_session_id,omitempty"`   // Claude session ID from a previous task on this issue
 	PriorWorkDir     string     `json:"prior_work_dir,omitempty"`     // work_dir from a previous task on this issue
 	TriggerCommentID string     `json:"trigger_comment_id,omitempty"` // comment that triggered this task
+	TaskType         string     `json:"task_type,omitempty"`          // "standard" (default) or loop_plan/develop/review/fix
 }
 
 // AgentData holds agent details returned by the claim endpoint.

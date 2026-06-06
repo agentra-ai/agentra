@@ -15,6 +15,7 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/daemon/execenv"
 	"github.com/agentra-ai/agentra/server/internal/daemon/repocache"
 	"github.com/agentra-ai/agentra/server/internal/daemon/usage"
+	"github.com/agentra-ai/agentra/server/internal/loop/stages"
 	"github.com/agentra-ai/agentra/server/pkg/agent"
 )
 
@@ -907,7 +908,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 	// the same (agent, issue) pair. The work_dir path is stored in DB on
 	// task completion and passed back via PriorWorkDir on the next claim.
 
-	prompt := BuildPrompt(task)
+	prompt, systemPrompt, maxTurns := buildPromptForStage(task.TaskType, task)
 
 	// Pass the daemon's auth credentials and context so the spawned agent CLI
 	// can call the Agentra API and the local daemon (e.g. `agentra repo checkout`).
@@ -951,6 +952,8 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 	session, err := backend.Execute(ctx, prompt, agent.ExecOptions{
 		Cwd:             env.WorkDir,
 		Model:           entry.Model,
+		SystemPrompt:    systemPrompt,
+		MaxTurns:        maxTurns,
 		Timeout:         d.cfg.AgentTimeout,
 		ResumeSessionID: task.PriorSessionID,
 	})
@@ -1116,6 +1119,31 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 			errMsg = fmt.Sprintf("%s execution %s", provider, result.Status)
 		}
 		return TaskResult{Status: "blocked", Comment: errMsg}, nil
+	}
+}
+
+// buildPromptForStage returns the user prompt, system prompt, and max turns
+// for a given task_type. Falls through to the legacy BuildPrompt for "standard"
+// or any unknown type. Loop stages get a different system prompt and turn
+// budget (real per-stage tool wiring lands in Task 9; the stages package is
+// stubbed in Task 8).
+func buildPromptForStage(taskType string, task Task) (prompt, systemPrompt string, maxTurns int) {
+	ref := &stages.TaskRef{
+		ID:         task.ID,
+		IssueID:    task.IssueID,
+		IssueTitle: task.IssueTitle,
+	}
+	switch taskType {
+	case "loop_plan":
+		return BuildPrompt(task), stages.LoopStagePrompt("plan", ref), 5
+	case "loop_develop":
+		return BuildPrompt(task), stages.LoopStagePrompt("develop", ref), 30
+	case "loop_review":
+		return BuildPrompt(task), stages.LoopStagePrompt("review", ref), 5
+	case "loop_fix":
+		return BuildPrompt(task), stages.LoopStagePrompt("fix", ref), 30
+	default:
+		return BuildPrompt(task), "", 0 // standard: no system prompt override, no turn cap change
 	}
 }
 
