@@ -114,6 +114,29 @@ func (c *Coordinator) HandleTaskCompleted(e events.Event) {
 	go c.processTaskCompleted(context.Background(), e)
 }
 
+// HandleTaskFailed handles task:failed events. Stub for M1; full failure
+// classification lands in Task 16.
+func (c *Coordinator) HandleTaskFailed(e events.Event) {
+	go func() {
+		slog.Warn("loop coordinator: task failed event (stub)",
+			"event_type", e.Type, "workspace_id", e.WorkspaceID)
+		// Task 16 will: parse task_id from payload, look up loop_id,
+		// mark the loop failed with an appropriate failure_reason.
+	}()
+}
+
+// RestoreOnStartup loads any loops that were running/paused when the server
+// last stopped, so the coordinator can re-subscribe to their state. Currently
+// just logs the count; a follow-up task will re-enqueue stale stage tasks.
+func (c *Coordinator) RestoreOnStartup(ctx context.Context) {
+	loops, err := c.store.LoadActive(ctx)
+	if err != nil {
+		slog.Warn("loop coordinator: restore active loops failed", "err", err)
+		return
+	}
+	slog.Info("loop coordinator: restored active loops", "count", len(loops))
+}
+
 func (c *Coordinator) processTaskCompleted(ctx context.Context, e events.Event) {
 	taskID, ok := eventTaskID(e)
 	if !ok {

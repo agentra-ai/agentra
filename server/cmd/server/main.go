@@ -70,6 +70,7 @@ func main() {
 	// Start background sweeper to mark stale runtimes as offline.
 	sweepCtx, sweepCancel := context.WithCancel(context.Background())
 	go runRuntimeSweeper(sweepCtx, queries, bus)
+	go runLoopCoordinator(sweepCtx, queries, bus)
 
 	// Graceful shutdown
 	go func() {
