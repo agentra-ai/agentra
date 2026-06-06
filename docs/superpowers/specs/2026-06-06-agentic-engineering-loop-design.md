@@ -1,7 +1,7 @@
 # Agentic Engineering Loop 设计规格
 
 **日期**: 2026-06-06
-**状态**: Draft v2
+**状态**: Draft v3 (调研完成,影响写回 §5-§6-§7-§9-§11)
 **作者**: brainstorm with user
 **目标读者**: Agentra 维护者 + 后续实现 plan 的 agent
 
@@ -189,7 +189,7 @@ v1 把它做成了独立的"loop"子系统(新包 + 3 张新表 + 新 worker + �
 
 ## 5. 数据模型
 
-### 5.1 新表:loops
+### 5.1 新表:`loops`
 
 ```sql
 CREATE TABLE loops (
@@ -208,8 +208,9 @@ CREATE TABLE loops (
   branch_name TEXT,
 
   -- 配置
-  agent_id UUID REFERENCES agents(id),             -- 用哪个 LLM provider
+  agent_id UUID REFERENCES agent(id),             -- 用哪个 LLM provider
   config JSONB NOT NULL DEFAULT '{}',              -- 后续:parallel/timeout 等
+  failure_reason TEXT,                             -- 见 §8.1 失败分类
 
   started_at TIMESTAMPTZ,
   completed_at TIMESTAMPTZ,
@@ -222,46 +223,63 @@ CREATE INDEX idx_loops_status ON loops(status)
   WHERE status IN ('pending', 'running', 'paused');
 ```
 
-**v1 的 `loop_stages` 表 v2 删掉**:每个 stage 就是 `tasks` 表里的一行,带 `task_type` 区分。Stage 状态通过 `tasks.status` 跟踪。
+**v1 的 `loop_stages` / `loop_artifacts` 表 v2 删掉**:
+- 每个 stage 就是 `agent_task_queue` 表里的一行,带 `task_type` 区分
+- Stage 状态通过 `agent_task_queue.status` 跟踪
+- Stage 输出(plan / diff / review JSON)写到 `task_runs.output` (TEXT,见 migrations/035)
 
-**v1 的 `loop_artifacts` 表 v2 删掉**:复用 `task_artifacts`,artifact `kind` 区分 `plan` / `diff` / `review` / `fix_diff`。
-
-### 5.2 tasks 表加 1 列
+### 5.2 `agent_task_queue` 表加 2 列
 
 ```sql
-ALTER TABLE tasks ADD COLUMN loop_id UUID REFERENCES loops(id);
+ALTER TABLE agent_task_queue ADD COLUMN task_type VARCHAR(50) NOT NULL DEFAULT 'standard';
+ALTER TABLE agent_task_queue ADD COLUMN loop_id UUID REFERENCES loops(id);
+ALTER TABLE agent_task_queue ADD CONSTRAINT agent_task_queue_task_type_check
+  CHECK (task_type IN ('standard', 'loop_plan', 'loop_develop', 'loop_review', 'loop_fix'));
+
+CREATE INDEX idx_agent_task_queue_loop_id ON agent_task_queue(loop_id) WHERE loop_id IS NOT NULL;
+CREATE INDEX idx_agent_task_queue_task_type ON agent_task_queue(task_type) WHERE task_type <> 'standard';
 ```
 
-`(可选)`:也可以用 `tasks.metadata` JSONB 存 `loop_id`,不破坏 schema。本 spec 默认用列,查询更高效。
+**注意**:
+- `task_type` 是**新概念**——调研发现当前 `agent_task_queue` 无此列,所有现有 task 都是 `task_type='standard'`
+- `loop_id` 让一个 loop 串起来 4 个 stage task;`loop_id IS NULL` 的就是普通 task
+- `agent_task_queue` 加列需要同步改 `pkg/db/queries/agent.sql` 的 `CreateAgentTask` 入参,然后 `make sqlc` 重生成
 
 ### 5.3 4 个新 task_type
 
-注册到现有 task_type 体系(假设是 enum 或 text):
+| task_type | system prompt 模板要点 | 工具(见 §6.7) | 输出到 `task_runs.output` |
+|-----------|------------------------|---------------|---------------------------|
+| `loop_plan` | "你是需求分析师。读 issue,产出结构化 plan:目标、涉及文件、步骤、验收。" | read_file, search_code | markdown |
+| `loop_develop` | "你是开发者。读 plan,改文件,跑测试,commit 到分支 `loop/<issue-id>-<n>`。" | read_file, write_file, run_command, run_test, git_*, github_pr_create | unified diff + branch_name (from `TaskResult.BranchName`) |
+| `loop_review` | "你是代码审查员。读 diff 和原 plan,产出 JSON: `{approved: bool, issues: [{file, line, severity, message}]}`。" | read_file, git_diff | review JSON |
+| `loop_fix` | "你是开发者。读 review.issues,改文件,跑测试,新 commit。" | read_file, write_file, run_command, run_test, git_* | unified diff |
 
-| task_type | system prompt 模板要点 | 工具 | 输出 artifact (`kind`) |
-|-----------|------------------------|------|--------------------------|
-| `loop_plan` | "你是需求分析师。读 issue,产出结构化 plan:目标、涉及文件、步骤、验收。" | read_file, search_code | `plan` (markdown) |
-| `loop_develop` | "你是开发者。读 plan,改文件,跑测试,commit 到分支 loop/<issue-id>-<n>。" | read_file, write_file, run_command, git_commit, git_push | `diff` (unified diff) |
-| `loop_review` | "你是代码审查员。读 diff 和原 plan,产出 JSON: `{approved: bool, issues: [{file, line, severity, message}]}`。" | read_file, read_diff | `review` (JSON) |
-| `loop_fix` | "你是开发者。读 review.issues,改文件,跑测试,新 commit。" | read_file, write_file, run_command, git_commit, git_push | `fix_diff` (unified diff) |
+System prompt 模板存 `server/internal/loop/prompts/*.md`(纯文本,易调试,后续可热更新)。
 
-System prompt 模板存在 `server/internal/loop/prompts/*.md`(纯文本,易调试,后续可热更新)。
+**`AgentStage` 枚举扩展**(`service/task.go:428-436` 当前 5 个值):
+- 加 `planning` / `developing` / `reviewing` / `fixing` 4 个值
+- daemon 通过现有 `ReportAgentStage` API(`daemon.go:769` 等)上报,前端自动展示
 
 ### 5.4 涉及文件改动总览
 
 | 文件 | 动作 | 用途 |
 |------|------|------|
-| `migrations/0XX_loops.up.sql` | 新建 | loops 表 + tasks.loop_id 列 |
-| `server/internal/loop/coordinator.go` | 新建 | 状态机,事件订阅,~300 行 |
+| `server/migrations/0XX_loops.up.sql` | 新建 | `loops` 表 + `agent_task_queue` 加 2 列 |
+| `server/internal/loop/loop.go` | 新建 | `Loop` struct,CRUD 函数(DB 层) |
+| `server/internal/loop/coordinator.go` | 新建 | 状态机,事件订阅实现,~300 行 |
 | `server/internal/loop/stages/{plan,develop,review,fix}.go` | 新建 | 4 个 stage executor,~150 行/个 |
 | `server/internal/loop/prompts/{plan,develop,review,fix}.md` | 新建 | system prompt 模板 |
-| `server/internal/loop/loop.go` | 新建 | `Loop` struct,公共类型 |
+| `server/internal/loop/tools/{read_file,write_file,...}.go` | 新建 | 11 个 tool 实现(M2 起) |
 | `server/internal/handler/loop.go` | 新建 | REST endpoint,~80 行 |
 | `server/internal/cli/loop.go` | 新建 | CLI 子命令,~100 行 |
-| `server/internal/daemon/routing.go` | 修改 | 加 4 个 task_type 的 routing rule |
-| `server/internal/events/handlers.go` | 修改 | 注册 `LoopCoordinator` 订阅 `task:completed` |
+| `server/cmd/server/loop_coordinator.go` | 新建 | Coordinator 启动 wiring,薄包装 ~30 行 |
+| `server/pkg/db/queries/agent.sql` | 修改 | `CreateAgentTask` 加 `task_type` / `loop_id` 入参 |
+| `server/internal/daemon/types.go` | 修改 | `Task` struct 加 `TaskType` 字段 |
+| `server/internal/daemon/daemon.go` | 修改 | `runTask` 函数加 stage dispatch switch(在 `BuildPrompt` 之前) |
+| `server/internal/service/task.go` | 修改 | `AgentStage` 常量加 4 个值 |
+| `server/cmd/server/main.go` | 修改 | 加 3 行:ctx + cancel + `go runLoopCoordinator(...)` |
 
-新文件 ~9 个,修改文件 ~2 个。**对比 v1 的 5 张新表 + 1 个新 worker + 1 个新 supervisor,改动量小一档。**
+新文件 ~10 个,修改文件 ~5 个。**对比 v1 的 5 张新表 + 1 个新 worker + 1 个新 supervisor,改动量小一档。**
 
 ---
 
@@ -269,11 +287,12 @@ System prompt 模板存在 `server/internal/loop/prompts/*.md`(纯文本,易调�
 
 ### 6.1 LoopCoordinator
 
-文件:`server/internal/loop/coordinator.go`
+**实现位置**:`server/internal/loop/coordinator.go`(纯逻辑,~300 行,可独立测试)
+**启动 wiring**:`server/cmd/server/loop_coordinator.go`(薄包装,模仿 `runtime_sweeper.go`)
 
 **职责**:
 - `CreateLoop(ctx, issueID, opts) (*Loop, error)` — 创建 loop,初始 task=`loop_plan`
-- `HandleTaskCompleted(ctx, task) error` — 订阅 `task:completed` 事件,推进状态机
+- `HandleTaskCompleted(ctx, event) error` — 订阅 `task:completed` 事件,推进状态机
 - `Pause / Resume / Cancel(ctx, loopID)` — 用户操作
 - `GetLoop(ctx, loopID) (*Loop, error)` — 查询
 
@@ -281,9 +300,28 @@ System prompt 模板存在 `server/internal/loop/prompts/*.md`(纯文本,易调�
 - 不执行 task(daemon 干)
 - 不直接调 LLM(Backend 干)
 - 不动 `issues` / `comments` 表(只读)
-- 不感知 task 内容(只读 status / artifacts 类型)
+- 不感知 task 内容(只读 `task_runs.output` / `agent_task_queue.status`)
 
-**关键设计**:Coordinator 启动时从 `loops` 表加载所有 `status='running' | 'paused'` 的 loop,监听事件;不维护内存状态,DB 是 single source of truth。这样 Coordinator 进程崩溃重启后状态不丢。
+**进程内订阅**:
+```go
+// server/cmd/server/loop_coordinator.go
+func runLoopCoordinator(ctx context.Context, pool *pgxpool.Pool, bus *events.Bus) {
+    coord := loop.NewCoordinator(pool, bus)
+    bus.Subscribe(protocol.EventTaskCompleted, func(e events.Event) {
+        // 立即扔后台,避免阻塞 bus publisher
+        go coord.HandleTaskCompleted(ctx, e)
+    })
+    bus.Subscribe(protocol.EventTaskFailed, func(e events.Event) {
+        go coord.HandleTaskFailed(ctx, e)
+    })
+    coord.Start(ctx) // 启动时从 DB 恢复 running/paused loop
+}
+```
+
+**关键设计**:
+- Coordinator 启动时从 `loops` 表加载所有 `status='running' | 'paused'` 的 loop,监听事件
+- 不维护内存状态,DB 是 single source of truth,Coordinator 进程崩溃重启后状态不丢
+- 长操作(状态机推进 + DB 写入)必须在 goroutine 里跑,避免阻塞 bus publisher(`bus.go:54-81` 同步调用)
 
 ### 6.2 Stage Executors
 
@@ -324,23 +362,41 @@ func PlanExecutor(ctx context.Context, task *Task) ([]Artifact, error) {
 
 其他 3 个 stage 类似,只是 system prompt + tools + 输出处理不同。
 
-### 6.3 Daemon Routing
+### 6.3 Daemon Routing(实际形态)
 
-`server/internal/daemon/routing.go` 加 4 个 case(伪代码):
+**没有 `routing.go` 这种文件**——daemon 当前是单线 `runTask` 流程。Stage dispatch 加在 `daemon.runTask` 内 `BuildPrompt` 调用之前(调研见 §13.3):
 
 ```go
-func routeTask(task *Task) (StageExecutor, bool) {
-    switch task.Type {
-    case "loop_plan":     return stages.PlanExecutor, true
-    case "loop_develop":  return stages.DevelopExecutor, true
-    case "loop_review":   return stages.ReviewExecutor, true
-    case "loop_fix":      return stages.FixExecutor, true
-    default:              return nil, false
+// server/internal/daemon/daemon.go (修订 runTask 内的 BuildPrompt 调用点)
+// 原代码(daemon.go:910):prompt := BuildPrompt(task)
+// 改为:
+prompt, execOpts := buildPromptForStage(task.TaskType, task)
+
+func buildPromptForStage(taskType string, task *Task) (string, agent.ExecOptions) {
+    switch taskType {
+    case "loop_plan":
+        return loadLoopPrompt("plan", task), agent.ExecOptions{
+            SystemPrompt: readPromptFile("server/internal/loop/prompts/plan.md"),
+            Tools: loopToolsByStage["loop_plan"],
+        }
+    case "loop_develop":
+        return loadLoopPrompt("develop", task), agent.ExecOptions{...}
+    case "loop_review":
+        return loadLoopPrompt("review", task), agent.ExecOptions{...}
+    case "loop_fix":
+        return loadLoopPrompt("fix", task), agent.ExecOptions{...}
+    default:
+        // standard 任务走原 BuildPrompt 路径,行为不变
+        return BuildPrompt(task), agent.ExecOptions{}
     }
 }
 ```
 
-具体形态取决于现有 daemon 的 routing 机制(可能已经是 dispatcher 模式,只需注册)。**不需要新 worker**。
+**关键点**:
+- `runTask` 自身不改(daemon.go:854-1090),`BuildPrompt` 保留作为 standard 路径 fallback
+- stage dispatch 复用现有 `provider` 解析和 `agent.New(...)` 构造(`daemon.go:929`),只是 prompt + tools 不同
+- `Task` struct(`daemon/types.go:25`)加 `TaskType` 字段,由 `TaskService.ClaimTask` 返参里透传
+- 不需要新 worker 进程,daemon 还是 daemon
 
 ### 6.4 CLI
 
@@ -370,13 +426,38 @@ agentra loop list [--status=running]
 | POST | /api/loops/:id/resume | — | 恢复 |
 | POST | /api/loops/:id/cancel | — | 取消 |
 
-### 6.6 WebSocket 事件
+### 6.6 WebSocket 事件与 Coordinator 消费
 
-复用现有 `task:*` 事件(loop 任务也是 task,自动推送)。**可选**新增 1 个:
+**复用现有 `task:*` 事件**。Coordinator 在 `cmd/server` 进程内订阅:
 
+```go
+bus.Subscribe(protocol.EventTaskCompleted, func(e events.Event) {
+    go coord.HandleTaskCompleted(ctx, e)
+})
+```
+
+**payload 不够用,要补 DB 查表**——`task:completed` 事件 payload(`task.go:647-666`)只含 `task_id` / `agent_id` / `issue_id` / `status`,**不含 `task_type` / `pr_url` / `output`**。Coordinator 收到事件后:
+
+```go
+func (c *Coordinator) HandleTaskCompleted(ctx context.Context, e events.Event) {
+    payload := e.Payload.(map[string]any)
+    taskID := payload["task_id"].(string)
+
+    // 补查 DB 取 task_type 和 stage output(task_runs.output)
+    task, err := c.queries.GetAgentTask(ctx, taskID)
+    if err != nil { return }
+    if task.LoopID == nil { return }  // 非 loop task,忽略
+
+    run, _ := c.queries.GetLatestTaskRun(ctx, taskID)  // 读 stage output
+    c.advanceStateMachine(ctx, task.LoopID, task.TaskType, run)
+}
+```
+
+每次事件多 2 次 DB 查表(GetAgentTask + GetLatestTaskRun),可接受。后续如需优化再扩展 `broadcastTaskEvent` payload。
+
+**可选新增 1 个事件**:
 - `loop:status_changed` — loop 整体状态/阶段切换时广播,UI 可以快速响应
-
-事件 payload 包含 `loop_id`,前端过滤。
+- payload 含 `loop_id` / `status` / `current_stage` / `iteration` / `failure_reason`
 
 ### 6.7 Tool System Design
 
@@ -493,16 +574,21 @@ dogfood 模式下,工具直接走开发者本机环境(因为 loop 跑在开发�
 - 复用 `tasks.status` 流转
 - 复用 task 的 retry 机制(stage 内重试 3 次)
 
-### 7.2 现有 daemon
+### 7.2 现有 daemon(调研修正版)
 
-- 现有 task worker 的 routing 加 4 个 case
-- 不需要新 worker、不需要新进程
+- **daemon 是独立进程**,由 `agentra daemon start` 启,跟 `cmd/server` 通过 HTTP 轮询通信
+- **不加新 worker 进程**
+- 在 `daemon.runTask`(`daemon.go:854`)的 `BuildPrompt` 调用点(`daemon.go:910`)加 `switch task.TaskType` 分发器
+- `daemon.Task` struct(`daemon/types.go:25`)加 `TaskType` 字段,由 server 侧 `TaskService.ClaimTask` 返参透传
+- `service/task.go:428-436` 的 `AgentStage` 常量加 4 个值(`planning` / `developing` / `reviewing` / `fixing`)
 
-### 7.3 现有事件总线
+### 7.3 现有事件总线(调研修正版)
 
-- `internal/events` 已有 task:completed 事件
-- LoopCoordinator 在启动时注册订阅
-- (可选)新增 `loop:status_changed` 事件
+- `internal/events.Bus` 是同步 in-process pub/sub(`bus.go:54-81`)
+- 监听**在本进程**注册(`cmd/server/main.go:50-61` 启动时)
+- LoopCoordinator 订阅 `protocol.EventTaskCompleted` 和 `protocol.EventTaskFailed`
+- **handler 内长操作必须 `go func()` 扔后台**,否则阻塞 publisher
+- (可选)新增 `loop:status_changed` 事件由 Coordinator 在状态切换时 `bus.Publish`
 
 ### 7.4 现有 issue UI
 
@@ -666,7 +752,9 @@ Loop 结束/失败时,Coordinator 汇总所有 stage 的 token 用量,写入 `lo
 #### M0: 数据模型 + REST 骨架 (1 天)
 
 **产出**:
-- `migrations/0XX_loops.up.sql`:`loops` 表 + `tasks.loop_id` 列
+- `server/migrations/0XX_loops.up.sql`:`loops` 表 + `agent_task_queue` 加 `task_type` / `loop_id` 2 列
+- `server/pkg/db/queries/agent.sql`:`CreateAgentTask` 加 `task_type` / `loop_id` 入参
+- `make sqlc` 重生成 `pkg/db/generated/`
 - `server/internal/loop/loop.go`:`Loop` struct + CRUD 函数(DB 层)
 - `server/internal/handler/loop.go`:REST endpoint(GET / POST / list)
 - 不创建实际 task,不订阅事件,不调 Backend
@@ -675,7 +763,8 @@ Loop 结束/失败时,Coordinator 汇总所有 stage 的 token 用量,写入 `lo
 - `POST /api/loops {issue_id: X}` 创建 status=pending 的 loop
 - `GET /api/loops/:id` 返回 loop
 - `GET /api/loops?status=running` 列表查询
-- `pnpm typecheck` + `go test ./...` 通过
+- `go test ./...` + `make test` 通过(daemon 编译过,因为 `Task.TaskType` 是新加字段)
+- `make sqlc` 跑通无报错
 
 #### M1: LoopCoordinator + Plan stage (2 天)
 
@@ -867,6 +956,7 @@ LLM call 的 args 脱敏:**不记** user 消息全文,只记长度;不记 file c
 - Loop template(不同 issue type 配不同 stage 组合 + 不同 system prompt)
 - Sandbox 隔离(每个 loop 跑在独立 worktree 或 Docker)
 - Loop 的成本统计(token 用量、wallclock)
+- **跨进程事件总线**(目前 `events.Bus` 仅本进程,多 server 副本时需 LISTEN/NOTIFY / Redis pub/sub 让 Coordinator 同步)
 
 ---
 
@@ -1093,79 +1183,149 @@ func (c *Coordinator) decideNextStage(loop *Loop, lastTask *Task) (Decision, err
 
 ---
 
-## 13. 待确认 (open questions)
+## 13. 实现影响 — 现有系统调研结果
 
-### 12.6 实现细节:Coordinator 怎么消费 LangGraph-style 模式
+实现 plan 阶段调研了 5 个关键问题,结论全部写入下文,直接影响 §5-§6 的实现细节。**调研发现:v2 的核心架构不变,但有 3 个隐含假设需要修正**:
+1. `task_type` 字段不存在,需要 SQL 迁移 + sqlc 重生成
+2. 没有 `task_artifacts` 表,stage 输出存到 `task_runs.output` (TEXT) 即可
+3. Coordinator 必须跑在 `cmd/server` 进程(不是 daemon,不是新 binary),订阅 in-process 事件总线
 
-Coordinator 关键代码骨架(伪 Go):
+### 13.1 Q1: `task_type` + executor routing
+
+**结论:完全不存在 task_type 机制,需要从头加。**
+
+- `agent_task_queue` 表(`pkg/db/generated/models.go:93-114`)有 19 个字段,**没有 `task_type`**
+- 整个 server 代码里 `grep "task_type"` **零匹配**
+- Daemon 的 `handleTask` (`daemon.go:746-852`) 只按 `Runtime.Provider` 分发(claude / codex / opencode),**不按任务类型分发**
+- `pkg/taskgraph/delegation.go:9-26` 是个 `// TODO` 桩,**未在生产使用**,不应触碰
+- 唯一跟"任务类型"沾边的枚举是 `pkg/taskgraph/types.go:5-10` 的 `NodeType`(root / planner / executor / synthesis),但这是另一个未实现包,跟 `agent_task_queue` 无关
+
+**最小变更集**:
+1. **新 migration**:`ALTER TABLE agent_task_queue ADD COLUMN task_type VARCHAR(50) NOT NULL DEFAULT 'standard'`,加 CHECK 约束限定取值
+2. **修 SQL**:`pkg/db/queries/agent.sql:63-68` 的 `CreateAgentTask` 加 `task_type` 入参
+3. **跑 `make sqlc`** 重生成 `pkg/db/generated/agent.sql.go` 和 `models.go`
+4. **修 daemon Task struct**:`internal/daemon/types.go:25-37` 加 `TaskType` 字段
+5. **修 daemon 路由**:`daemon.runTask` (`daemon.go:854`) 在 `BuildPrompt(task)` (`daemon.go:910`) 之前加 `switch task.TaskType` 分发器,按 stage 选 system prompt 模板
+6. **不** 触碰 `pkg/taskgraph/`(死代码)
+
+### 13.2 Q2: `task:completed` 事件
+
+**结论:事件存在并按预期发,但 payload 缺 `task_type` / `pr_url` 等关键字段,Coordinator 需要一次 DB 查表来补足。**
+
+**事件**:`protocol.EventTaskCompleted = "task:completed"`(`pkg/protocol/events.go:28`)
+
+**发布**:`TaskService.CompleteTask`(`internal/service/task.go:338`)经 `broadcastTaskEvent`(`task.go:647-666`)统一发:
 
 ```go
-// server/internal/loop/coordinator.go
-package loop
-
-type Coordinator struct {
-    db        *sql.DB
-    events    *events.Bus
-    taskSvc   *service.TaskService
-    backend   agent.Backend  // 现有 Backend 接口
-}
-
-func (c *Coordinator) HandleTaskCompleted(ctx context.Context, evt events.TaskCompleted) error {
-    task, err := c.taskSvc.GetTask(ctx, evt.TaskID)
-    if err != nil { return err }
-
-    loop, err := c.getLoopByTaskID(ctx, task.LoopID)
-    if err != nil { return err }
-    if loop.Status != "running" { return nil }  // 用户暂停/取消后不再推进
-
-    next, err := c.decideNextStage(loop, task)  // 状态机转移
-    if err != nil { return c.failLoop(ctx, loop, err) }
-
-    switch next.action {
-    case "create_task":
-        return c.taskSvc.CreateTask(ctx, next.taskSpec)
-    case "complete":
-        return c.completeLoop(ctx, loop, next.prURL)
-    case "fail":
-        return c.failLoop(ctx, loop, next.reason)
-    }
-    return nil
-}
-
-func (c *Coordinator) decideNextStage(loop *Loop, lastTask *Task) (Decision, error) {
-    switch loop.CurrentStage {
-    case "plan":
-        return Decision{action: "create_task", taskSpec: developTask(loop)}, nil
-    case "develop":
-        return Decision{action: "create_task", taskSpec: reviewTask(loop)}, nil
-    case "review":
-        review := parseReviewArtifact(lastTask.Artifacts)
-        if review.Approved {
-            return Decision{action: "complete", prURL: ...}, nil
-        }
-        if loop.Iteration >= loop.MaxIterations {
-            return Decision{action: "fail", reason: "max_iterations_exceeded"}, nil
-        }
-        return Decision{action: "create_task", taskSpec: fixTask(loop, review.Issues)}, nil
-    case "fix":
-        return Decision{action: "create_task", taskSpec: reviewTask(loop)}, nil
-    }
-    return Decision{}, fmt.Errorf("unknown stage: %s", loop.CurrentStage)
+Payload: map[string]any{
+    "task_id":  ...,
+    "agent_id": ...,
+    "issue_id": ...,
+    "status":   task.Status,
 }
 ```
 
-**这个 Coordinator 是 v2 借鉴 LangGraph 状态机 + CrewAI sequential process 的产物**,但用 Go 直接写,集成进现有 `internal/events` 订阅和 `internal/service.TaskService`,没有任何外部框架依赖。
+**问题**:
+- `task_type` 不在 payload 里(且 DB 里也没有 — 见 13.1)
+- `pr_url` / `output` 只在 wire-format `TaskCompletedPayload`(`pkg/protocol/messages.go:27-32`)里,被 `CompleteTask` 用来发评论,**不进事件总线**
+- `task:failed` 事件的 `errMsg` 也不在 payload 里
 
----
+**Coordinator 决策**:
+- 收到 `task:completed` 后,**调一次 `Queries.GetAgentTask(ctx, task_id)`** 读 `task_type` 和关联的 `task_runs.output`
+- 如果要避免 N+1 查表,可后续扩展 `broadcastTaskEvent` payload;MVP 先不优化
+- 现成订阅模式可参考 `cmd/server/activity_listeners.go:214-217`
 
-## 13. 待确认 (open questions)
+### 13.3 Q3: daemon 路由机制
 
-实现 plan 阶段需要确认:
+**结论:daemon 是独立 OS 进程,跟 server 进程不共享事件总线。Stage 分发只能在 daemon 进程内的 `runTask` 函数里加 switch。**
 
-1. 现有 `task` 系统是否已经支持自定义 `task_type` + executor routing?还是要扩展?
-2. 现有 `task` 系统是否已经发 `task:completed` 事件?如果没有,事件怎么发?
-3. 现有 daemon 的 routing 机制是 dispatcher / registry / 还是 if-else 链?这影响 stage executor 的注册方式。
-4. `internal/events` 事件订阅是同步回调还是消息队列?决定 Coordinator 是否能 hot-reload 状态。
-5. dogfood 模式下,loop worker 跟 daemon 是不是跑在同一个进程?如果不是,需要新进程间协调。
+**daemon 进程模型**:
+- 由 `agentra daemon start` (`cmd/agentra/cmd_daemon.go:170`) 通过 `exec.Command(self, "daemon", "start", "--foreground")` 自启
+- 真实逻辑在 `runDaemonForeground`(`:255`)调 `daemon.New(...).Run(ctx)`(`:304`)
+- **daemon 跟 server 之间走 HTTP 轮询**,**不** 共享 `events.Bus`
 
-这些确认后,implementation plan 阶段可以开始拆 task。
+**daemon 内部 LLM 调用链**:
+```
+pollLoop (daemon.go:707)
+  → d.client.ClaimTask()  // HTTP to server
+  → d.handleTask(ctx, t)  (daemon.go:746)
+    → d.client.StartTask() (daemon.go:760)  // HTTP
+    → d.runTask(ctx, task, provider, ...) (daemon.go:854)
+      → BuildPrompt(task)  (daemon.go:910)  ← **这里是 stage 分发的天然接缝**
+      → agent.New(provider, ...)  (daemon.go:929)
+      → backend.Execute(ctx, prompt, opts) (daemon.go:951)  // 唯一 LLM call site
+    → d.client.CompleteTask()  (daemon.go:841)  // HTTP
+```
+
+**stage 分发接缝**:`daemon.runTask` 里 `BuildPrompt(task)` 之前,加 `switch task.TaskType` 选不同 prompt 模板 + tool 列表。`runTask` 自己不需要改,因为 `provider` 解析和 backend 构造跟 stage 正交。
+
+**对应 `AgentStage` 枚举扩展**:`service/task.go:428-436` 当前有 `reading, implementing, testing, committing, done` 5 个值,加 `planning, reviewing, fixing` 3 个,通过 `ReportAgentStage`(`daemon.go:769, 798, 806, 816, 827, 836, 840, 846, 849`)上报给 UI。
+
+### 13.4 Q4: events 订阅模型
+
+**结论:同步 in-process pub/sub,无队列无持久化。Coordinator 必须把重活扔到 goroutine 避免阻塞 publisher。**
+
+- `Bus.Subscribe(eventType, h)` 是公开方法(`internal/events/bus.go:36`),任何 package 持 `*events.Bus` 引用都能注册
+- 没有 `init()` 自动注册,全部在 `cmd/server/main.go:50-61` 启动时手动调 `registerXxxListeners(...)`
+- **关键约束**:`Publish`(`bus.go:54-81`)在 publisher goroutine 上**同步**调用 handler,handler 阻塞会卡住 publisher(虽然有 panic recover,没有超时)
+- 所以 Coordinator 的 `HandleTaskCompleted` 收到事件后,先 `go func() { ... }()` 把状态机推进 / DB 写入扔到后台 goroutine,立即返回
+
+**注册 pattern**(参考 `activity_listeners.go:214-217`):
+```go
+bus.Subscribe(protocol.EventTaskCompleted, func(e events.Event) {
+    go loop.HandleTaskCompleted(ctx, e)  // 立即扔后台
+})
+```
+
+**进程范围**:**仅本进程**。grep `nats|redis|amqp|kafka` 在 `internal/events/` 和 `go.mod` 零匹配。不支持跨进程 pub/sub。
+
+### 13.5 Q5: loop worker 进程模型
+
+**结论:Coordinator 跑在 `cmd/server` 进程内,跟 `runRuntimeSweeper` 一样的 goroutine pattern。零新 binary、零新部署。**
+
+**现有 5 个 binary**(`server/cmd/`):
+- `server` — HTTP API + WS Hub + event bus + 后台 workers(中心常驻进程)
+- `agentra` — 用户 CLI(Cobra)
+- `gateway` — 容器/Docker 内的 agent runtime(WebSocket 连接到 server)
+- `mcp` — MCP tool server(stdio)
+- `migrate` — 一次性 DB migration runner
+
+**Coordinator 选 (a) in-process goroutine in `cmd/server`**:
+- 直接拿 `*events.Bus` 和 `*pgxpool.Pool`,无 IPC
+- 跟 `runRuntimeSweeper`(`cmd/server/main.go:72`)一样的 pattern
+- 跟 server 共生死(server 已是 always-on,Coordinator 顺势 always-on)
+
+**`main.go` 加 3 行**(模仿 sweeper block):
+```go
+loopCtx, loopCancel := context.WithCancel(context.Background())
+go runLoopCoordinator(loopCtx, pool, bus)
+// 在 SIGINT/SIGTERM handler 里:
+loopCancel()  // 跟 sweepCancel() 并列
+```
+
+Coordinator 的**实现代码**在 `server/internal/loop/coordinator.go`(逻辑),**启动 wiring** 在 `server/cmd/server/loop_coordinator.go`(薄包装调 `loop.New(...).Run(ctx)`)。这样:
+- 测试可以单独 import `internal/loop` 不依赖 cmd/server
+- cmd/server 不臃肿,继续 sweeper 那种薄层风格
+
+### 13.6 综合影响:对 §5-§6 的修订点
+
+下表是 v2 文档需要修正的所有位置(将在 v2 最终版一次性改完):
+
+| 章节 | 现状(假设) | 修正 |
+|------|-------------|------|
+| §5.1 `loops` 表 | ✓ 正确,新表 | 不变 |
+| §5.2 `tasks.loop_id` | ❌ 写成 `tasks` 表 | 改为 `agent_task_queue.loop_id` + `agent_task_queue.task_type` |
+| §5.3 task_type 枚举 | ❌ 假设 task_type 已存在 | 改为"需要新加",列在 migration 里 |
+| §5.4 文件清单 | ❌ 没列 `pkg/db/queries/agent.sql` / `daemon/types.go` | 补全,加 `cmd/server/loop_coordinator.go` |
+| §6.1 Coordinator 位置 | ❌ "server/internal/loop/coordinator.go" 模糊 | 明确:实现 `internal/loop/coordinator.go` + 启动 `cmd/server/loop_coordinator.go` |
+| §6.3 Daemon Routing | ❌ "routing.go" 不存在 | 改为 "在 `daemon.runTask` 里加 `buildPromptForStage(task.TaskType, task)` 分发器" |
+| §6.5 REST API | ✓ 正确 | 不变 |
+| §6.6 WS 事件 | ❌ 假设 payload 含 task_type | 改为 "Coordinator 收到 `task:completed` 后,先 `GetAgentTask(task_id)` 取 task_type,再决定下一 stage" |
+| §7.2 daemon 集成 | ❌ "现有 task worker 的 routing 加 4 个 case" | 改为 "在 `daemon.runTask` 的 `BuildPrompt` 之前加 stage dispatch switch" |
+| §9.4 M0 acceptance | ❌ "不创建实际 task" | 加 "必须包含 migration + sqlc 重生成 + daemon 编译通过" |
+| §11 未来工作 | — | 加一条: "跨进程 pub/sub 改造,支持多 server 副本时 Coordinator 仍能同步" |
+
+**新估算代码量**:§5-§6 列的"~9 个新文件 + 2 个修改文件"修正为:
+- 新文件 ~10 个(`internal/loop/` 下 6 个 + `cmd/server/loop_coordinator.go` 1 个 + `migrations/0XX_loop.up.sql` 1 个 + 2 个 prompt .md 占位)
+- 修改文件 ~5 个:`pkg/db/queries/agent.sql`(sqlc 输入)、`daemon/types.go`、`daemon/runTask` 内的 `runTask` 函数、`cmd/server/main.go`(3 行)、`service/task.go`(`AgentStage` 加 3 个值)
+- 估算总代码量仍 **~1100 行**(略增 ~100 行处理 task_type 接入)
