@@ -111,6 +111,8 @@ type AgentTaskQueue struct {
 	CloudRuntimeID   pgtype.UUID        `json:"cloud_runtime_id"`
 	RetryCount       int32              `json:"retry_count"`
 	MaxRetries       int32              `json:"max_retries"`
+	TaskType         string             `json:"task_type"`
+	LoopID           pgtype.UUID        `json:"loop_id"`
 }
 
 type Attachment struct {
@@ -321,6 +323,26 @@ type IssueSubscriber struct {
 type IssueToLabel struct {
 	IssueID pgtype.UUID `json:"issue_id"`
 	LabelID pgtype.UUID `json:"label_id"`
+}
+
+type Loop struct {
+	ID            pgtype.UUID        `json:"id"`
+	IssueID       pgtype.UUID        `json:"issue_id"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	Status        string             `json:"status"`
+	CurrentStage  pgtype.Text        `json:"current_stage"`
+	Iteration     int32              `json:"iteration"`
+	MaxIterations int32              `json:"max_iterations"`
+	PrUrl         pgtype.Text        `json:"pr_url"`
+	PrNumber      pgtype.Int4        `json:"pr_number"`
+	BranchName    pgtype.Text        `json:"branch_name"`
+	AgentID       pgtype.UUID        `json:"agent_id"`
+	Config        []byte             `json:"config"`
+	FailureReason pgtype.Text        `json:"failure_reason"`
+	StartedAt     pgtype.Timestamptz `json:"started_at"`
+	CompletedAt   pgtype.Timestamptz `json:"completed_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Member struct {

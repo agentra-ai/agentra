@@ -57,7 +57,7 @@ const cancelAgentTask = `-- name: CancelAgentTask :one
 UPDATE agent_task_queue
 SET status = 'cancelled', completed_at = now()
 WHERE id = $1 AND status IN ('queued', 'dispatched', 'running')
-RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries
+RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id
 `
 
 func (q *Queries) CancelAgentTask(ctx context.Context, id pgtype.UUID) (AgentTaskQueue, error) {
@@ -84,6 +84,8 @@ func (q *Queries) CancelAgentTask(ctx context.Context, id pgtype.UUID) (AgentTas
 		&i.CloudRuntimeID,
 		&i.RetryCount,
 		&i.MaxRetries,
+		&i.TaskType,
+		&i.LoopID,
 	)
 	return i, err
 }
@@ -125,7 +127,7 @@ WHERE id = (
     LIMIT 1
     FOR UPDATE SKIP LOCKED
 )
-RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries
+RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id
 `
 
 // Claims the next queued task for an agent, enforcing per-issue serialization:
@@ -156,6 +158,8 @@ func (q *Queries) ClaimAgentTask(ctx context.Context, agentID pgtype.UUID) (Agen
 		&i.CloudRuntimeID,
 		&i.RetryCount,
 		&i.MaxRetries,
+		&i.TaskType,
+		&i.LoopID,
 	)
 	return i, err
 }
@@ -164,7 +168,7 @@ const completeAgentTask = `-- name: CompleteAgentTask :one
 UPDATE agent_task_queue
 SET status = 'completed', completed_at = now(), result = $2, session_id = $3, work_dir = $4
 WHERE id = $1 AND status = 'running'
-RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries
+RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id
 `
 
 type CompleteAgentTaskParams struct {
@@ -203,6 +207,8 @@ func (q *Queries) CompleteAgentTask(ctx context.Context, arg CompleteAgentTaskPa
 		&i.CloudRuntimeID,
 		&i.RetryCount,
 		&i.MaxRetries,
+		&i.TaskType,
+		&i.LoopID,
 	)
 	return i, err
 }
@@ -296,9 +302,19 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 }
 
 const createAgentTask = `-- name: CreateAgentTask :one
-INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, trigger_comment_id, runtime_type, cloud_runtime_id)
-VALUES ($1, $2, $3, 'queued', $4, $5, COALESCE($6, 'local'), $7)
-RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries
+INSERT INTO agent_task_queue (
+    agent_id, runtime_id, issue_id, status, priority,
+    trigger_comment_id, runtime_type, cloud_runtime_id,
+    task_type, loop_id
+)
+VALUES (
+    $1, $2, $3, 'queued', $4, $5,
+    COALESCE($6, 'local'),
+    $7,
+    COALESCE($8, 'standard'),
+    $9
+)
+RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id
 `
 
 type CreateAgentTaskParams struct {
@@ -309,10 +325,12 @@ type CreateAgentTaskParams struct {
 	TriggerCommentID pgtype.UUID `json:"trigger_comment_id"`
 	RuntimeType      interface{} `json:"runtime_type"`
 	CloudRuntimeID   pgtype.UUID `json:"cloud_runtime_id"`
+	TaskType         interface{} `json:"task_type"`
+	LoopID           pgtype.UUID `json:"loop_id"`
 }
 
-// Creates an agent task. runtime_type and cloud_runtime_id are optional:
-// they default to 'local' and NULL respectively if not provided.
+// Creates an agent task. task_type defaults to 'standard' (existing behavior);
+// loop tasks pass 'loop_plan'/'loop_develop'/'loop_review'/'loop_fix' plus a loop_id.
 func (q *Queries) CreateAgentTask(ctx context.Context, arg CreateAgentTaskParams) (AgentTaskQueue, error) {
 	row := q.db.QueryRow(ctx, createAgentTask,
 		arg.AgentID,
@@ -322,6 +340,8 @@ func (q *Queries) CreateAgentTask(ctx context.Context, arg CreateAgentTaskParams
 		arg.TriggerCommentID,
 		arg.RuntimeType,
 		arg.CloudRuntimeID,
+		arg.TaskType,
+		arg.LoopID,
 	)
 	var i AgentTaskQueue
 	err := row.Scan(
@@ -345,6 +365,8 @@ func (q *Queries) CreateAgentTask(ctx context.Context, arg CreateAgentTaskParams
 		&i.CloudRuntimeID,
 		&i.RetryCount,
 		&i.MaxRetries,
+		&i.TaskType,
+		&i.LoopID,
 	)
 	return i, err
 }
@@ -353,7 +375,7 @@ const failAgentTask = `-- name: FailAgentTask :one
 UPDATE agent_task_queue
 SET status = 'failed', completed_at = now(), error = $2
 WHERE id = $1 AND status IN ('dispatched', 'running')
-RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries
+RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id
 `
 
 type FailAgentTaskParams struct {
@@ -385,6 +407,8 @@ func (q *Queries) FailAgentTask(ctx context.Context, arg FailAgentTaskParams) (A
 		&i.CloudRuntimeID,
 		&i.RetryCount,
 		&i.MaxRetries,
+		&i.TaskType,
+		&i.LoopID,
 	)
 	return i, err
 }
@@ -509,7 +533,7 @@ func (q *Queries) GetAgentInWorkspace(ctx context.Context, arg GetAgentInWorkspa
 }
 
 const getAgentTask = `-- name: GetAgentTask :one
-SELECT id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries FROM agent_task_queue
+SELECT id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id FROM agent_task_queue
 WHERE id = $1
 `
 
@@ -537,6 +561,8 @@ func (q *Queries) GetAgentTask(ctx context.Context, id pgtype.UUID) (AgentTaskQu
 		&i.CloudRuntimeID,
 		&i.RetryCount,
 		&i.MaxRetries,
+		&i.TaskType,
+		&i.LoopID,
 	)
 	return i, err
 }
@@ -616,7 +642,7 @@ func (q *Queries) HasPendingTaskForIssueAndAgent(ctx context.Context, arg HasPen
 }
 
 const listActiveTasksByIssue = `-- name: ListActiveTasksByIssue :many
-SELECT id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries FROM agent_task_queue
+SELECT id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id FROM agent_task_queue
 WHERE issue_id = $1 AND status IN ('dispatched', 'running')
 ORDER BY created_at DESC
 `
@@ -651,6 +677,8 @@ func (q *Queries) ListActiveTasksByIssue(ctx context.Context, issueID pgtype.UUI
 			&i.CloudRuntimeID,
 			&i.RetryCount,
 			&i.MaxRetries,
+			&i.TaskType,
+			&i.LoopID,
 		); err != nil {
 			return nil, err
 		}
@@ -663,7 +691,7 @@ func (q *Queries) ListActiveTasksByIssue(ctx context.Context, issueID pgtype.UUI
 }
 
 const listAgentTasks = `-- name: ListAgentTasks :many
-SELECT id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries FROM agent_task_queue
+SELECT id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id FROM agent_task_queue
 WHERE agent_id = $1
 ORDER BY created_at DESC
 `
@@ -698,6 +726,8 @@ func (q *Queries) ListAgentTasks(ctx context.Context, agentID pgtype.UUID) ([]Ag
 			&i.CloudRuntimeID,
 			&i.RetryCount,
 			&i.MaxRetries,
+			&i.TaskType,
+			&i.LoopID,
 		); err != nil {
 			return nil, err
 		}
@@ -810,7 +840,7 @@ func (q *Queries) ListAllAgents(ctx context.Context, workspaceID pgtype.UUID) ([
 }
 
 const listPendingTasksByRuntime = `-- name: ListPendingTasksByRuntime :many
-SELECT id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries FROM agent_task_queue
+SELECT id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id FROM agent_task_queue
 WHERE runtime_id = $1 AND status IN ('queued', 'dispatched')
 ORDER BY priority DESC, created_at ASC
 `
@@ -845,6 +875,8 @@ func (q *Queries) ListPendingTasksByRuntime(ctx context.Context, runtimeID pgtyp
 			&i.CloudRuntimeID,
 			&i.RetryCount,
 			&i.MaxRetries,
+			&i.TaskType,
+			&i.LoopID,
 		); err != nil {
 			return nil, err
 		}
@@ -857,7 +889,7 @@ func (q *Queries) ListPendingTasksByRuntime(ctx context.Context, runtimeID pgtyp
 }
 
 const listTasksByIssue = `-- name: ListTasksByIssue :many
-SELECT id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries FROM agent_task_queue
+SELECT id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id FROM agent_task_queue
 WHERE issue_id = $1
 ORDER BY created_at DESC
 `
@@ -892,6 +924,8 @@ func (q *Queries) ListTasksByIssue(ctx context.Context, issueID pgtype.UUID) ([]
 			&i.CloudRuntimeID,
 			&i.RetryCount,
 			&i.MaxRetries,
+			&i.TaskType,
+			&i.LoopID,
 		); err != nil {
 			return nil, err
 		}
@@ -949,7 +983,7 @@ SET status = 'queued',
     dispatched_at = NULL,
     started_at = NULL
 WHERE id = $1 AND status = 'failed' AND retry_count < max_retries
-RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries
+RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id
 `
 
 // Resets a failed task back to queued, incrementing retry_count.
@@ -978,6 +1012,8 @@ func (q *Queries) RetryAgentTask(ctx context.Context, id pgtype.UUID) (AgentTask
 		&i.CloudRuntimeID,
 		&i.RetryCount,
 		&i.MaxRetries,
+		&i.TaskType,
+		&i.LoopID,
 	)
 	return i, err
 }
@@ -986,7 +1022,7 @@ const startAgentTask = `-- name: StartAgentTask :one
 UPDATE agent_task_queue
 SET status = 'running', started_at = now()
 WHERE id = $1 AND status = 'dispatched'
-RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries
+RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id
 `
 
 func (q *Queries) StartAgentTask(ctx context.Context, id pgtype.UUID) (AgentTaskQueue, error) {
@@ -1013,6 +1049,8 @@ func (q *Queries) StartAgentTask(ctx context.Context, id pgtype.UUID) (AgentTask
 		&i.CloudRuntimeID,
 		&i.RetryCount,
 		&i.MaxRetries,
+		&i.TaskType,
+		&i.LoopID,
 	)
 	return i, err
 }
