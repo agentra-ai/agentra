@@ -560,36 +560,180 @@ CrewAI 把多 agent 协作抽象成"剧组":
 
 ### 12.4 为什么不用 LangGraph / CrewAI 直接
 
-| 维度 | LangGraph | CrewAI | 结论 |
-|------|-----------|--------|------|
-| 语言 | Python only | Python only | ❌ 都不支持 Go |
-| 官方 Go port | 无 | 无 | ❌ 都没出 |
-| 跟 Backend 接口兼容 | 绑定 LangChain 生态,需要适配 | 绑定自家 agent 抽象,需要适配 | ❌ 都要写 adapter 层 |
-| 部署复杂度 | 加 Python 微服务 | 加 Python 微服务 | ❌ agentra 是 Go-native,混语言破坏一致性 |
-| 图编排能力 | 强(复杂条件、并行、子图) | 弱(主要 sequential) | ⚠️ 我们用不到 LangGraph 的强项,CrewAI 能力相当 |
-| 团队学习成本 | 中(图概念) | 低(更直观) | ⚠️ 不算决定性 |
-| 维护风险 | LangChain API 经常 breaking | CrewAI 还在快速迭代 | ⚠️ 都不稳定 |
+**先纠正 v2 初稿的说法**:调研后确认,**LangGraph 有多个非官方 Go 端口**,CrewAI 没有 Go 端口但生态位上有 Go-native 替代品。
 
-**核心判断**:我们 4 个 stage 的状态机很简单,LangGraph 的图编排能力用不上(用上反而是 over-engineering);CrewAI 的 sequential 模式我们直接实现 ~300 行就够。引入 Python 服务带来的语言混用、部署复杂度、维护风险,远超收益。
+| 维度 | LangGraph (Python) | CrewAI (Python) | 结论 |
+|------|--------------------|-----------------|------|
+| 语言 | Python only | Python only | ⚠️ Python 生态 |
+| 官方 Go port | ❌ 无 | ❌ 无 | LangGraph 没有官方 Go port |
+| **非官方 Go port** | ✅ 有多个(见 12.5) | ⚠️ 仅 1 个 1⭐ 玩具项目 | LangGraph 侧有可选项,CrewAI 侧无 |
+| 跟 Backend 接口兼容 | 绑定 LangChain 生态,要 adapter | 绑定自家 agent 抽象,要 adapter | ⚠️ 都要适配层 |
+| 部署复杂度 | 加 Python 微服务(若直接用) | 加 Python 微服务(若直接用) | ⚠️ 混语言 = 一致性损失 |
+| 图编排能力 | 强(复杂条件、并行、子图) | 弱(主要 sequential) | 我们用不到 LangGraph 强项 |
+| 团队学习成本 | 中(图概念) | 低(更直观) | ⚠️ 不算决定性 |
+| 维护风险 | LangChain API 经常 breaking | CrewAI 还在快速迭代 | ⚠️ 都不算稳 |
+
+**核心判断**:
+1. **不直接用 LangGraph/CrewAI 的 Python 实现**:理由仍是语言不一致 + 部署复杂度。
+2. **不强制复用其 Go port**:非官方 Go port 都有碎片化、stars 低、API 跟 LangGraph Python 不完全对齐等风险,直接拿我们的 Backend 接口包一个"伪 LangGraph"是给将来挖坑。
+3. **借鉴抽象、状态机、sequential/loop 模式**:这部分放在我们的自定义 Coordinator 里实现,300 行能说清楚。
+
+### 12.4.1 但要承认:Go-native 多 agent 框架在 2026 已经不少了
+
+调研时发现 Go 生态有 **3 类候选**值得放进 12.5 对比表(下面 12.5 详述):
+- **直接对标 LangGraph 的 Go port**(`smallnest/langgraphgo` 261⭐、`dshills/langgraph-go` 8⭐)
+- **OpenAI Agents Go SDK 的社区 port**(`nlpodyssey/openai-agents-go` 258⭐)
+- **Go-native 多 agent 编排框架**(`AgenticGoKit` 155⭐——**这个最值得评估**)
+
+具体对比见 12.5。结论不变:custom Coordinator 是 MVP 的正确选择,AgenticGoKit 是 post-MVP 演进的强候选。
 
 ### 12.5 Go 生态编排方案对比
 
-调研了 Go 生态的多 agent / workflow 编排方案:
+调研了 Go 生态的多 agent / workflow 编排方案,**包括非官方 LangGraph Go port、Go-native 多 agent 框架、通用 workflow 引擎三类**:
 
-| 选项 | 定位 | 优势 | 劣势 | v2 选不选 |
-|------|------|------|------|-----------|
-| **Temporal** | 生产级 workflow 引擎 | retries / timeouts / signals / versioning 全部现成;多语言 SDK | 加 Temporal server 依赖(独立进程);学习曲线陡;对 4 stage 杀鸡用牛刀 | ❌ MVP 不上,长期可考虑 |
-| **Inngest** | Function-as-a-Service 风格 workflow | Go SDK 体验好;事件驱动;managed 服务 | 第三方 vendor;定价不透明 | ❌ MVP 不上 |
-| **Cadence (Uber)** | 类似 Temporal | Go-native 早;成熟 | 社区比 Temporal 小;部署也重 | ❌ MVP 不上 |
-| **Restate** | 比 Temporal 轻量 | 单 binary 部署;Go SDK 简洁 | 生态新;生产案例少 | ⚠️ 观望 |
-| **Hatchet** | 分布式任务队列 + workflow | Go SDK 好;开源 | 主打任务队列,不是为 LLM 编排设计 | ❌ 场景不匹配 |
-| **自定义 Coordinator + 事件总线** | 跟现有架构一致 | 零新依赖;~300 行;DB 持久化;跟现有 WS 事件打通 | 自己写 retry/timeout 边界(其实已经由 `tasks` 表 retry 提供) | ✅ **v2 选这个** |
+#### 12.5.1 A 类:LangGraph / CrewAI 风格多 agent 框架
 
-**v2 选自定义的理由**:
-1. **零新基础设施依赖**。Temporal / Inngest / Cadence 都需要独立 server,跟 agentra 的"一 docker compose 跑起来"理念冲突。
-2. **跟现有事件流打通**。Coordinator 订阅 `task:completed` 事件就行,不用引入新消息总线。
-3. **代码量真的不大**。状态机 4-5 个转移,~300 行;比 adapter 层(把 LangGraph 翻译成 Go)还少。
-4. **后续可演进**。如果以后真要图编排,优先评估 Temporal(Go SDK 成熟,跟我们的 stack 最契合);自定义 Coordinator 不会成为障碍。
+| 选项 | ⭐ | 维护 | License | 关键特性 | 适配度 |
+|------|-----|------|---------|----------|--------|
+| **`AgenticGoKit`** (`AgenticGoKit/AgenticGoKit`) | 155 | 活跃(2026-05-26 推过) | Apache 2.0 | **Sequential / Parallel / DAG / Loop** 4 种编排模式;Anthropic / OpenAI / Ollama 等多 LLM;**MCP tool**;OpenTelemetry;Beta | ⭐⭐⭐⭐ |
+| **`nlpodyssey/openai-agents-go`** | 258 | 活跃(2026-03-26) | Apache 2.0 | OpenAI Python Agents SDK 的 Go port;Agent + Handoffs + Guardrails 3 个核心概念;examples 完整 | ⭐⭐⭐ |
+| **`smallnest/langgraphgo`** | 261 | 2026-02-24 推过 | MIT | LangGraph Go port;功能强,但 137MB(可能含模型/样例资源) | ⭐⭐ |
+| **`dshills/langgraph-go`** | 8 | 2025-11-18 推过 | MIT | 自称 "production-looking":stateful graph + deterministic replay + checkpointing + observability + Anthropic/OpenAI/Google/Bedrock 适配 | ⭐⭐ (stars 太低) |
+| **`gocrewwai`** (`stealthrocket/gocrewwai`) | 9 | 2026-05-10 | (待查) | "Enterprise-grade CrewAI alternative for Go" — LangGraph-style Flow + A2A + MCP + HITL | ⭐⭐ |
+| `crewai-go` (`captain-corgi-hub`) | 1 | 2024-10 起未推 | (待查) | "Generative AI Multi Agents in Go inspire by CrewAI" — 几乎无更新 | ⭐ |
+
+**`AgenticGoKit` 是这类别里最值得评估的**:
+- **DAG / Loop pattern** 是我们 v2 状态机想要的(Loop 模式直接对应 plan→develop→review→fix)
+- **MCP tool 集成**正好对得上 agentra 已有的 `pkg/mcp` server
+- **Anthropic 支持**是必需的(我们 Backend 主要调 Claude)
+- **Apache 2.0** 允许商用
+- **风险**:155 stars + "Beta" 状态,生产可用性需要自己验证
+
+#### 12.5.2 B 类:通用 workflow 引擎(非 LLM 专用)
+
+| 选项 | ⭐ | 维护 | License | 关键特性 | 适配度 |
+|------|-----|------|---------|----------|--------|
+| **Temporal** (`temporalio/temporal`) | 20778 | 活跃(2026-06-06) | MIT | 生产级 workflow 引擎:retries / timeouts / signals / versioning 全有;多语言 SDK | ⭐⭐⭐ |
+| **Inngest** (`inngest/inngest`) | 5451 | 活跃(2026-06-05) | NOASSERTION | FaaS 风格 workflow;Go SDK 好;事件驱动;managed 或 self-host | ⭐⭐ |
+| Cadence (Uber) | 5k+ | 活跃 | Apache 2.0 | Temporal 前身;Go-native 早;成熟 | ⭐⭐ |
+| Restate | 1k+ | 活跃 | (待查) | 比 Temporal 轻量;单 binary | ⭐ |
+| Hatchet | 1k+ | 活跃 | (待查) | 分布式任务队列 + workflow;非 LLM 专用 | ⭐ |
+| Argo Workflows (`argoproj/argo-workflows`) | (high) | 活跃 | Apache 2.0 | K8s-native;非 LLM 专用;引入 K8s 依赖过重 | ⭐ |
+
+Temporal / Inngest 是 Go 生态最成熟的 workflow 引擎,但**它们解决的是通用业务工作流**(订单处理、跨服务 saga、定时任务),不是 LLM agent 编排。LLM stage 的特殊性(非确定性、token 成本、人工 review、tool calling 错误处理)它们不直接管,得自己包一层。
+
+#### 12.5.3 C 类:其他 Go AI/agent 工具(参考)
+
+| 选项 | ⭐ | 备注 |
+|------|-----|------|
+| `gastown` (`stealthrocket/gastown`) | 15755 | "multi-agent workspace manager" — 大型平台,跟我们 MVP 不匹配 |
+| `mudler/nib` | 21 | "tiny zero-dependency LLM agent harness" — 终端工具,非编排框架 |
+| `superfly/contextwindow` | (low) | 低层 LLM agent 库 |
+| `AgenticGoKit/agk` | - | AgenticGoKit 的 CLI(独立 sibling repo) |
+
+#### 12.5.4 v2 选哪个
+
+| 候选 | MVP | 理由 |
+|------|-----|------|
+| **`AgenticGoKit`** | ❌ 不上 | 关键风险:155 stars + "Beta" 状态,breaking change 概率高;集成要适配 MCP 和 Backend 接口;学习新抽象 |
+| **`nlpodyssey/openai-agents-go`** | ❌ 不上 | 主要是 OpenAI API 绑定(虽然自称 provider-agnostic),不直接支持 Anthropic 为一等公民 |
+| **`smallnest/langgraphgo`** | ❌ 不上 | 137MB 代码量,stars 跟 AgenticGoKit 相当但活跃度差;跟 LangGraph Python API 同步压力 |
+| **`Temporal`** | ❌ 不上 | 引入 Temporal server 部署,跟"一 docker compose"理念冲突;杀鸡用牛刀 |
+| **`Inngest`** | ❌ 不上 | 第三方 vendor;定价不透明 |
+| **自定义 Coordinator** | ✅ **MVP 选这个** | 见下面理由 |
+
+**v2 选自定义 Coordinator 的理由**:
+1. **零新基础设施依赖**。Temporal / Inngest / Cadence / Restate 都需要独立 server,跟 agentra 的"一 docker compose 跑起来"理念冲突。
+2. **零新代码依赖**。AgenticGoKit / nlpodyssey 都要拉新库、适配 API,学习新抽象;我们 4 stage 状态机 ~300 行说清楚。
+3. **跟现有事件流打通**。Coordinator 订阅 `task:completed` 事件就行,不用引入新消息总线。
+4. **API stability**。自己写的代码我们自己控制,不会因为 framework breaking change 拖累 release。
+5. **后续可演进**。如果以后真要换,优先评估 AgenticGoKit(MCP + Anthropic + DAG/Loop pattern 最贴合),次选 Temporal(Go SDK 成熟)。Custom Coordinator 不会成为障碍,Stage 是单一函数,容易映射到外部框架的 Node。
+
+### 12.6 实现细节:Coordinator 怎么消费 LangGraph-style 模式
+
+Coordinator 关键代码骨架(伪 Go):
+
+```go
+// server/internal/loop/coordinator.go
+package loop
+
+type Coordinator struct {
+    db        *sql.DB
+    events    *events.Bus
+    taskSvc   *service.TaskService
+    backend   agent.Backend  // 现有 Backend 接口
+}
+
+func (c *Coordinator) HandleTaskCompleted(ctx context.Context, evt events.TaskCompleted) error {
+    task, err := c.taskSvc.GetTask(ctx, evt.TaskID)
+    if err != nil { return err }
+
+    loop, err := c.getLoopByTaskID(ctx, task.LoopID)
+    if err != nil { return err }
+    if loop.Status != "running" { return nil }  // 用户暂停/取消后不再推进
+
+    next, err := c.decideNextStage(loop, task)  // 状态机转移
+    if err != nil { return c.failLoop(ctx, loop, err) }
+
+    switch next.action {
+    case "create_task":
+        return c.taskSvc.CreateTask(ctx, next.taskSpec)
+    case "complete":
+        return c.completeLoop(ctx, loop, next.prURL)
+    case "fail":
+        return c.failLoop(ctx, loop, next.reason)
+    }
+    return nil
+}
+
+func (c *Coordinator) decideNextStage(loop *Loop, lastTask *Task) (Decision, error) {
+    switch loop.CurrentStage {
+    case "plan":
+        return Decision{action: "create_task", taskSpec: developTask(loop)}, nil
+    case "develop":
+        return Decision{action: "create_task", taskSpec: reviewTask(loop)}, nil
+    case "review":
+        review := parseReviewArtifact(lastTask.Artifacts)
+        if review.Approved {
+            return Decision{action: "complete", prURL: ...}, nil
+        }
+        if loop.Iteration >= loop.MaxIterations {
+            return Decision{action: "fail", reason: "max_iterations_exceeded"}, nil
+        }
+        return Decision{action: "create_task", taskSpec: fixTask(loop, review.Issues)}, nil
+    case "fix":
+        return Decision{action: "create_task", taskSpec: reviewTask(loop)}, nil
+    }
+    return Decision{}, fmt.Errorf("unknown stage: %s", loop.CurrentStage)
+}
+```
+
+**这个 Coordinator 是 v2 借鉴 LangGraph 状态机 + CrewAI sequential process 的产物**,但用 Go 直接写,集成进现有 `internal/events` 订阅和 `internal/service.TaskService`,没有任何外部框架依赖。
+
+### 12.7 演进路径:什么时候切换到 AgenticGoKit
+
+如果以后出现以下信号,重新评估并可能切换到 `AgenticGoKit`:
+
+| 触发条件 | 理由 |
+|----------|------|
+| AgenticGoKit 达到 1k+ stars | 社区验证足够,降低"项目死了"风险 |
+| AgenticGoKit 发布 v1.0 (脱离 Beta) | API stability 有保证 |
+| Loop stage 数量超过 6 个 | 状态机管理成本上升,框架抽象收益变高 |
+| Loop 需要并行 stage / sub-loop | 我们当前的 flat state machine 表达力不够 |
+| Loop 需要可视化编排 UI | AgenticGoKit 自带 Mermaid 流程图生成,自己写成本高 |
+| AgenticGoKit 支持 Anthropic 优先 + 我们的 Backend 接口 | 集成摩擦降低 |
+
+**触发后**:
+- Coordinator 退化成 AgenticGoKit 的一个 Workflow 定义文件
+- StageExecutor 退化成 AgenticGoKit 的 Agent / Tool
+- 我们的 `loops` 表替换成 AgenticGoKit 自己的 state 表
+- 估计需要 2-3 周迁移工作
+
+**触发前**:保持自定义 Coordinator,代码量小、依赖少、可控。
+
+---
+
+## 13. 待确认 (open questions)
 
 ### 12.6 实现细节:Coordinator 怎么消费 LangGraph-style 模式
 
