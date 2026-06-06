@@ -378,6 +378,109 @@ agentra loop list [--status=running]
 
 事件 payload 包含 `loop_id`,前端过滤。
 
+### 6.7 Tool System Design
+
+Stage 需要调用工具(读文件、写文件、跑命令、git 操作)。这里定义工具的接口、清单、按 stage 的作用域、沙箱策略。
+
+#### 6.7.1 Tool 接口
+
+```go
+// server/internal/loop/tools/tool.go
+type Tool interface {
+    Name() string
+    Description() string
+    Schema() ToolSchema              // 给 LLM 的 JSON schema(走 tool_use 协议)
+    Execute(ctx context.Context, args json.RawMessage) (Result, error)
+}
+
+type ToolSchema struct {
+    Name        string                 `json:"name"`
+    Description string                 `json:"description"`
+    Parameters  map[string]interface{} `json:"parameters"`  // JSON schema
+}
+
+type Result struct {
+    Content string  // 文本结果给 LLM
+    Error   string  // 非空代表失败
+    Stderr  string  // run_command 用,跟 stdout 分开
+    ExitCode int    // run_command 用
+}
+```
+
+工具是**纯函数**:`args → Result`,无状态,无副作用靠 Execute 自己管。每次调用都打日志(`tool_call` / `tool_result` / `tool_error` 事件)。
+
+#### 6.7.2 Tool 清单(MVP)
+
+| Tool | 用在哪些 stage | 关键参数 | 返回 |
+|------|----------------|----------|------|
+| `read_file` | Plan, Develop, Review, Fix | `path` | 文件内容(>10KB 截断) |
+| `search_code` | Plan, Develop, Fix | `query`, `path?` | grep 结果 |
+| `write_file` | Develop, Fix | `path`, `content` | void(失败返 error) |
+| `run_command` | Develop, Fix | `cmd`, `timeout_sec?` | stdout/stderr/exit_code |
+| `run_test` | Develop, Fix | `cmd?`(默认 `go test ./...` 或 `pnpm test`) | 测试结果摘要 |
+| `git_status` | Develop, Fix | — | git status 输出 |
+| `git_diff` | Develop, Review, Fix | `staged?`, `file?` | unified diff |
+| `git_commit` | Develop, Fix | `message` | commit SHA |
+| `git_push` | Develop, Fix | `remote`, `branch` | void |
+| `create_branch` | Develop | `name` | void |
+| `github_pr_create` | Develop(最后) | `title`, `body`, `base?` | PR URL + number |
+
+Plan / Review 是只读 stage,只用 `read_file` / `search_code` / `git_diff`。Develop / Fix 是写 stage,有完整工具集。
+
+#### 6.7.3 Tool 按 stage 分配
+
+```go
+// server/internal/loop/stages/tools.go
+var toolsByStage = map[string][]string{
+    "loop_plan":    {"read_file", "search_code"},
+    "loop_develop": {"read_file", "search_code", "write_file", "run_command", "run_test",
+                     "git_status", "git_diff", "git_commit", "git_push",
+                     "create_branch", "github_pr_create"},
+    "loop_review":  {"read_file", "git_diff"},
+    "loop_fix":     {"read_file", "search_code", "write_file", "run_command", "run_test",
+                     "git_status", "git_diff", "git_commit", "git_push"},
+}
+```
+
+#### 6.7.4 Tool 安全策略
+
+| 维度 | dogfood 模式(MVP) | 生产模式(post-MVP) |
+|------|---------------------|---------------------|
+| 文件系统 | 全权限(loop 跑在开发者本机) | 限制在 loop 专属 worktree |
+| `run_command` | 任何命令,默认 timeout 5 分钟 | 命令白名单 + timeout 强制 |
+| `git_*` | 开发者本机 git 配置 | 专用 bot account + token |
+| `github_pr_create` | 开发者本机 `gh` 认证 | 专用 GitHub App token |
+| 网络 | 任意 | 出站白名单 |
+
+dogfood 模式下,工具直接走开发者本机环境(因为 loop 跑在开发者的机器上,改 Agentra 自己);生产模式(post-MVP)需要 worktree 隔离、bot account、沙箱命令。
+
+#### 6.7.5 Tool 错误处理
+
+- `read_file` 文件不存在:返回 error(message 含 "file not found, do not retry")
+- `write_file` 写只读文件:返回 error
+- `run_command` timeout:返回 partial output + timeout error
+- `run_command` exit_code != 0:**不** 当作 tool 错误,return Result 包含 exit_code,让 LLM 看 stderr 自己判断
+- `git_commit` 啥都没改:返回 error "no changes to commit"
+- `git_push` 冲突:返回 error 包含 "merge conflict",stage fail
+- `github_pr_create` 已经存在同标题 PR:返回 error 包含 PR URL(stage 仍然 fail,用户决定)
+
+每个 tool 错误都会被 LLM 看到,LLM 可以决定怎么应对(改 prompt / 换思路 / 放弃)。Coordinator 不替 LLM 决定"放弃"。
+
+#### 6.7.6 工具调用日志
+
+每次工具调用都通过 `pkg/logger` 打:
+
+```
+[loop_id=xxx] tool=read_file args={path: "server/internal/loop/coordinator.go"}
+[loop_id=xxx] tool=read_file result=1453_chars duration=12ms
+[loop_id=xxx] tool=run_command args={cmd: "go test ./...", timeout: 300}
+[loop_id=xxx] tool=run_command result={exit_code: 0, stdout: "...", stderr: ""} duration=2.3s
+[loop_id=xxx] tool=github_pr_create args={title: "Fix AGENTRA-1", body: "..."}
+[loop_id=xxx] tool=github_pr_create error="PR already exists: https://..."
+```
+
+日志带 `loop_id` / `issue_id` / `stage` / `iteration`,可以从 `internal/loop/loop.log` 反查任何一次 loop 跑的所有 tool 调用。Args 脱敏(不记 file content,只记 path)。
+
 ---
 
 ## 7. 集成点
@@ -431,19 +534,99 @@ agentra loop list [--status=running]
 
 ## 8. 失败处理
 
-| 场景 | 行为 |
-|------|------|
-| Plan task 失败 | task retry 3 次;失败后 loop `failed` |
-| Develop task 失败 | task retry;失败后 loop `failed` |
-| Review task 失败 | task retry;失败后 loop `failed` |
-| Fix task 失败 | task retry;重试 3 次后 loop `failed` |
-| LLM 网络错误 | 现有 task retry 机制 |
-| 用户暂停 | LoopCoordinator 标记 `paused`;**不再创建新 task**;已有 task 跑完后不创建下一 task |
-| 用户恢复 | LoopCoordinator 恢复创建下一 task |
-| 用户取消 | LoopCoordinator 取消所有进行中的 task,标记 `cancelled` |
-| iteration >= max_iterations | loop `failed`,记录 `failure_reason='max_iterations_exceeded'` |
-| 创建 PR 失败 | loop `failed`,记录 `failure_reason='pr_create_failed'` |
-| Coordinator 进程崩溃 | 重启时从 `loops` 表加载 `running/paused` 状态的 loop,继续 |
+### 8.1 失败分类
+
+| 错误类别 | 例子 | 默认行为 |
+|----------|------|----------|
+| LLM 网络错误 | timeout, connection reset | stage retry 3 次(指数 backoff 1s/4s/16s) |
+| LLM rate limit | 429 | stage retry 3 次(指数 backoff 10s/40s/160s) |
+| LLM context exceeded | prompt too long | stage fail,loop fail(retry 不解决问题,需修 prompt) |
+| LLM content filter | blocked output | stage fail,loop fail |
+| Tool 错误 - 文件 | not found, permission denied | stage retry 1 次(LLM 可能自动改路径),然后 fail |
+| Tool 错误 - git | conflict, no remote | stage fail,loop fail(让用户手动处理) |
+| Tool 错误 - test | test failed | **不 fail**,记入 develop artifact,让 review stage 看到 |
+| Tool 错误 - PR 创建 | gh 没装,token 失效 | loop fail,记录 `failure_reason='pr_create_failed'`,用户可 resume |
+| 用户暂停 | CLI / REST / UI 操作 | LoopCoordinator 标记 `paused`;**不再创建新 task**;已有 task 跑完后停在原地 |
+| 用户恢复 | 同上 | LoopCoordinator 恢复创建下一 task(从 `current_stage` 继续) |
+| 用户取消 | 同上 | LoopCoordinator 取消所有进行中的 task,标记 `cancelled` |
+| iteration >= max_iterations | review 一直找到 issues | loop `failed`,记录 `failure_reason='max_iterations_exceeded'` |
+| Loop 总时长超时 | 单 loop 跑超过 24h | loop `failed`,记录 `failure_reason='loop_timeout'` |
+| Stage 超时 | 单 stage 跑超过 30min | stage fail,loop fail(默认) |
+| Coordinator 进程崩溃 | OOM, panic | 重启时从 DB 恢复(见 8.4) |
+
+### 8.2 Timeout 配置
+
+| 资源 | 默认值 | 配置项 |
+|------|--------|--------|
+| 单次 LLM call | 5 分钟 | `loops.config.llm_timeout_sec` |
+| 单个 stage | 30 分钟 | `loops.config.stage_timeout_sec` |
+| 整个 loop | 24 小时 | `loops.config.loop_timeout_sec` |
+| LLM call 间空闲(轮询) | 不适用(Backend 是 streaming) | — |
+| 单次 `run_command` | 5 分钟 | `run_command` args 里的 `timeout_sec`(默认 300) |
+| 单次 `run_test` | 10 分钟 | 固定(测试可能长) |
+
+创建 loop 时可覆盖默认值;`max_iterations` 默认 5,可指定 1-20。
+
+### 8.3 Retry 策略
+
+| 资源 | 重试次数 | backoff | 重试计数 |
+|------|----------|---------|----------|
+| LLM call(网络错误) | 3 | 指数 1s/4s/16s | **不** 计入 loop iteration |
+| LLM call(rate limit) | 3 | 指数 10s/40s/160s | **不** 计入 |
+| Tool 错误(文件) | 1 | 立即 | **不** 计入 |
+| Tool 错误(git) | 0 | — | 直接 fail |
+| Stage 失败 | 0(由 task 系统 retry) | — | 取决于 task 系统 |
+| Loop 失败 | **0**(不自动重试 loop) | — | 用户主动 `agentra loop resume` |
+
+**关键不变量**:**LLM call 的 retry 不计入 loop iteration**。iteration 只在 "Review 找到 issues → 进入 Fix" 时 +1。LLM 抽风不算,review 真的找到问题才算。
+
+### 8.4 Coordinator 崩溃恢复
+
+Coordinator 进程崩溃 / OOM / 重启时,启动逻辑:
+
+1. 加载 `loops.status IN ('running', 'paused')` 的所有 loop
+2. 对每个 loop,加载 `tasks.status='running'` 的 task:
+   - 如果 task 超过 `stage_timeout_sec` → 标为 `failed`,触发 Coordinator 走 fail-loop 逻辑
+   - 如果 task 未超时 → 标为 `interrupted`,让 daemon 重试(task 系统自带 retry 机制)
+3. 重新订阅 `task:completed` 事件,从 `current_stage` 继续推进
+4. 对 `loops.status='paused'` 的 loop,只订阅,不主动推进
+
+**DB 是 single source of truth**。Coordinator 进程无内存状态需要恢复,所有数据从 `loops` / `tasks` / `task_artifacts` 表读。
+
+### 8.5 Token 成本跟踪
+
+每个 stage 完成后,把 LLM call 的 token 用量写入 `task_artifacts.metadata`:
+
+```sql
+UPDATE task_artifacts
+SET metadata = metadata || jsonb_build_object(
+  'input_tokens', $1,
+  'output_tokens', $2,
+  'wallclock_ms', $3,
+  'cost_usd', $4
+)
+WHERE id = $5;
+```
+
+Loop 结束/失败时,Coordinator 汇总所有 stage 的 token 用量,写入 `loops.config.total_cost`(M2 起记录):
+
+```json
+{
+  "total_cost": {
+    "input_tokens": 1240000,
+    "output_tokens": 320000,
+    "estimated_usd": 12.40,
+    "by_stage": {
+      "plan":    { "input": 5000, "output": 2000 },
+      "develop": { "input": 800000, "output": 200000 },
+      "review":  { "input": 100000, "output": 5000 },
+      "fix":     { "input": 335000, "output": 113000 }
+    }
+  }
+}
+```
+
+用户在 issue 页面 / `agentra loop status` 里能看到这个 loop 花了多少 token。**M2 起实现**;M0/M1 先不实现,占位字段准备好。
 
 ---
 
@@ -475,6 +658,183 @@ agentra loop list [--status=running]
 - [ ] Coordinator 进程崩溃后重启能继续(无状态丢失)
 - [ ] 单元测试覆盖 Coordinator 状态机所有转移
 - [ ] 集成测试覆盖 plan → develop → review → done 全流程(mock LLM)
+
+### 9.4 分阶段实现计划
+
+6 个 milestone 推进,每个 milestone 都有可验证的产出和验收。**总计 ~9 个工作日**(单人,~2 周)。
+
+#### M0: 数据模型 + REST 骨架 (1 天)
+
+**产出**:
+- `migrations/0XX_loops.up.sql`:`loops` 表 + `tasks.loop_id` 列
+- `server/internal/loop/loop.go`:`Loop` struct + CRUD 函数(DB 层)
+- `server/internal/handler/loop.go`:REST endpoint(GET / POST / list)
+- 不创建实际 task,不订阅事件,不调 Backend
+
+**验收**:
+- `POST /api/loops {issue_id: X}` 创建 status=pending 的 loop
+- `GET /api/loops/:id` 返回 loop
+- `GET /api/loops?status=running` 列表查询
+- `pnpm typecheck` + `go test ./...` 通过
+
+#### M1: LoopCoordinator + Plan stage (2 天)
+
+**产出**:
+- `server/internal/loop/coordinator.go`:Coordinator 骨架 + `CreateLoop` + `HandleTaskCompleted`
+- `server/internal/loop/stages/plan.go`:PlanExecutor(只读 issue,产出 plan markdown)
+- `server/internal/loop/events.go`:事件订阅注册
+- `server/internal/daemon/routing.go`:加 `loop_plan` case
+- 4 个 system prompt 模板(只 plan 实际用,其他占位)
+
+**验收**:
+- `agentra loop start ISSUE-1` 创建 loop
+- Loop 自动跑 Plan stage,产出 `plan` artifact
+- 完成后 loop 状态 `running, current_stage=plan`(无 develop 转移,停在 plan)
+- 用户能看到 plan 内容
+- Coordinator 单元测试覆盖 `decideNextStage` 所有分支
+
+#### M2: Develop stage (2 天)
+
+**产出**:
+- `server/internal/loop/stages/develop.go`:DevelopExecutor
+- `server/internal/loop/tools/*.go`:11 个 tool 实现(read_file, write_file, run_command, run_test, git_*, github_pr_create)
+- 状态机加 `plan → develop → done`(无 review,直接 done)
+
+**验收**:
+- Loop 跑 plan → develop → done
+- Develop stage 真的改了 Agentra 代码,创建了 commit
+- 完成后有 `diff` artifact
+- Develop stage 失败时 loop fail,有 `failure_reason`
+- 11 个 tool 各自单元测试覆盖(happy path + 关键 error path)
+
+#### M3: Review stage (2 天)
+
+**产出**:
+- `server/internal/loop/stages/review.go`:ReviewExecutor
+- 状态机加 `develop → review → done`(review 默认 approved,MVP 简化)
+- Review JSON 解析逻辑
+
+**验收**:
+- Loop 跑 plan → develop → review → done
+- Review 产出 `review` artifact(JSON: `{approved, issues[]}`)
+- 默认 approved,loop 完成
+- Review 单元测试覆盖(approved 路径 + 强制 issues 路径用 mock LLM)
+
+#### M4: Fix stage + iteration (2 天)
+
+**产出**:
+- `server/internal/loop/stages/fix.go`:FixExecutor
+- 状态机加 `review → fix → review` 转移
+- `iteration` 计数,max_iterations 检查
+- Loop 失败时 `failure_reason` 字段写入
+
+**验收**:
+- Review 找到 issues 时,loop 自动 fix 然后再 review
+- iteration 计数正确(每次 fix +1)
+- iteration >= max_iterations 后 loop `failed`,`failure_reason='max_iterations_exceeded'`
+- 集成测试覆盖 review→fix→review 完整流程(mock LLM 强制 review 找 issues)
+
+#### M5: CLI + UI 验证 (1 天)
+
+**产出**:
+- `server/internal/cli/loop.go`:`start` / `status` / `pause` / `resume` / `cancel` / `list` 子命令
+- Web UI 验证:issue 页面能看到 loop 进度(走现有 task 视图,无新代码)
+- WS 事件:`loop:status_changed`(可选)
+
+**验收**:
+- 所有 CLI 子命令工作
+- Issue 页面显示 loop 状态(手动验证)
+- E2E test:从 CLI 启动 loop,UI 看到进度,loop 完成
+
+#### M6: 第一次 dogfood (1 天)
+
+**产出**:
+- 选一个真实的 Agentra bug(优先简单明确,影响小,无外部依赖)
+- `agentra loop start <issue-id>` 启动 loop
+- Loop 跑完整 plan→develop→review→fix→review→done 流程
+- 创建 PR
+
+**验收**:
+- PR 由 loop 自动创建,可手动 review 后合并
+- 至少一次 review→fix 迭代被触发
+- Loop 创建的 PR 通过 CI
+- 整个流程 token 成本 < $20(粗略上限)
+
+**总计:M0-M6 约 9 个工作日**(单人)。可以并行 M0+M1 的部分工作(比如 schema 设计可以先做)。
+
+### 9.5 测试策略
+
+| 测试类型 | 目标覆盖率 | 工具 | 关键测试 |
+|----------|------------|------|----------|
+| **单元测试** | Coordinator 90%,Stage Executors 80%,Tools 100% | `go test` + `testify/assert` | `decideNextStage` 所有分支、tool 错误路径、JSON 解析 |
+| **集成测试** | 关键流程 100% 覆盖 | `go test` + mock LLM(`httptest`) | plan→develop→review→done 全流程;review→fix→review;max_iterations 触发;Coordinator 崩溃恢复 |
+| **E2E test** | MVP 验收 100% 覆盖 | Playwright + 真实 Backend(staging env) | CLI 启动 loop → UI 看状态 → loop 完成 → PR 创建 |
+| **手动 dogfood** | 至少 1 次成功 | 开发者本机 | 用 loop 修复一个真实 bug,合并 PR |
+
+**Mock LLM 模式**:
+- 用 `httptest` 起一个 mock HTTP server 模拟 Anthropic API
+- 按 test case 注入 response(approved / issues / error)
+- 不需要真 LLM,CI 跑得快
+
+**集成测试位置**:`server/internal/loop/integration_test.go`,需要数据库(test DB,M0 起就建)。
+
+**E2E test 位置**:`e2e/tests/loop.spec.ts`,需要 backend + frontend + 测试 issue 准备好。
+
+### 9.6 Observability
+
+#### 9.6.1 OTel Traces
+
+每个 stage 一个 root span,内含 LLM call 和 tool call 子 span:
+
+```
+[loop: AGENTRA-1, issue: 1, iter: 0]
+  └── [stage: plan]
+       └── [llm_call] input_tokens=4500, output_tokens=2200
+       └── [tool: read_file] path=docs/specs/loop.md
+  └── [stage: develop]
+       └── [llm_call] input_tokens=8000, output_tokens=3000
+       └── [tool: read_file] path=server/internal/loop/coordinator.go
+       └── [tool: write_file] path=server/internal/loop/coordinator.go
+       └── [tool: git_commit] sha=abc1234
+       └── [tool: github_pr_create] url=https://...
+```
+
+Span attributes 至少包含:`loop_id`, `issue_id`, `iteration`, `stage_type`, `agent_id`, `duration_ms`, `token_input`, `token_output`。
+
+#### 9.6.2 Metrics
+
+通过现有 Prometheus exporter(若已有)暴露:
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `loops_created_total` | counter | `workspace_id` |
+| `loops_completed_total` | counter | `workspace_id`, `iterations` |
+| `loops_failed_total` | counter | `workspace_id`, `failure_reason` |
+| `loops_duration_seconds` | histogram | `workspace_id`, `status` |
+| `loops_iterations_to_completion` | histogram | `workspace_id` |
+| `stages_duration_seconds` | histogram | `stage_type`, `status` |
+| `stages_llm_input_tokens_total` | counter | `stage_type`, `model` |
+| `stages_llm_output_tokens_total` | counter | `stage_type`, `model` |
+| `tools_call_total` | counter | `tool_name`, `status` |
+| `tools_duration_seconds` | histogram | `tool_name` |
+
+M0 起就埋点,不需要等 M6。
+
+#### 9.6.3 Logs
+
+结构化日志(JSON),带 `loop_id` / `issue_id` / `stage` / `iteration` / `tool` 字段。
+
+关键事件:
+- `loop.created` / `loop.started` / `loop.paused` / `loop.resumed` / `loop.cancelled`
+- `loop.stage_started` / `loop.stage_completed` / `loop.stage_failed`
+- `loop.iteration_incremented` / `loop.completed` / `loop.failed`
+- `tool.called` / `tool.succeeded` / `tool.failed`
+
+LLM call 的 args 脱敏:**不记** user 消息全文,只记长度;不记 file content,只记 path。
+
+#### 9.6.4 UI 集成
+
+不需要新 UI 代码——现有 `task:completed` 事件已经推送给前端,issue 页面里的 task 列表自动展示 loop 进度。可选新增 `loop:status_changed` 事件给前端做"loop 状态变化"的快闪。
 
 ---
 
