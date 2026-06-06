@@ -37,6 +37,8 @@ type CreateLoopParams struct {
 	Config        interface{} `json:"config"`
 }
 
+// Creates a new loop for an issue. status defaults to 'pending' if not specified;
+// agent_id is optional and can be assigned later.
 func (q *Queries) CreateLoop(ctx context.Context, arg CreateLoopParams) (Loop, error) {
 	row := q.db.QueryRow(ctx, createLoop,
 		arg.IssueID,
@@ -75,6 +77,7 @@ const getLoop = `-- name: GetLoop :one
 SELECT id, issue_id, workspace_id, status, current_stage, iteration, max_iterations, pr_url, pr_number, branch_name, agent_id, config, failure_reason, started_at, completed_at, created_at, updated_at FROM loops WHERE id = $1
 `
 
+// Returns a single loop by ID, or no rows.
 func (q *Queries) GetLoop(ctx context.Context, id pgtype.UUID) (Loop, error) {
 	row := q.db.QueryRow(ctx, getLoop, id)
 	var i Loop
@@ -116,6 +119,8 @@ type ListLoopsParams struct {
 	Limit       pgtype.Int4 `json:"limit"`
 }
 
+// Lists loops for a workspace with optional status/issue filters.
+// limit is required and bounded to prevent unbounded scans.
 func (q *Queries) ListLoops(ctx context.Context, arg ListLoopsParams) ([]Loop, error) {
 	rows, err := q.db.Query(ctx, listLoops,
 		arg.WorkspaceID,
@@ -163,8 +168,11 @@ const loadActiveLoops = `-- name: LoadActiveLoops :many
 SELECT id, issue_id, workspace_id, status, current_stage, iteration, max_iterations, pr_url, pr_number, branch_name, agent_id, config, failure_reason, started_at, completed_at, created_at, updated_at FROM loops
 WHERE status IN ('running', 'paused')
 ORDER BY created_at
+LIMIT 1000
 `
 
+// Returns all running/paused loops for the coordinator to resume on startup.
+// Bounded to prevent unbounded scans on servers with many historical loops.
 func (q *Queries) LoadActiveLoops(ctx context.Context) ([]Loop, error) {
 	rows, err := q.db.Query(ctx, loadActiveLoops)
 	if err != nil {
@@ -217,6 +225,7 @@ type SetLoopPRParams struct {
 	BranchName pgtype.Text `json:"branch_name"`
 }
 
+// Records the PR URL/number/branch produced by a successful develop stage.
 func (q *Queries) SetLoopPR(ctx context.Context, arg SetLoopPRParams) (Loop, error) {
 	row := q.db.QueryRow(ctx, setLoopPR,
 		arg.ID,
@@ -270,6 +279,8 @@ type UpdateLoopStatusParams struct {
 	CompletedAt   pgtype.Timestamptz `json:"completed_at"`
 }
 
+// Updates the status, current stage, iteration, and (optionally) failure_reason.
+// started_at is preserved across updates (only set on the first transition to 'running').
 func (q *Queries) UpdateLoopStatus(ctx context.Context, arg UpdateLoopStatusParams) (Loop, error) {
 	row := q.db.QueryRow(ctx, updateLoopStatus,
 		arg.ID,
