@@ -13,6 +13,7 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/handlerutil"
+	"github.com/agentra-ai/agentra/server/internal/loop"
 	"github.com/agentra-ai/agentra/server/internal/realtime"
 	"github.com/agentra-ai/agentra/server/internal/service"
 	"github.com/agentra-ai/agentra/server/internal/storage"
@@ -63,6 +64,7 @@ type Handler struct {
 	PlannerService *service.PlannerService
 	PingStore      *PingStore
 	UpdateStore    *UpdateStore
+	LoopStore      *loop.Store
 	Storage        storage.FileStorage
 	CFSigner       *auth.CloudFrontSigner
 }
@@ -89,6 +91,7 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 		EmailService:   emailService,
 		PingStore:      NewPingStore(),
 		UpdateStore:    NewUpdateStore(),
+		LoopStore:      loop.NewStore(queries),
 		Storage:        store,
 		CFSigner:       cfSigner,
 	}

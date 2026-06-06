@@ -330,6 +330,18 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 				r.Post("/{id}/read", h.MarkInboxRead)
 				r.Post("/{id}/archive", h.ArchiveInboxItem)
 			})
+
+			// Engineering loops
+			r.Route("/api/loops", func(r chi.Router) {
+				r.Get("/", h.ListLoops)
+				r.Post("/", h.CreateLoop)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetLoop)
+					r.Post("/pause", h.PauseLoop)
+					r.Post("/resume", h.ResumeLoop)
+					r.Post("/cancel", h.CancelLoop)
+				})
+			})
 		})
 	})
 

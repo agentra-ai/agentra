@@ -123,6 +123,46 @@ func (s *Store) SetPR(ctx context.Context, id, url string, num int, branch strin
 	return rowToLoop(row)
 }
 
+// ListLoopsInput captures the filters for ListLoops. WorkspaceID is required;
+// Status and IssueID are optional. Limit is required and should be > 0.
+type ListLoopsInput struct {
+	WorkspaceID string
+	Status      *Status
+	IssueID     *string
+	Limit       int
+}
+
+// ListLoops returns loops in a workspace, filtered by optional status/issue
+// id, ordered by created_at DESC. The SQL layer enforces a required Limit.
+func (s *Store) ListLoops(ctx context.Context, in ListLoopsInput) ([]*Loop, error) {
+	statusFilter := pgtype.Text{}
+	if in.Status != nil {
+		statusFilter = pgtype.Text{String: string(*in.Status), Valid: true}
+	}
+	issueFilter := pgtype.UUID{}
+	if in.IssueID != nil {
+		issueFilter = util.ParseUUID(*in.IssueID)
+	}
+	rows, err := s.q.ListLoops(ctx, dbpkg.ListLoopsParams{
+		WorkspaceID: util.ParseUUID(in.WorkspaceID),
+		Status:      statusFilter,
+		IssueID:     issueFilter,
+		Limit:       pgtype.Int4{Int32: int32(in.Limit), Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ListLoops: %w", err)
+	}
+	out := make([]*Loop, 0, len(rows))
+	for _, r := range rows {
+		l, err := rowToLoop(r)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, nil
+}
+
 // LoadActive returns all loops in 'running' or 'paused' status, ordered by
 // creation time. Used by the coordinator on startup to resume in-flight
 // loops.
