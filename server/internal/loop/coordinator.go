@@ -143,8 +143,9 @@ func (c *Coordinator) processTaskFailed(ctx context.Context, e events.Event) {
 	}
 
 	// Classify the error. The event payload may include an "error" string;
-	// absent that, the default is stage_timeout (most common failure mode).
-	reason := FailureStageTimeout
+	// absent that, the default is unrecoverable so the operator sees a clear
+	// "unclassified" signal rather than a misleading specific reason.
+	reason := FailureUnrecoverable
 	if msg, ok := e.Payload.(map[string]any); ok {
 		if errMsg, ok := msg["error"].(string); ok && errMsg != "" {
 			reason = classifyError(errMsg)
