@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"sync"
@@ -151,19 +152,19 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 		} else {
 			// Start new thread
 			threadResult, err := c.request(runCtx, "thread/start", map[string]any{
-				"model":                    nilIfEmpty(opts.Model),
-				"modelProvider":            nil,
-				"profile":                  nil,
-				"cwd":                      opts.Cwd,
-				"approvalPolicy":           nil,
-				"sandbox":                  "workspace-write",
-				"config":                   nil,
-				"baseInstructions":         nil,
-				"developerInstructions":    nilIfEmpty(opts.SystemPrompt),
-				"compactPrompt":            nil,
-				"includeApplyPatchTool":    nil,
-				"experimentalRawEvents":    false,
-				"persistExtendedHistory":   true,
+				"model":                  nilIfEmpty(opts.Model),
+				"modelProvider":          nil,
+				"profile":                nil,
+				"cwd":                    opts.Cwd,
+				"approvalPolicy":         nil,
+				"sandbox":                "workspace-write",
+				"config":                 nil,
+				"baseInstructions":       nil,
+				"developerInstructions":  nilIfEmpty(opts.SystemPrompt),
+				"compactPrompt":          nil,
+				"includeApplyPatchTool":  nil,
+				"experimentalRawEvents":  false,
+				"persistExtendedHistory": true,
 			})
 			if err != nil {
 				finalStatus = "failed"
@@ -185,12 +186,8 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 		c.threadID = threadID
 
 		// 3. Send turn and wait for completion
-		_, err = c.request(runCtx, turnMethod, map[string]any{
-			"threadId": threadID,
-			"input": []map[string]any{
-				{"type": "text", "text": prompt},
-			},
-		})
+		turnParams := buildCodexTurnParams(opts, threadID, prompt)
+		_, err = c.request(runCtx, turnMethod, turnParams)
 		if err != nil {
 			finalStatus = "failed"
 			finalError = fmt.Sprintf("codex %s failed: %v", turnMethod, err)
@@ -245,14 +242,14 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 // ── codexClient: JSON-RPC 2.0 transport ──
 
 type codexClient struct {
-	cfg       Config
-	stdin     interface{ Write([]byte) (int, error) }
-	mu        sync.Mutex
-	nextID    int
-	pending   map[int]*pendingRPC
-	threadID  string
-	turnID    string
-	onMessage func(Message)
+	cfg        Config
+	stdin      interface{ Write([]byte) (int, error) }
+	mu         sync.Mutex
+	nextID     int
+	pending    map[int]*pendingRPC
+	threadID   string
+	turnID     string
+	onMessage  func(Message)
 	onTurnDone func(aborted bool)
 
 	notificationProtocol string // "unknown", "legacy", "raw"
@@ -630,6 +627,32 @@ func (c *codexClient) handleItemNotification(method string, params map[string]an
 }
 
 // ── Helpers ──
+
+// buildCodexTurnParams assembles the params for the codex turn/start (or
+// turn/continue) JSON-RPC method.
+//
+// As of the codex app-server protocol this code targets, there is no
+// per-turn tool restriction field on `turn/start` or `thread/start`. Tool
+// restrictions are thread-level and configured out-of-band (e.g. via the
+// sandbox + approvalPolicy combination, or by defining a profile).
+//
+// Plumbing is in place: when codex grows a per-turn tool restriction field
+// (e.g. `tools`, `allowedTools`, or a nested `config` block), the only
+// change needed is inside this function. For now opts.Tools is logged at
+// debug level and ignored so the agent falls back to the full default
+// tool set.
+func buildCodexTurnParams(opts ExecOptions, threadID, prompt string) map[string]any {
+	if len(opts.Tools) > 0 {
+		slog.Default().Debug("codex: per-stage tool restrictions requested but codex JSON-RPC API does not expose per-turn tool field; ignoring",
+			"tools", opts.Tools)
+	}
+	return map[string]any{
+		"threadId": threadID,
+		"input": []map[string]any{
+			{"type": "text", "text": prompt},
+		},
+	}
+}
 
 func extractThreadID(result json.RawMessage) string {
 	var r struct {

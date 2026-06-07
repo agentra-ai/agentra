@@ -33,23 +33,7 @@ func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 
-	args := []string{
-		"--output-format", "stream-json",
-		"--verbose",
-		"--permission-mode", "bypassPermissions",
-	}
-	if opts.Model != "" {
-		args = append(args, "--model", opts.Model)
-	}
-	if opts.MaxTurns > 0 {
-		args = append(args, "--max-turns", fmt.Sprintf("%d", opts.MaxTurns))
-	}
-	if opts.SystemPrompt != "" {
-		args = append(args, "--append-system-prompt", opts.SystemPrompt)
-	}
-	if opts.ResumeSessionID != "" {
-		args = append(args, "--resume", opts.ResumeSessionID)
-	}
+	args := buildClaudeArgs(opts, execPath)
 	args = append(args, "-p", prompt)
 
 	cmd := exec.CommandContext(runCtx, execPath, args...)
@@ -259,6 +243,38 @@ func (b *claudeBackend) handleControlRequest(msg claudeSDKMessage, stdin interfa
 	}
 }
 
+// buildClaudeArgs assembles the CLI argument list for a single claude invocation.
+// The execPath parameter is the path to the claude binary (unused for arg
+// construction, but kept for symmetry with the other providers' helpers).
+func buildClaudeArgs(opts ExecOptions, execPath string) []string {
+	args := []string{
+		"--output-format", "stream-json",
+		"--verbose",
+		"--permission-mode", "bypassPermissions",
+	}
+	if opts.Model != "" {
+		args = append(args, "--model", opts.Model)
+	}
+	if opts.MaxTurns > 0 {
+		args = append(args, "--max-turns", fmt.Sprintf("%d", opts.MaxTurns))
+	}
+	if opts.SystemPrompt != "" {
+		args = append(args, "--append-system-prompt", opts.SystemPrompt)
+	}
+	if opts.ResumeSessionID != "" {
+		args = append(args, "--resume", opts.ResumeSessionID)
+	}
+	if len(opts.Tools) > 0 {
+		// Pass tool names as-is. The agentra custom tools (read_file, etc.)
+		// are exposed via the system prompt and routed through the daemon —
+		// they are NOT Claude's native tools. If the names don't match a
+		// Claude-native tool, the CLI will reject them and the operator
+		// will see a clear error in logs. Translation is a follow-up task.
+		args = append(args, "--allowedTools", strings.Join(opts.Tools, ","))
+	}
+	return args
+}
+
 // ── Claude SDK JSON types ──
 
 type claudeSDKMessage struct {
@@ -287,7 +303,7 @@ type claudeLogEntry struct {
 }
 
 type claudeMessageContent struct {
-	Role    string             `json:"role"`
+	Role    string               `json:"role"`
 	Content []claudeContentBlock `json:"content"`
 }
 

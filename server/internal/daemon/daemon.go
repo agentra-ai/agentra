@@ -909,7 +909,6 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 	// task completion and passed back via PriorWorkDir on the next claim.
 
 	prompt, systemPrompt, tools, maxTurns := buildPromptForStage(task.TaskType, task, env.WorkDir)
-	_ = tools // dead data until Task 11 wires per-stage tool restrictions into ExecOptions
 
 	// Pass the daemon's auth credentials and context so the spawned agent CLI
 	// can call the Agentra API and the local daemon (e.g. `agentra repo checkout`).
@@ -957,6 +956,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		MaxTurns:        maxTurns,
 		Timeout:         d.cfg.AgentTimeout,
 		ResumeSessionID: task.PriorSessionID,
+		Tools:           tools,
 	})
 	if err != nil {
 		return TaskResult{}, err
@@ -1131,9 +1131,11 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 // prompts can reference the live path.
 //
 // As of Task 15, Plan, Develop, Review, and Fix are wired. Other loop_*
-// types fall through to BuildPrompt. The tools slice is plumbed but not
-// yet consumed by ExecOptions — that wiring arrives alongside the
-// agent-runtime tool registry.
+// types fall through to BuildPrompt. The tools slice is consumed by
+// agent.ExecOptions.Tools and plumbed into the spawned agent CLI — Claude
+// translates it to --allowedTools, while Codex and Opencode ignore it
+// (their JSON-RPC / CLI does not currently expose per-invocation tool
+// restrictions) and log a debug message.
 func buildPromptForStage(taskType string, task Task, workDir string) (prompt, systemPrompt string, tools []string, maxTurns int) {
 	if taskType == "" || taskType == "standard" {
 		return BuildPrompt(task), "", nil, 0
