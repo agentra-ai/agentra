@@ -116,7 +116,7 @@ func runLoopStart(cmd *cobra.Command, args []string) error {
 	}
 
 	loopID := strVal(result, "id")
-	fmt.Printf("started loop %s on issue %s\n", loopID, args[0])
+	fmt.Fprintf(os.Stderr, "started loop %s on issue %s\n", loopID, args[0])
 
 	output, _ := cmd.Flags().GetString("output")
 	if output == "json" {
@@ -188,7 +188,7 @@ func runLoopTransition(cmd *cobra.Command, loopID, verb, pastTense, path string)
 		return fmt.Errorf("%s loop: %w", verb, err)
 	}
 
-	fmt.Printf("%s loop %s\n", pastTense, loopID)
+	fmt.Fprintf(os.Stderr, "%s loop %s\n", pastTense, loopID)
 
 	output, _ := cmd.Flags().GetString("output")
 	if output == "json" {
