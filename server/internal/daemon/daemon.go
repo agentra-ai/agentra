@@ -1130,11 +1130,10 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 // prepared execenv working directory, threaded into the TaskRef so stage
 // prompts can reference the live path.
 //
-// As of Task 14, Plan, Develop, and Review are wired. Other loop_*
-// types fall through to BuildPrompt until their executors land in
-// Task 15. The tools slice is plumbed but not yet consumed by
-// ExecOptions — that wiring arrives alongside the agent-runtime tool
-// registry.
+// As of Task 15, Plan, Develop, Review, and Fix are wired. Other loop_*
+// types fall through to BuildPrompt. The tools slice is plumbed but not
+// yet consumed by ExecOptions — that wiring arrives alongside the
+// agent-runtime tool registry.
 func buildPromptForStage(taskType string, task Task, workDir string) (prompt, systemPrompt string, tools []string, maxTurns int) {
 	if taskType == "" || taskType == "standard" {
 		return BuildPrompt(task), "", nil, 0
@@ -1191,6 +1190,32 @@ func buildPromptForStage(taskType string, task Task, workDir string) (prompt, sy
 		p, err := stages.BuildReviewPrompt(ref)
 		if err != nil {
 			slog.Warn("daemon: build review prompt failed; falling back to standard prompt", "err", err, "task_type", taskType)
+			return BuildPrompt(task), "", nil, 0
+		}
+		return p.UserPrompt, p.SystemPrompt, p.Tools, p.MaxTurns
+	case "loop_fix":
+		// TODO(task-13): same placeholder-Branch caveat as the develop
+		// and review arms above. Fix reuses the develop stage's branch
+		// and PR, but the daemon Task struct does not yet carry the
+		// real branch name, so we derive a placeholder until the claim
+		// payload grows a Branch field. Iteration is also a placeholder
+		// for now — the loop coordinator already tracks the per-loop
+		// iteration (see coordinator.decideNextStage and
+		// TestDecideNextStage_ReviewRejectedToFix), but that value
+		// does not yet flow through the daemon Task struct. Once
+		// Task is extended to carry Branch and Iteration, replace
+		// these placeholders with the real values.
+		ref := stages.TaskRef{
+			ID:         task.ID,
+			IssueID:    task.IssueID,
+			IssueTitle: task.IssueTitle,
+			Branch:     fmt.Sprintf("loop/%s", task.IssueID),
+			Iteration:  1,
+			WorkDir:    workDir,
+		}
+		p, err := stages.BuildFixPrompt(ref)
+		if err != nil {
+			slog.Warn("daemon: build fix prompt failed; falling back to standard prompt", "err", err, "task_type", taskType)
 			return BuildPrompt(task), "", nil, 0
 		}
 		return p.UserPrompt, p.SystemPrompt, p.Tools, p.MaxTurns
