@@ -643,6 +643,9 @@ func (c *codexClient) handleItemNotification(method string, params map[string]an
 // tool set.
 func buildCodexTurnParams(opts ExecOptions, threadID, prompt string) map[string]any {
 	if len(opts.Tools) > 0 {
+		// Top-level helper has no receiver; fall back to slog.Default() so the
+		// log line is still emitted. The per-backend Execute path uses the
+		// backend's own logger.
 		slog.Default().Debug("codex: per-stage tool restrictions requested but codex JSON-RPC API does not expose per-turn tool field; ignoring",
 			"tools", opts.Tools)
 	}

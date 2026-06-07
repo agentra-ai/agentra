@@ -133,6 +133,9 @@ func buildOpencodeArgs(opts ExecOptions, execPath string) []string {
 		args = append(args, "--session", opts.ResumeSessionID)
 	}
 	if len(opts.Tools) > 0 {
+		// Top-level helper has no receiver; fall back to slog.Default() so the
+		// log line is still emitted. The per-backend Execute path uses the
+		// backend's own logger.
 		slog.Default().Debug("opencode: per-stage tool restrictions requested but opencode run does not expose a per-invocation tool flag; ignoring",
 			"tools", opts.Tools)
 	}

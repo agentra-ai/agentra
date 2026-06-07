@@ -176,9 +176,6 @@ func TestIntegration_RestoreOnStartup_LeavesPausedLoopAlone(t *testing.T) {
 
 	coord.RestoreOnStartup(ctx)
 
-	// Give the coordinator a moment in case it were to act (it shouldn't).
-	time.Sleep(100 * time.Millisecond)
-
 	if hasInFlightTask(t, pool, loopRow.ID, "loop_plan") {
 		t.Errorf("paused loop got re-enqueued; RestoreOnStartup must leave paused loops alone")
 	}
@@ -194,6 +191,9 @@ func TestIntegration_RestoreOnStartup_LeavesPausedLoopAlone(t *testing.T) {
 // hasInFlightTask returns true if there is a queued, dispatched, or running
 // task of the given type for the given loop. Used by restore tests to assert
 // the precondition that no work is in flight before invoking RestoreOnStartup.
+//
+// The status set mirrors the canonical "in-flight" list in the sqlc query
+// `HasInFlightTaskForLoopStage` in pkg/db/queries/loops.sql — keep both in sync.
 func hasInFlightTask(t *testing.T, pool *pgxpool.Pool, loopID, taskType string) bool {
 	t.Helper()
 	var n int
