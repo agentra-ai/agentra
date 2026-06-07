@@ -2,27 +2,32 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 )
 
-// All git tools run from the loop's work_dir. The branch to operate on is
-// passed as an argument (default: current branch).
+// All git tools run from the loop's work_dir. The branch to operate
+// on is passed as an argument (default: current branch).
 
 // GitStatusTool runs `git status` in WorkDir.
 type GitStatusTool struct{ WorkDir string }
 
-func (t *GitStatusTool) Name() string         { return "git_status" }
-func (t *GitStatusTool) Description() string  { return "Run `git status` and return the output." }
-func (t *GitStatusTool) Schema() map[string]any { return map[string]any{"type": "object"} }
+func (t *GitStatusTool) Name() string        { return "git_status" }
+func (t *GitStatusTool) Description() string { return "Run `git status` and return the output." }
+func (t *GitStatusTool) Schema() map[string]any {
+	return map[string]any{"type": "object"}
+}
 func (t *GitStatusTool) Execute(ctx context.Context, args map[string]any) (Result, error) {
-	return runGit(ctx, t.WorkDir, 10*time.Second, "status")
+	return runGitOK(ctx, t.WorkDir, 10*time.Second, "status")
 }
 
-// GitDiffTool shows a unified diff in WorkDir. Pass `staged:true` for the
-// index, or `file` to limit the diff to a single path.
+// GitDiffTool shows a unified diff in WorkDir. Pass `staged:true` for
+// the index, or `file` to limit the diff to a single path. The `file`
+// arg is validated against WorkDir so the `--` separator is not a
+// path-traversal bypass.
 type GitDiffTool struct{ WorkDir string }
 
 func (t *GitDiffTool) Name() string        { return "git_diff" }
@@ -42,9 +47,15 @@ func (t *GitDiffTool) Execute(ctx context.Context, args map[string]any) (Result,
 		gitArgs = append(gitArgs, "--staged")
 	}
 	if file, _ := args["file"].(string); file != "" {
+		// Validate the user-supplied path resolves inside WorkDir
+		// before passing it to git, so `--` isn't a path-traversal
+		// bypass.
+		if _, err := safeJoin(t.WorkDir, file); err != nil {
+			return Result{Error: err.Error()}, nil
+		}
 		gitArgs = append(gitArgs, "--", file)
 	}
-	return runGit(ctx, t.WorkDir, 30*time.Second, gitArgs...)
+	return runGitOK(ctx, t.WorkDir, 30*time.Second, gitArgs...)
 }
 
 // GitCommitTool stages all changes and commits with the given message.
@@ -67,33 +78,47 @@ func (t *GitCommitTool) Execute(ctx context.Context, args map[string]any) (Resul
 	if message == "" {
 		return Result{Error: "message is required"}, nil
 	}
-	// git add -A: stage every change in the work tree.
-	if _, err := runGit(ctx, t.WorkDir, 30*time.Second, "add", "-A"); err != nil {
-		return Result{Error: err.Error()}, nil
+	// `git add -A`: stage every change in the work tree. A non-zero
+	// exit propagates as-is so the LLM can read the actual git
+	// stderr via Result.Stderr.
+	if res, err := runGit(ctx, t.WorkDir, 30*time.Second, "add", "-A"); err != nil || res.ExitCode != 0 {
+		return toErrResult(res, err), nil
 	}
-	// Detect "nothing to commit" via `git diff --cached --quiet`. Exit 0 =
-	// no staged changes; exit 1 = staged changes exist; exit 2+ = error.
-	// This is more reliable than parsing `git diff --staged --stat`
-	// because the stat output is noisy and may be empty for a brand-new
-	// repo with a single empty commit.
-	check, _ := runGit(ctx, t.WorkDir, 10*time.Second, "diff", "--cached", "--quiet")
+	// Detect "nothing to commit" via `git diff --cached --quiet`.
+	// Exit 0 = no staged changes; exit 1 = staged changes exist;
+	// exit 2+ = error. More reliable than parsing stat output,
+	// which is noisy and may be empty for a brand-new repo with a
+	// single empty commit.
+	check, err := runGit(ctx, t.WorkDir, 10*time.Second, "diff", "--cached", "--quiet")
+	if err != nil {
+		return toErrResult(check, err), nil
+	}
 	if check.ExitCode == 0 {
-		return Result{Error: "no changes to commit"}, nil
+		// "nothing to commit" is a normal outcome, not a tool
+		// error. The LLM sees this in Content and decides whether
+		// to retry or move on.
+		return Result{Content: "nothing to commit, working tree clean"}, nil
 	}
 	if check.ExitCode > 1 {
-		return Result{Error: fmt.Sprintf("git diff --cached failed: %s", check.Stderr)}, nil
+		return check, nil
 	}
-	// git commit. The plan's note: surface a clear error if the commit
-	// itself fails (pre-commit hook, gpg signing, etc.) so the LLM can
-	// react rather than retry blindly.
-	if commitRes, err := runGit(ctx, t.WorkDir, 30*time.Second, "commit", "-m", message); err != nil {
-		return Result{Error: fmt.Sprintf("git commit failed: %s", commitRes.Stderr)}, nil
+	// git commit. A non-zero exit (pre-commit hook, gpg signing,
+	// etc.) is not a tool error — the LLM reads git's stderr.
+	commitRes, err := runGit(ctx, t.WorkDir, 30*time.Second, "commit", "-m", message)
+	if err != nil || commitRes.ExitCode != 0 {
+		return toErrResult(commitRes, err), nil
 	}
 	shaRes, _ := runGit(ctx, t.WorkDir, 5*time.Second, "rev-parse", "HEAD")
+	if shaRes.Error != "" {
+		// Workdir was unset / process spawn failed mid-way through
+		// a successful commit; surface it so the LLM can retry.
+		return shaRes, nil
+	}
 	return Result{Content: strings.TrimSpace(shaRes.Content)}, nil
 }
 
-// GitPushTool pushes the given branch to the given remote (default: origin).
+// GitPushTool pushes the given branch to the given remote (default:
+// origin).
 type GitPushTool struct{ WorkDir string }
 
 func (t *GitPushTool) Name() string        { return "git_push" }
@@ -117,13 +142,21 @@ func (t *GitPushTool) Execute(ctx context.Context, args map[string]any) (Result,
 	if branch == "" {
 		return Result{Error: "branch is required"}, nil
 	}
-	if pushRes, err := runGit(ctx, t.WorkDir, 60*time.Second, "push", remote, branch); err != nil {
-		return Result{Error: fmt.Sprintf("git push failed: %s", pushRes.Stderr)}, nil
+	pushRes, err := runGit(ctx, t.WorkDir, 60*time.Second, "push", remote, branch)
+	if err != nil {
+		return toErrResult(pushRes, err), nil
+	}
+	if pushRes.ExitCode != 0 {
+		// Push failure is a normal outcome (no upstream, non-
+		// fast-forward, auth failure, etc.). The LLM reads
+		// stderr to decide.
+		return pushRes, nil
 	}
 	return Result{Content: fmt.Sprintf("pushed %s/%s", remote, branch)}, nil
 }
 
-// CreateBranchTool creates and checks out a new branch from the current HEAD.
+// CreateBranchTool creates and checks out a new branch from the
+// current HEAD.
 type CreateBranchTool struct{ WorkDir string }
 
 func (t *CreateBranchTool) Name() string        { return "create_branch" }
@@ -142,14 +175,15 @@ func (t *CreateBranchTool) Execute(ctx context.Context, args map[string]any) (Re
 	if name == "" {
 		return Result{Error: "name is required"}, nil
 	}
-	if _, err := runGit(ctx, t.WorkDir, 5*time.Second, "checkout", "-b", name); err != nil {
-		return Result{Error: err.Error()}, nil
+	coRes, _ := runGitOK(ctx, t.WorkDir, 5*time.Second, "checkout", "-b", name)
+	if coRes.Error != "" || coRes.ExitCode != 0 {
+		return coRes, nil
 	}
 	return Result{Content: "switched to " + name}, nil
 }
 
-// GitHubPRCreateTool opens a GitHub PR via the `gh` CLI. Returns the PR
-// URL in Result.PRURL (and Content) on success.
+// GitHubPRCreateTool opens a GitHub PR via the `gh` CLI. Returns the
+// PR URL in Result.PRURL (and Content) on success.
 type GitHubPRCreateTool struct{ WorkDir string }
 
 func (t *GitHubPRCreateTool) Name() string        { return "github_pr_create" }
@@ -175,43 +209,113 @@ func (t *GitHubPRCreateTool) Execute(ctx context.Context, args map[string]any) (
 	if title == "" || body == "" {
 		return Result{Error: "title and body are required"}, nil
 	}
-	// Use gh CLI; assume it's authenticated in dogfood mode. gh writes the
-	// PR URL to stdout on success and errors to stderr on failure, so
-	// CombinedOutput captures both.
 	cctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, "gh", "pr", "create", "--title", title, "--body", body, "--base", base)
+	// Prefer --json url so URL extraction is robust against stderr
+	// noise and warning banners that `gh` may emit. stdout/stderr are
+	// captured separately and capped via limitedBuffer to protect
+	// the LLM context.
+	cmd := exec.CommandContext(cctx, "gh", "pr", "create",
+		"--title", title, "--body", body, "--base", base, "--json", "url")
 	cmd.Dir = t.WorkDir
-	out, err := cmd.CombinedOutput()
+	stdout := &limitedBuffer{max: shellCap}
+	stderr := &limitedBuffer{max: shellCap}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	_ = cmd.Run()
 	if cctx.Err() == context.DeadlineExceeded {
-		return Result{Error: "gh pr create timed out after 60s"}, nil
+		return Result{Error: "gh pr create timed out after 60s", Stderr: stderr.String()}, nil
 	}
-	if err != nil {
-		return Result{Error: fmt.Sprintf("gh pr create: %v: %s", err, out)}, nil
+	res := Result{Stderr: stderr.String()}
+	if cmd.ProcessState != nil {
+		res.ExitCode = cmd.ProcessState.ExitCode()
 	}
-	// gh output: "https://github.com/owner/repo/pull/N"
-	url := strings.TrimSpace(string(out))
-	return Result{Content: url, PRURL: url}, nil
+	if res.ExitCode != 0 {
+		// `gh` failed (auth, no remote, not a git repo, etc.).
+		// Surface the actual stderr so the LLM can see why.
+		res.Error = "gh pr create failed"
+		return res, nil
+	}
+	// Parse JSON; fall back to scanning stdout for an http URL if
+	// the installed `gh` doesn't support --json.
+	out := stdout.String()
+	var payload struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err == nil {
+		url := strings.TrimSpace(payload.URL)
+		if strings.HasPrefix(url, "http") {
+			return Result{Content: url, PRURL: url}, nil
+		}
+	}
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "http") {
+			return Result{Content: line, PRURL: line}, nil
+		}
+	}
+	res.Error = "gh pr create: could not parse PR URL from output"
+	return res, nil
 }
 
 // runGit executes git in workDir with the given args and a timeout.
-// The error message is intentionally generic so we don't leak the full
-// command line (which can include paths or messages) back to the LLM.
+// stdout and stderr are captured separately, each capped at shellCap
+// bytes (50KB) to protect the LLM context from huge diffs/status
+// outputs. A non-zero git exit is NOT returned as a Go error: the
+// function returns the captured output in Content/Stderr with a
+// populated ExitCode. The Go error is reserved for actual tool-level
+// failures (workdir unset, process spawn failure, timeout).
 func runGit(ctx context.Context, workDir string, timeout time.Duration, args ...string) (Result, error) {
+	if workDir == "" {
+		return Result{}, fmt.Errorf("git: work directory is not set")
+	}
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(cctx, "git", args...)
 	cmd.Dir = workDir
-	out, err := cmd.CombinedOutput()
-	res := Result{Content: string(out), ExitCode: 0}
+	stdout := &limitedBuffer{max: shellCap}
+	stderr := &limitedBuffer{max: shellCap}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	runErr := cmd.Run()
+	res := Result{Content: stdout.String(), Stderr: stderr.String()}
 	if cmd.ProcessState != nil {
 		res.ExitCode = cmd.ProcessState.ExitCode()
 	}
 	if cctx.Err() == context.DeadlineExceeded {
-		return res, fmt.Errorf("git: %w", context.DeadlineExceeded)
+		return res, fmt.Errorf("git: timed out after %s", timeout)
 	}
+	// ProcessState is nil only when the process never started
+	// (binary not found, etc.). For a non-zero exit, cmd.Run()
+	// returns *exec.ExitError but ProcessState is still set —
+	// those are normal git exits and not tool errors, so the
+	// caller inspects Result.ExitCode/Stderr instead.
+	if cmd.ProcessState == nil {
+		return res, fmt.Errorf("git: %w", runErr)
+	}
+	return res, nil
+}
+
+// toErrResult converts a runGit (Result, error) return into the tool's
+// standard Result shape. A non-nil Go error becomes Result.Error;
+// otherwise the result is returned untouched. Used to short-circuit
+// "either tool error or non-zero exit" branches without duplicating
+// the conversion logic at every call site.
+func toErrResult(res Result, err error) Result {
 	if err != nil {
-		return res, fmt.Errorf("git: %w", err)
+		res.Error = err.Error()
+	}
+	return res
+}
+
+// runGitOK is a thin convenience wrapper around runGit that converts
+// any tool-level error into Result.Error. Use runGit directly when
+// the caller needs to inspect ExitCode for special cases (e.g.
+// "nothing to commit").
+func runGitOK(ctx context.Context, workDir string, timeout time.Duration, args ...string) (Result, error) {
+	res, err := runGit(ctx, workDir, timeout, args...)
+	if err != nil {
+		return Result{Error: err.Error(), Stderr: res.Stderr, ExitCode: res.ExitCode}, nil
 	}
 	return res, nil
 }
