@@ -1,11 +1,11 @@
 CREATE TABLE team_memory (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
     memory_type TEXT NOT NULL CHECK (memory_type IN ('learning', 'task_result', 'context', 'pattern')),
     content TEXT NOT NULL,
     embedding vector(1536),
     metadata JSONB DEFAULT '{}',
-    created_by UUID REFERENCES agents(id),
+    created_by UUID REFERENCES agent(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

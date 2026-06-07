@@ -2,8 +2,8 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE agent_memories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    agent_id UUID NOT NULL REFERENCES agent(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
     memory_type TEXT NOT NULL CHECK (memory_type IN ('learning', 'task_result', 'context', 'pattern')),
     content TEXT NOT NULL,
     embedding vector(1536),
