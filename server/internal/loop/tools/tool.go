@@ -19,11 +19,15 @@ type Tool interface {
 // Error is non-empty only for tool-level errors (bad args, path traversal,
 // timeout). A non-zero exit code from a shell command is NOT a tool error
 // — it goes in ExitCode, and the LLM sees the stderr in Stderr.
+//
+// PRURL is populated by github_pr_create on success, so the caller can
+// extract a stable link to the opened PR without re-parsing Content.
 type Result struct {
 	Content  string `json:"content"`
 	Error    string `json:"error,omitempty"`
 	Stderr   string `json:"stderr,omitempty"`
 	ExitCode int    `json:"exit_code,omitempty"`
+	PRURL    string `json:"pr_url,omitempty"`
 }
 
 // Registry maps tool name → implementation. Populated by init() in each
