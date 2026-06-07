@@ -103,6 +103,28 @@ func (q *Queries) GetLoop(ctx context.Context, id pgtype.UUID) (Loop, error) {
 	return i, err
 }
 
+const hasInFlightTaskForLoopStage = `-- name: HasInFlightTaskForLoopStage :one
+SELECT count(*) > 0 AS has_in_flight FROM agent_task_queue
+WHERE loop_id = $1 AND task_type = $2
+  AND status IN ('queued', 'dispatched', 'running')
+`
+
+type HasInFlightTaskForLoopStageParams struct {
+	LoopID   pgtype.UUID `json:"loop_id"`
+	TaskType string      `json:"task_type"`
+}
+
+// Returns true if there is an in-flight (queued, dispatched, or running)
+// task of the given task_type for the given loop. Used by
+// Coordinator.RestoreOnStartup to detect loops whose stage task was lost
+// during a restart and needs to be re-enqueued.
+func (q *Queries) HasInFlightTaskForLoopStage(ctx context.Context, arg HasInFlightTaskForLoopStageParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasInFlightTaskForLoopStage, arg.LoopID, arg.TaskType)
+	var has_in_flight bool
+	err := row.Scan(&has_in_flight)
+	return has_in_flight, err
+}
+
 const listLoops = `-- name: ListLoops :many
 SELECT id, issue_id, workspace_id, status, current_stage, iteration, max_iterations, pr_url, pr_number, branch_name, agent_id, config, failure_reason, started_at, completed_at, created_at, updated_at FROM loops
 WHERE workspace_id = $1

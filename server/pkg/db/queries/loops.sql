@@ -56,3 +56,12 @@ SELECT * FROM loops
 WHERE status IN ('running', 'paused')
 ORDER BY created_at
 LIMIT 1000;
+
+-- name: HasInFlightTaskForLoopStage :one
+-- Returns true if there is an in-flight (queued, dispatched, or running)
+-- task of the given task_type for the given loop. Used by
+-- Coordinator.RestoreOnStartup to detect loops whose stage task was lost
+-- during a restart and needs to be re-enqueued.
+SELECT count(*) > 0 AS has_in_flight FROM agent_task_queue
+WHERE loop_id = $1 AND task_type = $2
+  AND status IN ('queued', 'dispatched', 'running');

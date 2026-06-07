@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -32,6 +33,12 @@ const (
 	taskTypeReview  = "loop_review"
 	taskTypeFix     = "loop_fix"
 )
+
+// loopRestoreTimeout is the maximum age of a running loop (measured from
+// started_at) before RestoreOnStartup considers it abandoned and marks it
+// failed. Paused loops are never timed out — pausing is an explicit operator
+// action, not a stuck state.
+const loopRestoreTimeout = 30 * time.Minute
 
 // TaskResult is the parsed result of a completed agent task. Most fields
 // are stage-specific: PR info comes from develop/review output, review
@@ -185,16 +192,100 @@ func classifyError(msg string) FailureReason {
 
 func ptrString(s string) *string { return &s }
 
-// RestoreOnStartup loads any loops that were running/paused when the server
-// last stopped, so the coordinator can re-subscribe to their state. Currently
-// just logs the count; a follow-up task will re-enqueue stale stage tasks.
+// RestoreOnStartup re-arms loops that were running/paused when the server
+// last stopped. For each one we either re-enqueue the current stage's task
+// (when the in-flight task was lost mid-restart), mark the loop as
+// failed/timeout (when the loop has been running too long with no progress),
+// or skip it (when the loop is paused or a task is already in flight).
+//
+// Errors restoring a single loop are logged and skipped so one bad loop
+// does not abort the whole restore. Paused loops are intentionally left
+// alone — pausing is an explicit operator action, not a stuck state.
 func (c *Coordinator) RestoreOnStartup(ctx context.Context) {
 	loops, err := c.store.LoadActive(ctx)
 	if err != nil {
 		slog.Warn("loop coordinator: restore active loops failed", "err", err)
 		return
 	}
-	slog.Info("loop coordinator: restored active loops", "count", len(loops))
+	slog.Info("loop coordinator: restoring active loops", "count", len(loops))
+
+	for _, l := range loops {
+		if err := c.restoreOne(ctx, l); err != nil {
+			slog.Error("loop coordinator: restore loop failed",
+				"loop_id", l.ID, "status", l.Status, "err", err)
+		}
+	}
+}
+
+// restoreOne applies the RestoreOnStartup policy to a single loop. Pulled
+// out of the loop in RestoreOnStartup so per-loop error handling is uniform.
+func (c *Coordinator) restoreOne(ctx context.Context, l *Loop) error {
+	if l.CurrentStage == nil {
+		slog.Warn("loop coordinator: skipping active loop with no current stage",
+			"loop_id", l.ID, "status", l.Status)
+		return nil
+	}
+	if l.Status == StatusPaused {
+		// Paused loops are intentionally stopped; the operator will resume.
+		return nil
+	}
+	if l.Status != StatusRunning {
+		// LoadActive already filters to running/paused, but defend against
+		// drift (e.g. a hook changed the status since the load).
+		return nil
+	}
+
+	taskType := taskTypeForStage(*l.CurrentStage)
+	if taskType == "" {
+		slog.Warn("loop coordinator: unknown current stage, skipping",
+			"loop_id", l.ID, "stage", *l.CurrentStage)
+		return nil
+	}
+
+	has, err := c.queries.HasInFlightTaskForLoopStage(ctx, dbpkg.HasInFlightTaskForLoopStageParams{
+		LoopID:   util.ParseUUID(l.ID),
+		TaskType: taskType,
+	})
+	if err != nil {
+		return fmt.Errorf("check in-flight task: %w", err)
+	}
+	if has {
+		// A task is already in flight; the daemon will report its outcome
+		// and the coordinator's normal handler will advance the loop.
+		return nil
+	}
+
+	// No work in flight. If the loop has been running for too long with no
+	// progress, declare it abandoned and move on. Paused loops are exempted
+	// by the early-return above.
+	if l.StartedAt != nil && time.Since(*l.StartedAt) > loopRestoreTimeout {
+		now := nowUTC()
+		reason := string(FailureLoopTimeout)
+		if _, err := c.store.UpdateStatus(ctx, l.ID, UpdateStatusInput{
+			Status:        ptrStatus(StatusFailed),
+			FailureReason: &reason,
+			CompletedAt:   &now,
+		}); err != nil {
+			return fmt.Errorf("mark loop timed out: %w", err)
+		}
+		slog.Info("loop coordinator: timed out loop on restore",
+			"loop_id", l.ID, "started_at", l.StartedAt,
+			"elapsed", time.Since(*l.StartedAt).Round(time.Second))
+		return nil
+	}
+
+	// Re-enqueue the current stage's task. createTaskForStage also writes
+	// the next stage back to the loop row, which is a no-op for a fresh
+	// stage re-arm (it sets current_stage to the same value).
+	if err := c.createTaskForStage(ctx, l, Decision{
+		action:   actionCreateTask,
+		taskType: taskType,
+	}); err != nil {
+		return fmt.Errorf("re-enqueue stage task: %w", err)
+	}
+	slog.Info("loop coordinator: restored loop by re-enqueuing task",
+		"loop_id", l.ID, "task_type", taskType)
+	return nil
 }
 
 func (c *Coordinator) processTaskCompleted(ctx context.Context, e events.Event) {

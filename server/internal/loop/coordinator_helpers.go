@@ -40,6 +40,24 @@ func stageFromString(s string) *Stage {
 	return nil
 }
 
+// taskTypeForStage is the inverse of stageFromString: given a domain Stage,
+// it returns the task_type string the agent queue uses to enqueue that
+// stage's work. Returns "" for unknown stages so callers can fail loudly
+// (or skip) rather than enqueueing a malformed task_type.
+func taskTypeForStage(s Stage) string {
+	switch s {
+	case StagePlan:
+		return taskTypePlan
+	case StageDevelop:
+		return taskTypeDevelop
+	case StageReview:
+		return taskTypeReview
+	case StageFix:
+		return taskTypeFix
+	}
+	return ""
+}
+
 // parseTaskResult unmarshals the raw task_run output into a TaskResult. Bad
 // JSON or empty input returns nil — the coordinator must treat a missing
 // result as a non-event (no review verdict) rather than a crash.
