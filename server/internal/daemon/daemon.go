@@ -908,7 +908,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 	// the same (agent, issue) pair. The work_dir path is stored in DB on
 	// task completion and passed back via PriorWorkDir on the next claim.
 
-	prompt, systemPrompt, maxTurns := buildPromptForStage(task.TaskType, task)
+	prompt, systemPrompt, maxTurns := buildPromptForStage(task.TaskType, task, env.WorkDir)
 
 	// Pass the daemon's auth credentials and context so the spawned agent CLI
 	// can call the Agentra API and the local daemon (e.g. `agentra repo checkout`).
@@ -1125,13 +1125,14 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 // buildPromptForStage returns the user prompt, system prompt, and max turns
 // for a given task_type. Falls through to the legacy BuildPrompt for "standard"
 // or any unknown type. Loop stages get a different system prompt and turn
-// budget (real per-stage tool wiring lands in Task 9; the stages package is
-// stubbed in Task 8).
-func buildPromptForStage(taskType string, task Task) (prompt, systemPrompt string, maxTurns int) {
+// budget. workDir is the prepared execenv working directory, threaded into
+// the TaskRef so stage prompts can reference the live path.
+func buildPromptForStage(taskType string, task Task, workDir string) (prompt, systemPrompt string, maxTurns int) {
 	ref := &stages.TaskRef{
 		ID:         task.ID,
 		IssueID:    task.IssueID,
 		IssueTitle: task.IssueTitle,
+		WorkDir:    workDir,
 	}
 	switch taskType {
 	case "loop_plan":
