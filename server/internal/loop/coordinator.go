@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -114,16 +115,74 @@ func (c *Coordinator) HandleTaskCompleted(e events.Event) {
 	go c.processTaskCompleted(context.Background(), e)
 }
 
-// HandleTaskFailed handles task:failed events. Stub for M1; full failure
-// classification lands in Task 16.
+// HandleTaskFailed handles task:failed events. The bus publisher is
+// synchronous, so this method returns immediately and the I/O happens on
+// a goroutine. Failures inside the goroutine are logged (not returned).
 func (c *Coordinator) HandleTaskFailed(e events.Event) {
-	go func() {
-		slog.Warn("loop coordinator: task failed event (stub)",
-			"event_type", e.Type, "workspace_id", e.WorkspaceID)
-		// Task 16 will: parse task_id from payload, look up loop_id,
-		// mark the loop failed with an appropriate failure_reason.
-	}()
+	go c.processTaskFailed(context.Background(), e)
 }
+
+func (c *Coordinator) processTaskFailed(ctx context.Context, e events.Event) {
+	taskID, ok := eventTaskID(e)
+	if !ok {
+		return
+	}
+	task, err := c.queries.GetAgentTask(ctx, util.ParseUUID(taskID))
+	if err != nil {
+		return
+	}
+	if !task.LoopID.Valid {
+		return
+	}
+	l, err := c.store.GetLoop(ctx, util.UUIDToString(task.LoopID))
+	if err != nil {
+		return
+	}
+	if l.Status != StatusRunning {
+		return
+	}
+
+	// Classify the error. The event payload may include an "error" string;
+	// absent that, the default is stage_timeout (most common failure mode).
+	reason := FailureStageTimeout
+	if msg, ok := e.Payload.(map[string]any); ok {
+		if errMsg, ok := msg["error"].(string); ok && errMsg != "" {
+			reason = classifyError(errMsg)
+		}
+	}
+
+	now := nowUTC()
+	failed := StatusFailed
+	if _, err := c.store.UpdateStatus(ctx, l.ID, UpdateStatusInput{
+		Status:        &failed,
+		FailureReason: ptrString(string(reason)),
+		CompletedAt:   &now,
+	}); err != nil {
+		slog.Error("loop coordinator: mark loop failed",
+			"loop_id", l.ID, "task_id", task.ID, "err", err)
+	}
+}
+
+// classifyError maps an error message from a failed task to a FailureReason.
+// Conservative: when in doubt, return FailureUnrecoverable so the operator
+// sees a clear "unclassified" signal rather than a misleading specific
+// reason.
+func classifyError(msg string) FailureReason {
+	lower := strings.ToLower(msg)
+	switch {
+	case strings.Contains(lower, "context"):
+		return FailureContextExceeded
+	case strings.Contains(lower, "filter"), strings.Contains(lower, "blocked"):
+		return FailureContentFilter
+	case strings.Contains(lower, "timeout"):
+		return FailureStageTimeout
+	case strings.Contains(lower, "pr"):
+		return FailurePRCreateFailed
+	}
+	return FailureUnrecoverable
+}
+
+func ptrString(s string) *string { return &s }
 
 // RestoreOnStartup loads any loops that were running/paused when the server
 // last stopped, so the coordinator can re-subscribe to their state. Currently
@@ -201,12 +260,24 @@ func (c *Coordinator) createTaskForStage(ctx context.Context, l *Loop, d Decisio
 	if l.AgentID != nil {
 		agentID = util.ParseUUID(*l.AgentID)
 	}
+	// agent_task_queue.runtime_id is NOT NULL (added in migration 004). Look it
+	// up from the agent row when we have one; otherwise the loop was created
+	// without an agent and CreateAgentTask will fail with a NOT NULL violation.
+	var runtimeID pgtype.UUID
+	if l.AgentID != nil {
+		agent, err := c.queries.GetAgent(ctx, agentID)
+		if err != nil {
+			return fmt.Errorf("lookup agent for runtime_id: %w", err)
+		}
+		runtimeID = agent.RuntimeID
+	}
 	if _, err := c.queries.CreateAgentTask(ctx, dbpkg.CreateAgentTaskParams{
-		AgentID:  agentID,
-		IssueID:  util.ParseUUID(l.IssueID),
-		Priority: 1,
-		TaskType: d.taskType,
-		LoopID:   util.ParseUUID(l.ID),
+		AgentID:   agentID,
+		RuntimeID: runtimeID,
+		IssueID:   util.ParseUUID(l.IssueID),
+		Priority:  1,
+		TaskType:  d.taskType,
+		LoopID:    util.ParseUUID(l.ID),
 	}); err != nil {
 		return fmt.Errorf("create task: %w", err)
 	}
