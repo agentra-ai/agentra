@@ -135,6 +135,62 @@ func TestIntegration_RestoreOnStartup_TimeoutsLongRunningLoop(t *testing.T) {
 	}
 }
 
+// TestIntegration_RestoreOnStartup_LeavesPausedLoopAlone verifies that a
+// loop in 'paused' status is not re-armed by RestoreOnStartup. Pausing is an
+// explicit operator action; the coordinator must not silently resume a paused
+// loop on server restart.
+func TestIntegration_RestoreOnStartup_LeavesPausedLoopAlone(t *testing.T) {
+	pool := testPool(t)
+	q := dbpkg.New(pool)
+	bus := events.New()
+	coord := looppkg.NewCoordinator(q, bus)
+	store := looppkg.NewStore(q)
+
+	wsID := uuid.NewString()
+	issueID := uuid.NewString()
+	agentID := uuid.NewString()
+	seedWorkspaceAndIssue(t, pool, wsID, issueID)
+	seedAgent(t, pool, wsID, agentID)
+	t.Cleanup(func() {
+		cleanupLoopData(t, pool, wsID, issueID, agentID)
+	})
+
+	ctx := context.Background()
+	maxIters := 3
+	loopRow, err := store.CreateLoop(ctx, looppkg.CreateLoopInput{
+		IssueID: issueID, WorkspaceID: wsID, MaxIterations: &maxIters,
+		AgentID: &agentID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	paused := looppkg.StatusPaused
+	plan := looppkg.StagePlan
+	if _, err := store.UpdateStatus(ctx, loopRow.ID, looppkg.UpdateStatusInput{
+		Status:       &paused,
+		CurrentStage: &plan,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	coord.RestoreOnStartup(ctx)
+
+	// Give the coordinator a moment in case it were to act (it shouldn't).
+	time.Sleep(100 * time.Millisecond)
+
+	if hasInFlightTask(t, pool, loopRow.ID, "loop_plan") {
+		t.Errorf("paused loop got re-enqueued; RestoreOnStartup must leave paused loops alone")
+	}
+	got, err := store.GetLoop(ctx, loopRow.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != looppkg.StatusPaused {
+		t.Errorf("paused loop status changed to %q", got.Status)
+	}
+}
+
 // hasInFlightTask returns true if there is a queued, dispatched, or running
 // task of the given type for the given loop. Used by restore tests to assert
 // the precondition that no work is in flight before invoking RestoreOnStartup.
