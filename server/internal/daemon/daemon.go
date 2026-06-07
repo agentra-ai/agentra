@@ -1130,10 +1130,10 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 // prepared execenv working directory, threaded into the TaskRef so stage
 // prompts can reference the live path.
 //
-// For Task 10 only Plan is wired. Other loop_* types fall through to
-// BuildPrompt until their executors land in Tasks 11-15. The tools
-// slice is plumbed but not yet consumed by ExecOptions — that wiring
-// arrives in Task 11.
+// As of Task 13, Plan and Develop are wired. Other loop_* types fall
+// through to BuildPrompt until their executors land in Tasks 14-15.
+// The tools slice is plumbed but not yet consumed by ExecOptions —
+// that wiring arrives alongside the agent-runtime tool registry.
 func buildPromptForStage(taskType string, task Task, workDir string) (prompt, systemPrompt string, tools []string, maxTurns int) {
 	if taskType == "" || taskType == "standard" {
 		return BuildPrompt(task), "", nil, 0
@@ -1149,6 +1149,27 @@ func buildPromptForStage(taskType string, task Task, workDir string) (prompt, sy
 		p, err := stages.BuildPlanPrompt(ref)
 		if err != nil {
 			slog.Warn("daemon: build plan prompt failed; falling back to standard prompt", "err", err, "task_type", taskType)
+			return BuildPrompt(task), "", nil, 0
+		}
+		return p.UserPrompt, p.SystemPrompt, p.Tools, p.MaxTurns
+	case "loop_develop":
+		// TODO(task-13): Task does not yet carry Branch/Iteration. The
+		// loop coordinator (Task 6) tracks both per loop run, but the
+		// daemon Task struct (types.go) has not been extended to
+		// propagate them through the claim payload. Until then we
+		// derive a placeholder branch from the IssueID so the develop
+		// prompt is well-formed and the executor's tests pass.
+		ref := stages.TaskRef{
+			ID:         task.ID,
+			IssueID:    task.IssueID,
+			IssueTitle: task.IssueTitle,
+			Branch:     fmt.Sprintf("loop/%s", task.IssueID),
+			Iteration:  1,
+			WorkDir:    workDir,
+		}
+		p, err := stages.BuildDevelopPrompt(ref)
+		if err != nil {
+			slog.Warn("daemon: build develop prompt failed; falling back to standard prompt", "err", err, "task_type", taskType)
 			return BuildPrompt(task), "", nil, 0
 		}
 		return p.UserPrompt, p.SystemPrompt, p.Tools, p.MaxTurns
