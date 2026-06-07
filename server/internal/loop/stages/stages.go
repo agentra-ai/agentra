@@ -10,10 +10,12 @@
 package stages
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"sync"
+
+	"github.com/agentra-ai/agentra/server/pkg/agent"
 )
 
 // ErrUnknownStage is returned by Resolve when no Executor is registered for
@@ -26,12 +28,13 @@ var ErrUnknownStage = errors.New("stages: unknown stage")
 // buildPromptForStage helper populates this struct before calling into
 // stages.
 type TaskRef struct {
-	ID         string
-	IssueID    string
-	IssueTitle string
-	Branch     string
-	Iteration  int
-	WorkDir    string
+	ID               string
+	IssueID          string
+	IssueTitle       string
+	IssueDescription string
+	Branch           string
+	Iteration        int
+	WorkDir          string
 }
 
 // Result is the outcome of a single stage execution. Real executors
@@ -47,10 +50,19 @@ type Result struct {
 	RawJSON []byte // optional structured output (e.g. the review stage's verdict)
 }
 
-// Executor runs a single stage for a given task. The exact signature will
-// grow in later tasks as we add the real Plan/Develop/Review/Fix bodies;
-// the TaskRef parameter is stable.
-type Executor func(ref *TaskRef) (Result, error)
+// Executor runs a single stage for a given task.
+//
+// The contract: stages OWN prompt construction; the daemon OWNS agent
+// execution. An Executor returns a *Result (typically carrying the loaded
+// system prompt) and does NOT call backend.Execute. The daemon's runTask
+// loop reads the result, builds ExecOptions from it, and calls
+// backend.Execute itself.
+//
+// The backend parameter is reserved for future stages that need to query
+// the backend (e.g. count remaining context) without spawning a run.
+// Today's Plan executor ignores it. The nil-safe contract is verified by
+// TestPlan_Registered, which passes a nil backend.
+type Executor func(ctx context.Context, ref TaskRef, backend agent.Backend) (*Result, error)
 
 // registry maps task_type strings (loop_plan, loop_develop, loop_review,
 // loop_fix) to the Executor that implements that stage.
@@ -100,28 +112,4 @@ func AllRegistered() []string {
 		out = append(out, k)
 	}
 	return out
-}
-
-// LoopStagePrompt returns the loaded and substituted system prompt for a
-// given stage. On any failure (missing template, nil ref) it logs a
-// warning and returns an empty string — the daemon falls back to its
-// legacy BuildPrompt output in that case.
-func LoopStagePrompt(stage string, ref *TaskRef) string {
-	if ref == nil {
-		return ""
-	}
-	p, err := loadPrompt(stage, *ref)
-	if err != nil {
-		slog.Warn("stages: load prompt failed", "stage", stage, "err", err)
-		return ""
-	}
-	return p
-}
-
-// LoopToolsByStage returns the tool names available to a given stage.
-// Task 9 returns nil — per-stage tool wiring lands in Tasks 11-12, when
-// the read_file/write_file/search_code/run_command/run_test and
-// git_*/create_pr tools come online.
-func LoopToolsByStage(_ string) []string {
-	return nil
 }

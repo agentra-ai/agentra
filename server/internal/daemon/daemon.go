@@ -908,7 +908,8 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 	// the same (agent, issue) pair. The work_dir path is stored in DB on
 	// task completion and passed back via PriorWorkDir on the next claim.
 
-	prompt, systemPrompt, maxTurns := buildPromptForStage(task.TaskType, task, env.WorkDir)
+	prompt, systemPrompt, tools, maxTurns := buildPromptForStage(task.TaskType, task, env.WorkDir)
+	_ = tools // dead data until Task 11 wires per-stage tool restrictions into ExecOptions
 
 	// Pass the daemon's auth credentials and context so the spawned agent CLI
 	// can call the Agentra API and the local daemon (e.g. `agentra repo checkout`).
@@ -1122,29 +1123,37 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 	}
 }
 
-// buildPromptForStage returns the user prompt, system prompt, and max turns
-// for a given task_type. Falls through to the legacy BuildPrompt for "standard"
-// or any unknown type. Loop stages get a different system prompt and turn
-// budget. workDir is the prepared execenv working directory, threaded into
-// the TaskRef so stage prompts can reference the live path.
-func buildPromptForStage(taskType string, task Task, workDir string) (prompt, systemPrompt string, maxTurns int) {
-	ref := &stages.TaskRef{
-		ID:         task.ID,
-		IssueID:    task.IssueID,
-		IssueTitle: task.IssueTitle,
-		WorkDir:    workDir,
+// buildPromptForStage returns the user prompt, system prompt, per-stage
+// tool list, and max turns for a given task_type. Falls through to the
+// legacy BuildPrompt for "standard" or any unknown type. Loop stages get
+// a stage-specific system prompt and turn budget. workDir is the
+// prepared execenv working directory, threaded into the TaskRef so stage
+// prompts can reference the live path.
+//
+// For Task 10 only Plan is wired. Other loop_* types fall through to
+// BuildPrompt until their executors land in Tasks 11-15. The tools
+// slice is plumbed but not yet consumed by ExecOptions — that wiring
+// arrives in Task 11.
+func buildPromptForStage(taskType string, task Task, workDir string) (prompt, systemPrompt string, tools []string, maxTurns int) {
+	if taskType == "" || taskType == "standard" {
+		return BuildPrompt(task), "", nil, 0
 	}
 	switch taskType {
 	case "loop_plan":
-		return BuildPrompt(task), stages.LoopStagePrompt("plan", ref), 5
-	case "loop_develop":
-		return BuildPrompt(task), stages.LoopStagePrompt("develop", ref), 30
-	case "loop_review":
-		return BuildPrompt(task), stages.LoopStagePrompt("review", ref), 5
-	case "loop_fix":
-		return BuildPrompt(task), stages.LoopStagePrompt("fix", ref), 30
+		ref := stages.TaskRef{
+			ID:         task.ID,
+			IssueID:    task.IssueID,
+			IssueTitle: task.IssueTitle,
+			WorkDir:    workDir,
+		}
+		p, err := stages.BuildPlanPrompt(ref)
+		if err != nil {
+			slog.Warn("daemon: build plan prompt failed; falling back to standard prompt", "err", err, "task_type", taskType)
+			return BuildPrompt(task), "", nil, 0
+		}
+		return p.UserPrompt, p.SystemPrompt, p.Tools, p.MaxTurns
 	default:
-		return BuildPrompt(task), "", 0 // standard: no system prompt override, no turn cap change
+		return BuildPrompt(task), "", nil, 0
 	}
 }
 

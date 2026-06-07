@@ -11,11 +11,12 @@ import (
 // the {{.Foo}} template variables from the given TaskRef. The variable
 // set is fixed and small:
 //
-//	{{.IssueID}}      - TaskRef.IssueID
-//	{{.IssueTitle}}   - TaskRef.IssueTitle
-//	{{.Branch}}       - TaskRef.Branch (may be empty in early iterations)
-//	{{.Iteration}}    - TaskRef.Iteration as a decimal integer
-//	{{.WorkDir}}      - TaskRef.WorkDir
+//	{{.IssueID}}          - TaskRef.IssueID
+//	{{.IssueTitle}}       - TaskRef.IssueTitle
+//	{{.IssueDescription}} - TaskRef.IssueDescription
+//	{{.Branch}}           - TaskRef.Branch (may be empty in early iterations)
+//	{{.Iteration}}        - TaskRef.Iteration as a decimal integer
+//	{{.WorkDir}}          - TaskRef.WorkDir
 //
 // Unknown template variables are left untouched — the substitute step is
 // a plain string replace, not a text/template execution, so a typo in a
@@ -28,6 +29,7 @@ func loadPrompt(name string, task TaskRef) (string, error) {
 	s := string(raw)
 	s = strings.ReplaceAll(s, "{{.IssueID}}", task.IssueID)
 	s = strings.ReplaceAll(s, "{{.IssueTitle}}", task.IssueTitle)
+	s = strings.ReplaceAll(s, "{{.IssueDescription}}", task.IssueDescription)
 	s = strings.ReplaceAll(s, "{{.Branch}}", task.Branch)
 	s = strings.ReplaceAll(s, "{{.Iteration}}", fmt.Sprintf("%d", task.Iteration))
 	s = strings.ReplaceAll(s, "{{.WorkDir}}", task.WorkDir)
