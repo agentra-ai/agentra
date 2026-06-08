@@ -77,6 +77,65 @@ func NewCoordinator(q *dbpkg.Queries, bus *events.Bus) *Coordinator {
 	return &Coordinator{queries: q, bus: bus, store: NewStore(q)}
 }
 
+// StartLoop transitions a freshly created (status=pending, no stage) loop to
+// status=running with current_stage=plan and enqueues the first loop_plan
+// task. It is the production entry point that runs synchronously from the
+// CreateLoop HTTP handler — the rest of the state machine is event-driven
+// (HandleTaskCompleted / HandleTaskFailed), but the plan stage has no
+// preceding task to fire on, so the handler must kick it off explicitly.
+//
+// Policy: StartLoop is intentionally NOT idempotent. It refuses to re-start
+// a loop that is not in 'pending' status, so callers cannot accidentally
+// create a second loop_plan task for a loop that is already running.
+//
+// Errors are returned to the caller. The Coordinator's own event handlers
+// (HandleTaskCompleted / HandleTaskFailed) swallow errors and log them
+// because they run on a goroutine; StartLoop runs in a request goroutine
+// and the caller (the HTTP handler) wants to know if the first task
+// failed to enqueue.
+func (c *Coordinator) StartLoop(ctx context.Context, loopID string) error {
+	l, err := c.store.GetLoop(ctx, loopID)
+	if err != nil {
+		return fmt.Errorf("load loop: %w", err)
+	}
+	if l.Status != StatusPending {
+		return fmt.Errorf("loop %s: StartLoop requires status=pending, got %q", l.ID, l.Status)
+	}
+
+	// createTaskForStage handles CreateAgentTask (including the agent->runtime
+	// lookup for the NOT NULL FK) and the UpdateStatus(Status: running,
+	// CurrentStage: plan) in one go. It leaves started_at unset, so we
+	// stamp it in a second UpdateStatus that echoes the values createTaskForStage
+	// just wrote (status=running, current_stage=plan). UpdateStatus is a
+	// full-row write on the state-machine columns, so we cannot pass nil
+	// for either of those — the SQL would write an empty string for status
+	// (CHECK violation) and NULL for current_stage (clobbering the stage
+	// we just set).
+	plan := StagePlan
+	if err := c.createTaskForStage(ctx, l, Decision{
+		action:   actionCreateTask,
+		taskType: taskTypePlan,
+	}); err != nil {
+		return fmt.Errorf("enqueue plan task: %w", err)
+	}
+
+	// Stamp started_at. The SQL has COALESCE(started_at, $started_at) so this
+	// is a one-way set on the first transition to running.
+	now := nowUTC()
+	running := StatusRunning
+	if _, err := c.store.UpdateStatus(ctx, l.ID, UpdateStatusInput{
+		Status:       &running,
+		CurrentStage: &plan,
+		StartedAt:    &now,
+	}); err != nil {
+		return fmt.Errorf("stamp started_at: %w", err)
+	}
+
+	slog.Info("loop coordinator: started loop",
+		"loop_id", l.ID, "issue_id", l.IssueID, "workspace_id", l.WorkspaceID)
+	return nil
+}
+
 // decideNextStage is a pure function. Given a loop's current state and the
 // parsed result of the most recently completed task, it returns the next
 // action the coordinator should take. No I/O, no goroutines, no globals.

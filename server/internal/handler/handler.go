@@ -52,21 +52,22 @@ type dbExecutor interface {
 }
 
 type Handler struct {
-	Queries        *db.Queries
-	DB             dbExecutor
-	TxStarter      txStarter
-	Hub            *realtime.Hub
-	Bus            *events.Bus
-	TaskService    *service.TaskService
-	TraceService   *service.TraceService
-	EmailService   *service.EmailService
-	GraphStore     *taskgraph.GraphStore
-	PlannerService *service.PlannerService
-	PingStore      *PingStore
-	UpdateStore    *UpdateStore
-	LoopStore      *loop.Store
-	Storage        storage.FileStorage
-	CFSigner       *auth.CloudFrontSigner
+	Queries         *db.Queries
+	DB              dbExecutor
+	TxStarter       txStarter
+	Hub             *realtime.Hub
+	Bus             *events.Bus
+	TaskService     *service.TaskService
+	TraceService    *service.TraceService
+	EmailService    *service.EmailService
+	GraphStore      *taskgraph.GraphStore
+	PlannerService  *service.PlannerService
+	PingStore       *PingStore
+	UpdateStore     *UpdateStore
+	LoopStore       *loop.Store
+	LoopCoordinator *loop.Coordinator // optional; nil-safe; CreateLoop kicks off the first plan task when set
+	Storage         storage.FileStorage
+	CFSigner        *auth.CloudFrontSigner
 }
 
 func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *events.Bus, graphStore *taskgraph.GraphStore, plannerSvc *service.PlannerService, emailService *service.EmailService, store storage.FileStorage, cfSigner *auth.CloudFrontSigner) *Handler {
@@ -95,6 +96,16 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 		Storage:        store,
 		CFSigner:       cfSigner,
 	}
+}
+
+// SetLoopCoordinator attaches the loop Coordinator to the Handler. It is
+// intentionally a setter (not a New() parameter) so existing test fixtures
+// that build a Handler without a coordinator do not need to change. The
+// CreateLoop handler is nil-safe and skips starting the first plan task
+// when no coordinator is wired — useful for unit tests that only exercise
+// loop CRUD.
+func (h *Handler) SetLoopCoordinator(c *loop.Coordinator) {
+	h.LoopCoordinator = c
 }
 
 // publish sends a domain event through the event bus.

@@ -223,3 +223,108 @@ func cleanupLoopData(t *testing.T, pool *pgxpool.Pool, wsID, issueID, agentID st
 }
 
 func intPtr(i int) *int { return &i }
+
+// TestIntegration_StartLoop_TransitionsPendingToRunning verifies that
+// Coordinator.StartLoop on a freshly created (status=pending, no stage) loop
+// transitions it to status=running, current_stage=plan, enqueues a queued
+// loop_plan task, and stamps started_at. This is the production path that
+// CreateLoop in the handler now drives — previously the integration test
+// set this state by hand, which masked the missing production wiring.
+func TestIntegration_StartLoop_TransitionsPendingToRunning(t *testing.T) {
+	pool := testPool(t)
+	q := dbpkg.New(pool)
+	bus := events.New()
+	coord := looppkg.NewCoordinator(q, bus)
+	store := looppkg.NewStore(q)
+
+	wsID := uuid.NewString()
+	issueID := uuid.NewString()
+	agentID := uuid.NewString()
+	seedWorkspaceAndIssue(t, pool, wsID, issueID)
+	seedAgent(t, pool, wsID, agentID)
+	t.Cleanup(func() {
+		cleanupLoopData(t, pool, wsID, issueID, agentID)
+	})
+
+	ctx := context.Background()
+	maxIters := 3
+	loopRow, err := store.CreateLoop(ctx, looppkg.CreateLoopInput{
+		IssueID: issueID, WorkspaceID: wsID, MaxIterations: &maxIters,
+		AgentID: &agentID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Sanity: fresh loop is pending with no stage and no started_at.
+	if loopRow.Status != looppkg.StatusPending {
+		t.Fatalf("precondition: expected status=pending, got %q", loopRow.Status)
+	}
+	if loopRow.CurrentStage != nil {
+		t.Fatalf("precondition: expected current_stage=nil, got %v", *loopRow.CurrentStage)
+	}
+	if loopRow.StartedAt != nil {
+		t.Fatalf("precondition: expected started_at=nil, got %v", *loopRow.StartedAt)
+	}
+
+	// Drive the production entry point: the handler calls StartLoop after
+	// the loop is created.
+	if err := coord.StartLoop(ctx, loopRow.ID); err != nil {
+		t.Fatalf("StartLoop: %v", err)
+	}
+
+	// Loop should now be running in the plan stage with started_at set.
+	got, err := store.GetLoop(ctx, loopRow.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != looppkg.StatusRunning {
+		t.Errorf("expected status=running, got %q", got.Status)
+	}
+	if got.CurrentStage == nil || *got.CurrentStage != looppkg.StagePlan {
+		t.Errorf("expected current_stage=plan, got %v", got.CurrentStage)
+	}
+	if got.StartedAt == nil {
+		t.Error("expected started_at set after StartLoop")
+	}
+
+	// A loop_plan task should now be queued.
+	waitForTask(t, pool, agentID, loopRow.ID, "loop_plan", "queued")
+}
+
+// TestIntegration_StartLoop_RefusesNonPending verifies that StartLoop fails
+// loudly when called on a loop that is not in 'pending' status. This prevents
+// accidental double-starts: re-calling on a running loop would create a second
+// loop_plan task, and there is no policy that wants that.
+func TestIntegration_StartLoop_RefusesNonPending(t *testing.T) {
+	pool := testPool(t)
+	q := dbpkg.New(pool)
+	bus := events.New()
+	coord := looppkg.NewCoordinator(q, bus)
+	store := looppkg.NewStore(q)
+
+	wsID := uuid.NewString()
+	issueID := uuid.NewString()
+	agentID := uuid.NewString()
+	seedWorkspaceAndIssue(t, pool, wsID, issueID)
+	seedAgent(t, pool, wsID, agentID)
+	t.Cleanup(func() {
+		cleanupLoopData(t, pool, wsID, issueID, agentID)
+	})
+
+	ctx := context.Background()
+	loopRow, err := store.CreateLoop(ctx, looppkg.CreateLoopInput{
+		IssueID: issueID, WorkspaceID: wsID, AgentID: &agentID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Move it out of pending first.
+	running := looppkg.StatusRunning
+	if _, err := store.UpdateStatus(ctx, loopRow.ID, looppkg.UpdateStatusInput{Status: &running}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := coord.StartLoop(ctx, loopRow.ID); err == nil {
+		t.Error("expected StartLoop to refuse non-pending loop, got nil error")
+	}
+}

@@ -101,6 +101,63 @@ func TestCreateLoop_HappyPath(t *testing.T) {
 	}
 }
 
+// TestCreateLoop_StartsLoopWhenCoordinatorWired verifies the production
+// handler-to-coordinator wiring: when the Handler has a LoopCoordinator
+// attached, CreateLoop must call StartLoop, transitioning the loop from
+// pending to running and stamping started_at. This is the fix for the gap
+// where freshly created loops sat in 'pending' status forever because the
+// event-driven state machine has no preceding task to fire on for the
+// plan stage.
+func TestCreateLoop_StartsLoopWhenCoordinatorWired(t *testing.T) {
+	// Build a Handler that mirrors the global testHandler but with a real
+	// Coordinator wired. Reusing testHandler is not safe: it is a shared
+	// singleton, and writing started_at on a loop created from one test
+	// would race with reads from the rest of the suite.
+	wiredHandler := *testHandler
+	coord := looppkg.NewCoordinator(testHandler.Queries, testHandler.Bus)
+	wiredHandler.SetLoopCoordinator(coord)
+
+	// Look up the seeded "Handler Test Agent" — StartLoop enqueues a
+	// loop_plan task that requires a non-null agent_id (NOT NULL FK to
+	// agent_task_queue.agent_id).
+	listW := httptest.NewRecorder()
+	listReq := newRequest("GET", "/api/agents?workspace_id="+testWorkspaceID, nil)
+	testHandler.ListAgents(listW, listReq)
+	if listW.Code != http.StatusOK {
+		t.Fatalf("setup: ListAgents: expected 200, got %d: %s", listW.Code, listW.Body.String())
+	}
+	var seededAgents []AgentResponse
+	if err := json.NewDecoder(listW.Body).Decode(&seededAgents); err != nil {
+		t.Fatalf("decode agents: %v", err)
+	}
+	if len(seededAgents) == 0 {
+		t.Fatal("setup: expected at least 1 seeded agent")
+	}
+	agentID := seededAgents[0].ID
+
+	issueID := createLoopTestIssue(t, "loop auto-start")
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{
+		"issue_id": issueID,
+		"agent_id": agentID,
+	})
+	wiredHandler.CreateLoop(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateLoop: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	loop := decodeLoop(t, w.Body)
+	if loop["status"] != "running" {
+		t.Errorf("expected status=running after StartLoop, got %v", loop["status"])
+	}
+	if loop["current_stage"] != "plan" {
+		t.Errorf("expected current_stage=plan after StartLoop, got %v", loop["current_stage"])
+	}
+	if loop["started_at"] == nil || loop["started_at"] == "" {
+		t.Error("expected started_at set after StartLoop")
+	}
+}
+
 func TestCreateLoop_MissingIssueID(t *testing.T) {
 	w := httptest.NewRecorder()
 	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{})

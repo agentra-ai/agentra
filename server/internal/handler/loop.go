@@ -51,6 +51,27 @@ func (h *Handler) CreateLoop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Kick off the first stage (loop_plan). The rest of the loop is event-
+	// driven via task:completed / task:failed, but the plan stage has no
+	// preceding task to fire on, so the handler has to start it. If the
+	// coordinator is not wired (some unit tests) or StartLoop itself fails
+	// (e.g. transient DB error), we still return the created loop — the row
+	// exists in 'pending' status and can be retried by an operator, and a
+	// hard failure to the caller would have to undo a successful INSERT.
+	//
+	// On success, refetch the loop so the response reflects the post-start
+	// state (status=running, current_stage=plan, started_at) — callers
+	// frequently poll the just-created loop and would otherwise see stale
+	// 'pending' status.
+	if h.LoopCoordinator != nil {
+		if err := h.LoopCoordinator.StartLoop(r.Context(), loop.ID); err != nil {
+			slog.Warn("start loop failed; loop created in pending status, will not auto-resume",
+				"loop_id", loop.ID, "error", err)
+		} else if refreshed, gerr := h.LoopStore.GetLoop(r.Context(), loop.ID); gerr == nil {
+			loop = refreshed
+		}
+	}
+
 	slog.Info("loop created", "loop_id", loop.ID, "issue_id", loop.IssueID, "workspace_id", workspaceID)
 	writeJSON(w, http.StatusCreated, loop)
 }

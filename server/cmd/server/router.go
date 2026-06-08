@@ -17,6 +17,7 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/cli"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/handler"
+	"github.com/agentra-ai/agentra/server/internal/loop"
 	"github.com/agentra-ai/agentra/server/internal/middleware"
 	"github.com/agentra-ai/agentra/server/internal/realtime"
 	"github.com/agentra-ai/agentra/server/internal/service"
@@ -54,6 +55,14 @@ func allowedOrigins() []string {
 
 // NewRouter creates the fully-configured Chi router with all middleware and routes.
 func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Router {
+	return newRouter(pool, hub, bus, nil)
+}
+
+// newRouter is the internal form that accepts an optional loop Coordinator
+// to wire into the Handler. The Handler falls back to a nil coordinator
+// (CreateLoop then no-ops the StartLoop call) when nil is passed, which is
+// what unit tests want.
+func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord *loop.Coordinator) chi.Router {
 	queries := db.New(pool)
 	emailSvc := service.NewEmailService()
 
@@ -96,6 +105,9 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 	graphStore := taskgraph.NewGraphStore(pool)
 	plannerSvc := service.NewPlannerService(queries, graphStore)
 	h := handler.New(queries, pool, hub, bus, graphStore, plannerSvc, emailSvc, fileStorage, cfSigner)
+	if loopCoord != nil {
+		h.SetLoopCoordinator(loopCoord)
+	}
 
 	// Wire up GatewayHub callbacks to TaskService
 	setGatewayCallbacks(hub, h)
