@@ -51,6 +51,66 @@ func TestBuildClaudeArgsWithTools(t *testing.T) {
 	}
 }
 
+func TestTranslateToClaudeTools(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input []string
+		want  []string
+	}{
+		{
+			name:  "plan stage tools",
+			input: []string{"read_file", "search_code"},
+			want:  []string{"Read", "Glob", "Grep"},
+		},
+		{
+			name:  "review stage tools",
+			input: []string{"read_file", "search_code", "git_diff"},
+			want:  []string{"Read", "Glob", "Grep", "Bash"},
+		},
+		{
+			name: "develop stage tools",
+			input: []string{
+				"read_file", "search_code", "write_file",
+				"run_command", "run_test",
+				"git_status", "git_diff", "git_commit", "git_push",
+				"create_branch", "github_pr_create",
+			},
+			want: []string{"Read", "Glob", "Grep", "Write", "Edit", "Bash"},
+		},
+		{
+			name:  "native names pass through",
+			input: []string{"Read", "Bash", "Glob"},
+			want:  []string{"Read", "Bash", "Glob"},
+		},
+		{
+			name:  "unknown names pass through",
+			input: []string{"MCP_Server"},
+			want:  []string{"MCP_Server"},
+		},
+		{
+			name:  "deduplicates",
+			input: []string{"git_status", "git_diff", "git_commit"},
+			want:  []string{"Bash"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := translateToClaudeTools(tt.input)
+			if len(got) != len(tt.want) {
+				t.Fatalf("translateToClaudeTools(%v) = %v, want %v", tt.input, got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("translateToClaudeTools(%v)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestBuildClaudeArgsWithSingleTool(t *testing.T) {
 	t.Parallel()
 
@@ -64,8 +124,8 @@ func TestBuildClaudeArgsWithSingleTool(t *testing.T) {
 			if i+1 >= len(args) {
 				t.Fatalf("--allowedTools present but no value")
 			}
-			if got := args[i+1]; got != "read_file" {
-				t.Fatalf("expected --allowedTools read_file, got %q", got)
+			if got := args[i+1]; got != "Read" {
+				t.Fatalf("expected --allowedTools Read (translated from read_file), got %q", got)
 			}
 			return
 		}
