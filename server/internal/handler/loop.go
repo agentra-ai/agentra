@@ -38,6 +38,15 @@ func (h *Handler) CreateLoop(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "issue_id is required")
 		return
 	}
+	// agent_id is required: agent_task_queue.runtime_id is NOT NULL, so a
+	// loop without an agent would be unable to enqueue its first plan-stage
+	// task and would be stuck in 'pending' forever. The store accepts a nil
+	// agent_id (nullable column) for future flexibility, but the public API
+	// fails fast. Pass --agent on the CLI to provide one.
+	if req.AgentID == nil || *req.AgentID == "" {
+		writeError(w, http.StatusBadRequest, "agent_id is required")
+		return
+	}
 
 	loop, err := h.LoopStore.CreateLoop(r.Context(), looppkg.CreateLoopInput{
 		IssueID:       req.IssueID,

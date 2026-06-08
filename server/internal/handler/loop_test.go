@@ -6,12 +6,34 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 
 	looppkg "github.com/agentra-ai/agentra/server/internal/loop"
 )
+
+// createLoopTestAgent returns the id of a seeded agent in the test workspace.
+// agent_id is now a required field for CreateLoop, so any test that needs
+// a happy-path loop must supply one.
+func createLoopTestAgent(t *testing.T) string {
+	t.Helper()
+	w := httptest.NewRecorder()
+	req := newRequest("GET", "/api/agents?workspace_id="+testWorkspaceID, nil)
+	testHandler.ListAgents(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("setup: ListAgents: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var agents []AgentResponse
+	if err := json.NewDecoder(w.Body).Decode(&agents); err != nil {
+		t.Fatalf("decode agents: %v", err)
+	}
+	if len(agents) == 0 {
+		t.Fatal("setup: expected at least 1 seeded agent")
+	}
+	return agents[0].ID
+}
 
 // createLoopTestIssue creates an issue in the test workspace and returns its
 // id. The issue is cleaned up when the test ends.
@@ -76,11 +98,13 @@ func decodeLoop(t *testing.T, body *bytes.Buffer) map[string]any {
 
 func TestCreateLoop_HappyPath(t *testing.T) {
 	issueID := createLoopTestIssue(t, "loop happy path")
+	agentID := createLoopTestAgent(t)
 
 	w := httptest.NewRecorder()
 	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{
 		"issue_id":       issueID,
 		"max_iterations": 7,
+		"agent_id":       agentID,
 	})
 	testHandler.CreateLoop(w, req)
 	if w.Code != http.StatusCreated {
@@ -167,6 +191,27 @@ func TestCreateLoop_MissingIssueID(t *testing.T) {
 	}
 }
 
+// TestCreateLoop_RequiresAgentID verifies that CreateLoop rejects requests
+// missing agent_id. The agent_task_queue.runtime_id column is NOT NULL, so
+// a loop created without an agent would be unable to enqueue its first
+// plan-stage task and would be stuck in 'pending' forever. The handler must
+// fail fast with a clear 400.
+func TestCreateLoop_RequiresAgentID(t *testing.T) {
+	issueID := createLoopTestIssue(t, "loop missing agent")
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{
+		"issue_id": issueID,
+	})
+	testHandler.CreateLoop(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("CreateLoop (missing agent_id): expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "agent_id") {
+		t.Errorf("expected error body to mention agent_id, got: %s", w.Body.String())
+	}
+}
+
 func TestCreateLoop_MissingWorkspace(t *testing.T) {
 	issueID := createLoopTestIssue(t, "loop no workspace")
 
@@ -185,10 +230,12 @@ func TestCreateLoop_MissingWorkspace(t *testing.T) {
 
 func TestGetLoop_HappyPath(t *testing.T) {
 	issueID := createLoopTestIssue(t, "loop get happy")
+	agentID := createLoopTestAgent(t)
 
 	w := httptest.NewRecorder()
 	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{
 		"issue_id": issueID,
+		"agent_id": agentID,
 	})
 	testHandler.CreateLoop(w, req)
 	if w.Code != http.StatusCreated {
@@ -252,11 +299,13 @@ func TestGetLoop_WrongWorkspace(t *testing.T) {
 
 func TestListLoops_OnlyOwnWorkspace(t *testing.T) {
 	issueA := createLoopTestIssue(t, "loop list A")
+	agentID := createLoopTestAgent(t)
 	otherWS := createLoopTestWorkspace(t)
 
 	w := httptest.NewRecorder()
 	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{
 		"issue_id": issueA,
+		"agent_id": agentID,
 	})
 	testHandler.CreateLoop(w, req)
 	if w.Code != http.StatusCreated {
@@ -297,10 +346,12 @@ func TestListLoops_OnlyOwnWorkspace(t *testing.T) {
 
 func TestPauseLoop_UpdatesStatus(t *testing.T) {
 	issueID := createLoopTestIssue(t, "loop pause")
+	agentID := createLoopTestAgent(t)
 
 	w := httptest.NewRecorder()
 	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{
 		"issue_id": issueID,
+		"agent_id": agentID,
 	})
 	testHandler.CreateLoop(w, req)
 	if w.Code != http.StatusCreated {
@@ -331,10 +382,12 @@ func TestPauseLoop_UpdatesStatus(t *testing.T) {
 
 func TestResumeLoop_UpdatesStatus(t *testing.T) {
 	issueID := createLoopTestIssue(t, "loop resume")
+	agentID := createLoopTestAgent(t)
 
 	w := httptest.NewRecorder()
 	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{
 		"issue_id": issueID,
+		"agent_id": agentID,
 	})
 	testHandler.CreateLoop(w, req)
 	if w.Code != http.StatusCreated {
@@ -365,10 +418,12 @@ func TestResumeLoop_UpdatesStatus(t *testing.T) {
 
 func TestCancelLoop_UpdatesStatus(t *testing.T) {
 	issueID := createLoopTestIssue(t, "loop cancel")
+	agentID := createLoopTestAgent(t)
 
 	w := httptest.NewRecorder()
 	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{
 		"issue_id": issueID,
+		"agent_id": agentID,
 	})
 	testHandler.CreateLoop(w, req)
 	if w.Code != http.StatusCreated {
