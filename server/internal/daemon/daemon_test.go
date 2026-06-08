@@ -133,18 +133,28 @@ func TestBuildPromptForStage_ReviewUsesRealBranch(t *testing.T) {
 	t.Parallel()
 
 	task := Task{
-		ID:      "task-2",
-		IssueID: "issue-77",
-		Branch:  "feature/real-branch-from-develop",
-		LoopID:  "loop-uuid-2",
+		ID:        "task-2",
+		IssueID:   "issue-77",
+		Branch:    "feature/real-branch-from-develop",
+		Iteration: 3,
+		LoopID:    "loop-uuid-2",
 	}
-	userPrompt, _, _, _ := buildPromptForStage("loop_review", task, "/tmp/work")
+	userPrompt, systemPrompt, _, _ := buildPromptForStage("loop_review", task, "/tmp/work")
 
 	if userPrompt == "" {
 		t.Fatal("expected non-empty user prompt for loop_review")
 	}
 	if !strings.Contains(userPrompt, "feature/real-branch-from-develop") {
 		t.Errorf("expected user prompt to mention real branch, got %q", userPrompt)
+	}
+	// The review user prompt does not include iteration (unlike fix), so
+	// check the system prompt which is populated from the template.
+	// The template renders "Iteration: {{.Iteration}}" → "Iteration: 3".
+	if !strings.Contains(systemPrompt, "Iteration: 3") {
+		t.Errorf("expected system prompt to contain 'Iteration: 3', got %q", systemPrompt)
+	}
+	if strings.Contains(systemPrompt, "Iteration: 1") {
+		t.Errorf("expected system prompt to use real iteration 3, not the placeholder 1, got %q", systemPrompt)
 	}
 }
 

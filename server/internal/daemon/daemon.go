@@ -1198,12 +1198,18 @@ func buildPromptForStage(taskType string, task Task, workDir string) (prompt, sy
 				"task_id", task.ID, "issue_id", task.IssueID, "loop_id", task.LoopID)
 			branch = placeholderBranch
 		}
+		iteration := task.Iteration
+		if iteration < 1 {
+			slog.Warn("daemon: loop_review task has non-positive Iteration; defaulting to 1",
+				"task_id", task.ID, "issue_id", task.IssueID, "loop_id", task.LoopID, "iteration", iteration)
+			iteration = 1
+		}
 		ref := stages.TaskRef{
 			ID:         task.ID,
 			IssueID:    task.IssueID,
 			IssueTitle: task.IssueTitle,
 			Branch:     branch,
-			Iteration:  1,
+			Iteration:  iteration,
 			WorkDir:    workDir,
 		}
 		p, err := stages.BuildReviewPrompt(ref)
