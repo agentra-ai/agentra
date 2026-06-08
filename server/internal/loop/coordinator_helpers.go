@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -58,15 +59,64 @@ func taskTypeForStage(s Stage) string {
 	return ""
 }
 
-// parseTaskResult unmarshals the raw task_run output into a TaskResult. Bad
-// JSON or empty input returns nil — the coordinator must treat a missing
-// result as a non-event (no review verdict) rather than a crash.
+// parseTaskResult unmarshals the raw task_run output into a TaskResult. It is
+// forgiving of the common LLM habit of wrapping JSON in markdown fences or
+// surrounding it with a sentence of preamble. The fast path is a direct
+// json.Unmarshal; the slow path scans for the first balanced JSON object and
+// unmarshals that substring. Returns nil only when no parseable JSON object
+// can be found, so the coordinator can treat a missing result as a non-event
+// (no review verdict) rather than a crash.
 func parseTaskResult(raw []byte) *TaskResult {
 	if len(raw) == 0 {
 		return nil
 	}
 	var r TaskResult
-	if err := json.Unmarshal(raw, &r); err != nil {
+	if err := json.Unmarshal(raw, &r); err == nil {
+		return &r
+	}
+	// Fall back: extract the first balanced JSON object from the text,
+	// respecting string boundaries so braces inside string fields don't
+	// confuse the depth counter.
+	s := string(raw)
+	start := strings.Index(s, "{")
+	if start < 0 {
+		return nil
+	}
+	end := -1
+	depth := 0
+	inString := false
+	escape := false
+	for i := start; i < len(s); i++ {
+		c := s[i]
+		if escape {
+			escape = false
+			continue
+		}
+		if c == '\\' && inString {
+			escape = true
+			continue
+		}
+		if c == '"' {
+			inString = !inString
+			continue
+		}
+		if inString {
+			continue
+		}
+		if c == '{' {
+			depth++
+		} else if c == '}' {
+			depth--
+			if depth == 0 {
+				end = i
+				break
+			}
+		}
+	}
+	if end < 0 {
+		return nil
+	}
+	if err := json.Unmarshal([]byte(s[start:end+1]), &r); err != nil {
 		return nil
 	}
 	return &r
