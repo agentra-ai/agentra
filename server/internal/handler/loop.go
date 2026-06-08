@@ -210,7 +210,9 @@ func (h *Handler) transitionLoopStatus(w http.ResponseWriter, r *http.Request, t
 	}
 
 	updated, err := h.LoopStore.UpdateStatus(r.Context(), id, looppkg.UpdateStatusInput{
-		Status: target,
+		Status:       target,
+		Iteration:    &existing.Iteration,
+		CurrentStage: existing.CurrentStage,
 	})
 	if err != nil {
 		slog.Warn("update loop status failed", "error", err, "loop_id", id, "status", *target)

@@ -416,6 +416,80 @@ func TestResumeLoop_UpdatesStatus(t *testing.T) {
 	}
 }
 
+func TestTransitionLoop_PreservesIterationAndStage(t *testing.T) {
+	issueID := createLoopTestIssue(t, "loop preserve iteration")
+	agentID := createLoopTestAgent(t)
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{
+		"issue_id": issueID,
+		"agent_id": agentID,
+	})
+	testHandler.CreateLoop(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("setup: CreateLoop: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	loopID := decodeLoop(t, w.Body)["id"].(string)
+
+	// Move to running and set iteration to 3 via direct DB update to simulate
+	// a loop that has been through multiple coordinator cycles.
+	running := looppkg.StatusRunning
+	if _, err := testHandler.LoopStore.UpdateStatus(context.Background(), loopID, looppkg.UpdateStatusInput{
+		Status:    &running,
+		Iteration: intPtr(3),
+	}); err != nil {
+		t.Fatalf("setup: UpdateStatus to running: %v", err)
+	}
+	stage := looppkg.StageDevelop
+	if _, err := testHandler.LoopStore.UpdateStatus(context.Background(), loopID, looppkg.UpdateStatusInput{
+		Status:       &running,
+		Iteration:    intPtr(3),
+		CurrentStage: &stage,
+	}); err != nil {
+		t.Fatalf("setup: set current_stage: %v", err)
+	}
+
+	// Pause the loop — must preserve iteration and current_stage.
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/loops/"+loopID+"/pause", nil)
+	req = withURLParam(req, "id", loopID)
+	testHandler.PauseLoop(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("PauseLoop: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	paused := decodeLoop(t, w.Body)
+	if paused["status"] != "paused" {
+		t.Errorf("expected status=paused, got %v", paused["status"])
+	}
+	if int(paused["iteration"].(float64)) != 3 {
+		t.Errorf("PauseLoop: expected iteration=3, got %v", paused["iteration"])
+	}
+	if paused["current_stage"] != "develop" {
+		t.Errorf("PauseLoop: expected current_stage=develop, got %v", paused["current_stage"])
+	}
+
+	// Resume the loop — must still preserve iteration and current_stage.
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/loops/"+loopID+"/resume", nil)
+	req = withURLParam(req, "id", loopID)
+	testHandler.ResumeLoop(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ResumeLoop: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	resumed := decodeLoop(t, w.Body)
+	if resumed["status"] != "running" {
+		t.Errorf("expected status=running, got %v", resumed["status"])
+	}
+	if int(resumed["iteration"].(float64)) != 3 {
+		t.Errorf("ResumeLoop: expected iteration=3, got %v", resumed["iteration"])
+	}
+	if resumed["current_stage"] != "develop" {
+		t.Errorf("ResumeLoop: expected current_stage=develop, got %v", resumed["current_stage"])
+	}
+}
+
+func intPtr(v int) *int { return &v }
+
 func TestCancelLoop_UpdatesStatus(t *testing.T) {
 	issueID := createLoopTestIssue(t, "loop cancel")
 	agentID := createLoopTestAgent(t)
