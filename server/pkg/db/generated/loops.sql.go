@@ -103,6 +103,28 @@ func (q *Queries) GetLoop(ctx context.Context, id pgtype.UUID) (Loop, error) {
 	return i, err
 }
 
+const getLoopBranchAndIteration = `-- name: GetLoopBranchAndIteration :one
+SELECT branch_name, iteration FROM loops WHERE id = $1
+`
+
+type GetLoopBranchAndIterationRow struct {
+	BranchName pgtype.Text `json:"branch_name"`
+	Iteration  int32       `json:"iteration"`
+}
+
+// Returns the branch_name and iteration for a loop. Used by the daemon
+// claim handler to populate the per-stage prompts (review/fix need the
+// develop stage's branch and the current iteration count). branch_name
+// may be empty (e.g. before the develop stage has pushed a branch) and
+// iteration may be 0 (e.g. the plan-stage bootstrap); both come back as
+// valid nullable fields so callers can fall back to placeholders.
+func (q *Queries) GetLoopBranchAndIteration(ctx context.Context, id pgtype.UUID) (GetLoopBranchAndIterationRow, error) {
+	row := q.db.QueryRow(ctx, getLoopBranchAndIteration, id)
+	var i GetLoopBranchAndIterationRow
+	err := row.Scan(&i.BranchName, &i.Iteration)
+	return i, err
+}
+
 const hasInFlightTaskForLoopStage = `-- name: HasInFlightTaskForLoopStage :one
 SELECT count(*) > 0 AS has_in_flight FROM agent_task_queue
 WHERE loop_id = $1 AND task_type = $2

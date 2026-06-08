@@ -1136,10 +1136,25 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 // translates it to --allowedTools, while Codex and Opencode ignore it
 // (their JSON-RPC / CLI does not currently expose per-invocation tool
 // restrictions) and log a debug message.
+//
+// Branch/Iteration source: the server's claim handler (see
+// handler.ClaimTaskByRuntime) populates Task.Branch and Task.Iteration
+// from the loop row. Plan and Develop don't have a real branch yet
+// (Develop creates it; Plan runs first), so they fall back to a
+// "loop/<IssueID>" placeholder. Review and Fix must use the real branch
+// from the develop stage; an empty branch on those stages is a bug and
+// we log a warning but still fall back to the placeholder so the
+// executor doesn't crash.
 func buildPromptForStage(taskType string, task Task, workDir string) (prompt, systemPrompt string, tools []string, maxTurns int) {
 	if taskType == "" || taskType == "standard" {
 		return BuildPrompt(task), "", nil, 0
 	}
+	// placeholderBranch is the fallback branch name used by stages that
+	// don't have a real branch yet (plan, develop, or review/fix when
+	// the loop row's branch_name is empty). It's a deterministic
+	// derivation from the issue ID so the prompt is well-formed and
+	// human-readable in logs.
+	placeholderBranch := fmt.Sprintf("loop/%s", task.IssueID)
 	switch taskType {
 	case "loop_plan":
 		ref := stages.TaskRef{
@@ -1155,17 +1170,13 @@ func buildPromptForStage(taskType string, task Task, workDir string) (prompt, sy
 		}
 		return p.UserPrompt, p.SystemPrompt, p.Tools, p.MaxTurns
 	case "loop_develop":
-		// TODO(task-13): Task does not yet carry Branch/Iteration. The
-		// loop coordinator (Task 6) tracks both per loop run, but the
-		// daemon Task struct (types.go) has not been extended to
-		// propagate them through the claim payload. Until then we
-		// derive a placeholder branch from the IssueID so the develop
-		// prompt is well-formed and the executor's tests pass.
+		// Develop creates the branch — pass a placeholder so the
+		// develop prompt references a name the agent will use.
 		ref := stages.TaskRef{
 			ID:         task.ID,
 			IssueID:    task.IssueID,
 			IssueTitle: task.IssueTitle,
-			Branch:     fmt.Sprintf("loop/%s", task.IssueID),
+			Branch:     placeholderBranch,
 			Iteration:  1,
 			WorkDir:    workDir,
 		}
@@ -1176,16 +1187,22 @@ func buildPromptForStage(taskType string, task Task, workDir string) (prompt, sy
 		}
 		return p.UserPrompt, p.SystemPrompt, p.Tools, p.MaxTurns
 	case "loop_review":
-		// TODO(task-13): same placeholder-Branch caveat as the develop
-		// arm above. Review reads the diff for whatever branch the
-		// develop stage pushed, but the daemon Task struct does not yet
-		// carry that branch, so we derive a placeholder until the
-		// claim payload grows a Branch field.
+		// Review reads the develop stage's diff — it MUST reference the
+		// real branch from loops.branch_name. Fall back to the
+		// placeholder only if the server didn't populate Task.Branch
+		// (which would mean the loop row's branch_name is empty,
+		// itself a bug — develop should have set it).
+		branch := task.Branch
+		if branch == "" {
+			slog.Warn("daemon: loop_review task has empty Branch; falling back to placeholder",
+				"task_id", task.ID, "issue_id", task.IssueID, "loop_id", task.LoopID)
+			branch = placeholderBranch
+		}
 		ref := stages.TaskRef{
 			ID:         task.ID,
 			IssueID:    task.IssueID,
 			IssueTitle: task.IssueTitle,
-			Branch:     fmt.Sprintf("loop/%s", task.IssueID),
+			Branch:     branch,
 			Iteration:  1,
 			WorkDir:    workDir,
 		}
@@ -1196,23 +1213,26 @@ func buildPromptForStage(taskType string, task Task, workDir string) (prompt, sy
 		}
 		return p.UserPrompt, p.SystemPrompt, p.Tools, p.MaxTurns
 	case "loop_fix":
-		// TODO(task-13): same placeholder-Branch caveat as the develop
-		// and review arms above. Fix reuses the develop stage's branch
-		// and PR, but the daemon Task struct does not yet carry the
-		// real branch name, so we derive a placeholder until the claim
-		// payload grows a Branch field. Iteration is also a placeholder
-		// for now — the loop coordinator already tracks the per-loop
-		// iteration (see coordinator.decideNextStage and
-		// TestDecideNextStage_ReviewRejectedToFix), but that value
-		// does not yet flow through the daemon Task struct. Once
-		// Task is extended to carry Branch and Iteration, replace
-		// these placeholders with the real values.
+		// Fix reuses the develop stage's branch and PR, and runs at the
+		// current iteration count. Both must come from the loop row.
+		branch := task.Branch
+		if branch == "" {
+			slog.Warn("daemon: loop_fix task has empty Branch; falling back to placeholder",
+				"task_id", task.ID, "issue_id", task.IssueID, "loop_id", task.LoopID)
+			branch = placeholderBranch
+		}
+		iteration := task.Iteration
+		if iteration < 1 {
+			slog.Warn("daemon: loop_fix task has non-positive Iteration; defaulting to 1",
+				"task_id", task.ID, "issue_id", task.IssueID, "loop_id", task.LoopID, "iteration", iteration)
+			iteration = 1
+		}
 		ref := stages.TaskRef{
 			ID:         task.ID,
 			IssueID:    task.IssueID,
 			IssueTitle: task.IssueTitle,
-			Branch:     fmt.Sprintf("loop/%s", task.IssueID),
-			Iteration:  1,
+			Branch:     branch,
+			Iteration:  iteration,
 			WorkDir:    workDir,
 		}
 		p, err := stages.BuildFixPrompt(ref)

@@ -65,3 +65,12 @@ LIMIT 1000;
 SELECT count(*) > 0 AS has_in_flight FROM agent_task_queue
 WHERE loop_id = $1 AND task_type = $2
   AND status IN ('queued', 'dispatched', 'running');
+
+-- name: GetLoopBranchAndIteration :one
+-- Returns the branch_name and iteration for a loop. Used by the daemon
+-- claim handler to populate the per-stage prompts (review/fix need the
+-- develop stage's branch and the current iteration count). branch_name
+-- may be empty (e.g. before the develop stage has pushed a branch) and
+-- iteration may be 0 (e.g. the plan-stage bootstrap); both come back as
+-- valid nullable fields so callers can fall back to placeholders.
+SELECT branch_name, iteration FROM loops WHERE id = $1;
