@@ -15,6 +15,7 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/daemon/execenv"
 	"github.com/agentra-ai/agentra/server/internal/daemon/repocache"
 	"github.com/agentra-ai/agentra/server/internal/daemon/usage"
+	"github.com/agentra-ai/agentra/server/internal/loop/stages"
 	"github.com/agentra-ai/agentra/server/pkg/agent"
 )
 
@@ -907,7 +908,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 	// the same (agent, issue) pair. The work_dir path is stored in DB on
 	// task completion and passed back via PriorWorkDir on the next claim.
 
-	prompt := BuildPrompt(task)
+	prompt, systemPrompt, tools, maxTurns := buildPromptForStage(task.TaskType, task, env.WorkDir)
 
 	// Pass the daemon's auth credentials and context so the spawned agent CLI
 	// can call the Agentra API and the local daemon (e.g. `agentra repo checkout`).
@@ -951,8 +952,11 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 	session, err := backend.Execute(ctx, prompt, agent.ExecOptions{
 		Cwd:             env.WorkDir,
 		Model:           entry.Model,
+		SystemPrompt:    systemPrompt,
+		MaxTurns:        maxTurns,
 		Timeout:         d.cfg.AgentTimeout,
 		ResumeSessionID: task.PriorSessionID,
+		Tools:           tools,
 	})
 	if err != nil {
 		return TaskResult{}, err
@@ -1116,6 +1120,135 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 			errMsg = fmt.Sprintf("%s execution %s", provider, result.Status)
 		}
 		return TaskResult{Status: "blocked", Comment: errMsg}, nil
+	}
+}
+
+// buildPromptForStage returns the user prompt, system prompt, per-stage
+// tool list, and max turns for a given task_type. Falls through to the
+// legacy BuildPrompt for "standard" or any unknown type. Loop stages get
+// a stage-specific system prompt and turn budget. workDir is the
+// prepared execenv working directory, threaded into the TaskRef so stage
+// prompts can reference the live path.
+//
+// As of Task 15, Plan, Develop, Review, and Fix are wired. Other loop_*
+// types fall through to BuildPrompt. The tools slice is consumed by
+// agent.ExecOptions.Tools and plumbed into the spawned agent CLI — Claude
+// translates it to --allowedTools, while Codex and Opencode ignore it
+// (their JSON-RPC / CLI does not currently expose per-invocation tool
+// restrictions) and log a debug message.
+//
+// Branch/Iteration source: the server's claim handler (see
+// handler.ClaimTaskByRuntime) populates Task.Branch and Task.Iteration
+// from the loop row. Plan and Develop don't have a real branch yet
+// (Develop creates it; Plan runs first), so they fall back to a
+// "loop/<IssueID>" placeholder. Review and Fix must use the real branch
+// from the develop stage; an empty branch on those stages is a bug and
+// we log a warning but still fall back to the placeholder so the
+// executor doesn't crash.
+func buildPromptForStage(taskType string, task Task, workDir string) (prompt, systemPrompt string, tools []string, maxTurns int) {
+	if taskType == "" || taskType == "standard" {
+		return BuildPrompt(task), "", nil, 0
+	}
+	// placeholderBranch is the fallback branch name used by stages that
+	// don't have a real branch yet (plan, develop, or review/fix when
+	// the loop row's branch_name is empty). It's a deterministic
+	// derivation from the issue ID so the prompt is well-formed and
+	// human-readable in logs.
+	placeholderBranch := fmt.Sprintf("loop/%s", task.IssueID)
+	switch taskType {
+	case "loop_plan":
+		ref := stages.TaskRef{
+			ID:         task.ID,
+			IssueID:    task.IssueID,
+			IssueTitle: task.IssueTitle,
+			WorkDir:    workDir,
+		}
+		p, err := stages.BuildPlanPrompt(ref)
+		if err != nil {
+			slog.Warn("daemon: build plan prompt failed; falling back to standard prompt", "err", err, "task_type", taskType)
+			return BuildPrompt(task), "", nil, 0
+		}
+		return p.UserPrompt, p.SystemPrompt, p.Tools, p.MaxTurns
+	case "loop_develop":
+		// Develop creates the branch — pass a placeholder so the
+		// develop prompt references a name the agent will use.
+		ref := stages.TaskRef{
+			ID:         task.ID,
+			IssueID:    task.IssueID,
+			IssueTitle: task.IssueTitle,
+			Branch:     placeholderBranch,
+			Iteration:  1,
+			WorkDir:    workDir,
+		}
+		p, err := stages.BuildDevelopPrompt(ref)
+		if err != nil {
+			slog.Warn("daemon: build develop prompt failed; falling back to standard prompt", "err", err, "task_type", taskType)
+			return BuildPrompt(task), "", nil, 0
+		}
+		return p.UserPrompt, p.SystemPrompt, p.Tools, p.MaxTurns
+	case "loop_review":
+		// Review reads the develop stage's diff — it MUST reference the
+		// real branch from loops.branch_name. Fall back to the
+		// placeholder only if the server didn't populate Task.Branch
+		// (which would mean the loop row's branch_name is empty,
+		// itself a bug — develop should have set it).
+		branch := task.Branch
+		if branch == "" {
+			slog.Warn("daemon: loop_review task has empty Branch; falling back to placeholder",
+				"task_id", task.ID, "issue_id", task.IssueID, "loop_id", task.LoopID)
+			branch = placeholderBranch
+		}
+		iteration := task.Iteration
+		if iteration < 1 {
+			slog.Warn("daemon: loop_review task has non-positive Iteration; defaulting to 1",
+				"task_id", task.ID, "issue_id", task.IssueID, "loop_id", task.LoopID, "iteration", iteration)
+			iteration = 1
+		}
+		ref := stages.TaskRef{
+			ID:         task.ID,
+			IssueID:    task.IssueID,
+			IssueTitle: task.IssueTitle,
+			Branch:     branch,
+			Iteration:  iteration,
+			WorkDir:    workDir,
+		}
+		p, err := stages.BuildReviewPrompt(ref)
+		if err != nil {
+			slog.Warn("daemon: build review prompt failed; falling back to standard prompt", "err", err, "task_type", taskType)
+			return BuildPrompt(task), "", nil, 0
+		}
+		return p.UserPrompt, p.SystemPrompt, p.Tools, p.MaxTurns
+	case "loop_fix":
+		// Fix reuses the develop stage's branch and PR, and runs at the
+		// current iteration count. Both must come from the loop row.
+		branch := task.Branch
+		if branch == "" {
+			slog.Warn("daemon: loop_fix task has empty Branch; falling back to placeholder",
+				"task_id", task.ID, "issue_id", task.IssueID, "loop_id", task.LoopID)
+			branch = placeholderBranch
+		}
+		iteration := task.Iteration
+		if iteration < 1 {
+			slog.Warn("daemon: loop_fix task has non-positive Iteration; defaulting to 1",
+				"task_id", task.ID, "issue_id", task.IssueID, "loop_id", task.LoopID, "iteration", iteration)
+			iteration = 1
+		}
+		ref := stages.TaskRef{
+			ID:         task.ID,
+			IssueID:    task.IssueID,
+			IssueTitle: task.IssueTitle,
+			Branch:     branch,
+			Iteration:  iteration,
+			WorkDir:    workDir,
+		}
+		p, err := stages.BuildFixPrompt(ref)
+		if err != nil {
+			slog.Warn("daemon: build fix prompt failed; falling back to standard prompt", "err", err, "task_type", taskType)
+			return BuildPrompt(task), "", nil, 0
+		}
+		return p.UserPrompt, p.SystemPrompt, p.Tools, p.MaxTurns
+	default:
+		return BuildPrompt(task), "", nil, 0
 	}
 }
 

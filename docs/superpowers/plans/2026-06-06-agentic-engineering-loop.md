@@ -92,8 +92,8 @@ Create `server/migrations/038_loops.up.sql`:
 
 CREATE TABLE loops (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    issue_id UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    issue_id UUID NOT NULL REFERENCES issue(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
 
     status TEXT NOT NULL DEFAULT 'pending'
         CHECK (status IN ('pending', 'running', 'paused', 'done', 'failed', 'cancelled')),

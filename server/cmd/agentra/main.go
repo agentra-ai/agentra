@@ -71,6 +71,7 @@ func init() {
 	rootCmd.AddCommand(skillCmd)
 	rootCmd.AddCommand(runtimeCmd)
 	rootCmd.AddCommand(gitCmd)
+	rootCmd.AddCommand(loopCmd)
 }
 
 func main() {

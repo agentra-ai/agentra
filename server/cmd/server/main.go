@@ -60,16 +60,22 @@ func main() {
 	registerActivityListeners(bus, queries)
 	registerNotificationListeners(bus, queries)
 
-	r := NewRouter(pool, hub, bus)
+	// Background sweepers and the loop coordinator. runLoopCoordinator returns
+	// the Coordinator it constructs so we can hand it to the router/handler
+	// for the synchronous CreateLoop -> StartLoop path. The coordinator
+	// runs RestoreOnStartup eagerly inside the constructor's caller, so
+	// building the router afterwards guarantees the DB restore completes
+	// before any HTTP request can hit CreateLoop.
+	sweepCtx, sweepCancel := context.WithCancel(context.Background())
+	go runRuntimeSweeper(sweepCtx, queries, bus)
+	loopCoord := runLoopCoordinator(sweepCtx, queries, bus)
+
+	r := newRouter(pool, hub, bus, loopCoord)
 
 	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: r,
 	}
-
-	// Start background sweeper to mark stale runtimes as offline.
-	sweepCtx, sweepCancel := context.WithCancel(context.Background())
-	go runRuntimeSweeper(sweepCtx, queries, bus)
 
 	// Graceful shutdown
 	go func() {

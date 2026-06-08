@@ -33,23 +33,7 @@ func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 
-	args := []string{
-		"--output-format", "stream-json",
-		"--verbose",
-		"--permission-mode", "bypassPermissions",
-	}
-	if opts.Model != "" {
-		args = append(args, "--model", opts.Model)
-	}
-	if opts.MaxTurns > 0 {
-		args = append(args, "--max-turns", fmt.Sprintf("%d", opts.MaxTurns))
-	}
-	if opts.SystemPrompt != "" {
-		args = append(args, "--append-system-prompt", opts.SystemPrompt)
-	}
-	if opts.ResumeSessionID != "" {
-		args = append(args, "--resume", opts.ResumeSessionID)
-	}
+	args := buildClaudeArgs(opts, execPath)
 	args = append(args, "-p", prompt)
 
 	cmd := exec.CommandContext(runCtx, execPath, args...)
@@ -259,6 +243,75 @@ func (b *claudeBackend) handleControlRequest(msg claudeSDKMessage, stdin interfa
 	}
 }
 
+// agentraToClaudeTools maps agentra custom tool names (exposed via the system
+// prompt, executed as HTTP callbacks to the daemon) to the Claude-native tool
+// names that the --allowedTools flag understands. Multiple agentra tools may
+// map to the same Claude tool (e.g. all git operations use Bash). Pass-through
+// for names that already match a Claude tool.
+var agentraToClaudeTools = map[string][]string{
+	"read_file":       {"Read"},
+	"write_file":      {"Write", "Edit"},
+	"search_code":     {"Glob", "Grep"},
+	"run_command":     {"Bash"},
+	"run_test":        {"Bash"},
+	"git_status":      {"Bash"},
+	"git_diff":        {"Bash"},
+	"git_commit":      {"Bash"},
+	"git_push":        {"Bash"},
+	"create_branch":   {"Bash"},
+	"github_pr_create": {"Bash"},
+}
+
+// translateToClaudeTools converts a list of agentra tool names to the
+// corresponding set of Claude-native tool names for --allowedTools.
+// Unknown names are passed through unchanged so that Claude-native names
+// (Read, Bash, etc.) work as-is.
+func translateToClaudeTools(tools []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, t := range tools {
+		if mapped, ok := agentraToClaudeTools[t]; ok {
+			for _, m := range mapped {
+				if !seen[m] {
+					seen[m] = true
+					out = append(out, m)
+				}
+			}
+		} else if !seen[t] {
+			seen[t] = true
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// buildClaudeArgs assembles the CLI argument list for a single claude invocation.
+// The execPath parameter is the path to the claude binary (unused for arg
+// construction, but kept for symmetry with the other providers' helpers).
+func buildClaudeArgs(opts ExecOptions, execPath string) []string {
+	args := []string{
+		"--output-format", "stream-json",
+		"--verbose",
+		"--permission-mode", "bypassPermissions",
+	}
+	if opts.Model != "" {
+		args = append(args, "--model", opts.Model)
+	}
+	if opts.MaxTurns > 0 {
+		args = append(args, "--max-turns", fmt.Sprintf("%d", opts.MaxTurns))
+	}
+	if opts.SystemPrompt != "" {
+		args = append(args, "--append-system-prompt", opts.SystemPrompt)
+	}
+	if opts.ResumeSessionID != "" {
+		args = append(args, "--resume", opts.ResumeSessionID)
+	}
+	if len(opts.Tools) > 0 {
+		args = append(args, "--allowedTools", strings.Join(translateToClaudeTools(opts.Tools), ","))
+	}
+	return args
+}
+
 // ── Claude SDK JSON types ──
 
 type claudeSDKMessage struct {
@@ -287,7 +340,7 @@ type claudeLogEntry struct {
 }
 
 type claudeMessageContent struct {
-	Role    string             `json:"role"`
+	Role    string               `json:"role"`
 	Content []claudeContentBlock `json:"content"`
 }
 

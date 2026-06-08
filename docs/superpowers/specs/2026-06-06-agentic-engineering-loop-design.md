@@ -194,8 +194,8 @@ v1 把它做成了独立的"loop"子系统(新包 + 3 张新表 + 新 worker + �
 ```sql
 CREATE TABLE loops (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  issue_id UUID NOT NULL REFERENCES issues(id),
-  workspace_id UUID NOT NULL REFERENCES workspaces(id),
+  issue_id UUID NOT NULL REFERENCES issue(id),
+  workspace_id UUID NOT NULL REFERENCES workspace(id),
 
   status TEXT NOT NULL DEFAULT 'pending',
   current_stage TEXT,                              -- plan/develop/review/fix

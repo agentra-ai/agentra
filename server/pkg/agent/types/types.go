@@ -46,6 +46,14 @@ type ExecOptions struct {
 	MaxTurns        int
 	Timeout         time.Duration
 	ResumeSessionID string // if non-empty, resume a previous agent session
+
+	// Tools restricts the agent's tool set to the given list. When empty (the
+	// default for non-loop tasks), the agent CLI uses its full default tool
+	// set. When non-empty, behavior depends on the provider:
+	//   - Claude: passed as --allowedTools (comma-joined)
+	//   - Codex:  included in the turn/start JSON-RPC params (provider-specific)
+	//   - Opencode: included in the run command flags (provider-specific)
+	Tools []string
 }
 
 // Result is the final outcome after an agent session completes.
@@ -62,8 +70,8 @@ type Result struct {
 
 // TokenUsage holds token consumption metrics from an API provider.
 type TokenUsage struct {
-	InputTokens     int64 `json:"input_tokens"`
-	OutputTokens    int64 `json:"output_tokens"`
-	CacheReadTokens int64 `json:"cache_read_tokens,omitempty"`
+	InputTokens      int64 `json:"input_tokens"`
+	OutputTokens     int64 `json:"output_tokens"`
+	CacheReadTokens  int64 `json:"cache_read_tokens,omitempty"`
 	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
 }

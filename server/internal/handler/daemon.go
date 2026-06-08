@@ -311,7 +311,27 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	slog.Info("task claimed by runtime", "task_id", uuidToString(task.ID), "runtime_id", runtimeID, "agent_id", uuidToString(task.AgentID), "prior_session", resp.PriorSessionID)
+	// For loop tasks, look up the loop's branch_name and iteration so the
+	// daemon can build per-stage prompts that reference the real branch
+	// (review/fix) and the current fix iteration (fix). The loop row is
+	// the source of truth — `agent_task_queue` does not carry these
+	// values directly. If the loop is missing (e.g. deleted between
+	// enqueue and claim), the daemon's buildPromptForStage falls back to
+	// a placeholder and logs a warning.
+	if task.LoopID.Valid {
+		loopRef, err := h.Queries.GetLoopBranchAndIteration(r.Context(), task.LoopID)
+		if err != nil {
+			slog.Warn("claim: failed to load loop branch/iteration",
+				"task_id", uuidToString(task.ID), "loop_id", uuidToString(task.LoopID), "error", err)
+		} else {
+			if loopRef.BranchName.Valid {
+				resp.Branch = loopRef.BranchName.String
+			}
+			resp.Iteration = int(loopRef.Iteration)
+		}
+	}
+
+	slog.Info("task claimed by runtime", "task_id", uuidToString(task.ID), "runtime_id", runtimeID, "agent_id", uuidToString(task.AgentID), "prior_session", resp.PriorSessionID, "task_type", resp.TaskType, "branch", resp.Branch, "iteration", resp.Iteration)
 	writeJSON(w, http.StatusOK, map[string]any{"task": resp})
 }
 

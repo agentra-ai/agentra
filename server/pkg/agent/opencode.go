@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"time"
@@ -32,19 +33,10 @@ func (b *opencodeBackend) Execute(ctx context.Context, prompt string, opts ExecO
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 
-	args := []string{"run", "--format", "json"}
-	if opts.Model != "" {
-		args = append(args, "--model", opts.Model)
-	}
-	if opts.SystemPrompt != "" {
-		args = append(args, "--prompt", opts.SystemPrompt)
-	}
 	if opts.MaxTurns > 0 {
 		b.cfg.Logger.Warn("opencode does not support --max-turns; ignoring", "maxTurns", opts.MaxTurns)
 	}
-	if opts.ResumeSessionID != "" {
-		args = append(args, "--session", opts.ResumeSessionID)
-	}
+	args := buildOpencodeArgs(opts, execPath)
 	args = append(args, prompt)
 
 	cmd := exec.CommandContext(runCtx, execPath, args...)
@@ -109,6 +101,45 @@ func (b *opencodeBackend) Execute(ctx context.Context, prompt string, opts ExecO
 	}()
 
 	return &Session{Messages: msgCh, Result: resCh}, nil
+}
+
+// buildOpencodeArgs assembles the CLI argument list for a single opencode
+// invocation. The prompt is NOT included — the caller appends it after
+// running the helper, mirroring buildClaudeArgs.
+//
+// As of the opencode CLI version this code targets, `opencode run` does
+// not expose a per-invocation tool restriction flag (verified against
+// `opencode run --help`). Tool sets are configured via the agent config
+// or `--agent` flag, not via the run command itself.
+//
+// Plumbing is in place: when opencode grows a per-invocation tool
+// restriction flag, the only change needed is inside this function. For
+// now opts.Tools is logged at debug level and ignored so the agent falls
+// back to the full default tool set.
+//
+// Note: opts.MaxTurns is intentionally NOT handled here — the caller
+// (Execute) emits a warning when it's set, because opencode does not
+// support it and we want a noisy log on the way through, not a silent
+// field in the helper.
+func buildOpencodeArgs(opts ExecOptions, execPath string) []string {
+	args := []string{"run", "--format", "json"}
+	if opts.Model != "" {
+		args = append(args, "--model", opts.Model)
+	}
+	if opts.SystemPrompt != "" {
+		args = append(args, "--prompt", opts.SystemPrompt)
+	}
+	if opts.ResumeSessionID != "" {
+		args = append(args, "--session", opts.ResumeSessionID)
+	}
+	if len(opts.Tools) > 0 {
+		// Top-level helper has no receiver; fall back to slog.Default() so the
+		// log line is still emitted. The per-backend Execute path uses the
+		// backend's own logger.
+		slog.Default().Debug("opencode: per-stage tool restrictions requested but opencode run does not expose a per-invocation tool flag; ignoring",
+			"tools", opts.Tools)
+	}
+	return args
 }
 
 // ── Event handlers ──

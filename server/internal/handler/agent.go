@@ -127,6 +127,10 @@ type AgentTaskResponse struct {
 	PriorWorkDir     string         `json:"prior_work_dir,omitempty"`     // work_dir from a previous task on same issue
 	TriggerCommentID *string        `json:"trigger_comment_id,omitempty"` // comment that triggered this task
 	RuntimeType      string         `json:"runtime_type"` // "local" or "cloud"
+	TaskType         string         `json:"task_type,omitempty"`          // "standard" (default) or loop_plan/develop/review/fix
+	LoopID           string         `json:"loop_id,omitempty"`            // set when TaskType starts with "loop_"; identifies the loop row in `loops`
+	Branch           string         `json:"branch,omitempty"`             // for loop_review/loop_fix: the develop stage's branch from loops.branch_name
+	Iteration        int            `json:"iteration,omitempty"`          // for loop_fix: the current fix iteration from loops.iteration
 }
 
 // TaskAgentData holds agent info included in claim responses so the daemon
@@ -158,6 +162,8 @@ func taskToResponse(t db.AgentTaskQueue) AgentTaskResponse {
 		CreatedAt:        timestampToString(t.CreatedAt),
 		TriggerCommentID: uuidToPtr(t.TriggerCommentID),
 		RuntimeType:      t.RuntimeType,
+		TaskType:         t.TaskType,
+		LoopID:           uuidToString(t.LoopID),
 	}
 }
 

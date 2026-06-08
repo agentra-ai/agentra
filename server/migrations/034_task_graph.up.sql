@@ -1,9 +1,9 @@
 -- 034_task_graph.up.sql
 CREATE TABLE task_graph_nodes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    issue_id UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
-    agent_id UUID REFERENCES agents(id),
+    workspace_id UUID NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
+    issue_id UUID NOT NULL REFERENCES issue(id) ON DELETE CASCADE,
+    agent_id UUID REFERENCES agent(id),
     node_type TEXT NOT NULL CHECK (node_type IN ('root','planner','executor','synthesis')),
     status TEXT NOT NULL DEFAULT 'pending'
         CHECK (status IN ('pending','running','completed','failed','blocked')),

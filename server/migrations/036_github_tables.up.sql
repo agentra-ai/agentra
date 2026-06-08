@@ -1,6 +1,6 @@
 CREATE TABLE github_installations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
     installation_id BIGINT NOT NULL,
     account_login TEXT NOT NULL,
     account_type TEXT NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE github_installations (
 
 CREATE TABLE github_issue_links (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    issue_id UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+    issue_id UUID NOT NULL REFERENCES issue(id) ON DELETE CASCADE,
     repository TEXT NOT NULL,
     pr_number INT,
     commit_sha TEXT,
