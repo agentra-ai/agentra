@@ -46,7 +46,8 @@
     "invalidCallback": "Invalid callback URL",
     "invalidOrExpiredCode": "Invalid or expired code",
     "failedToSendCode": "Failed to send code. Make sure the server is running.",
-    "tagline": "Turn coding agents into real teammates"
+    "tagline": "Turn coding agents into real teammates",
+    "back": "Back"
   },
   "issues": {
     "title": "Issues",

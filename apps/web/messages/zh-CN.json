@@ -46,7 +46,8 @@
     "invalidCallback": "无效的回调地址",
     "invalidOrExpiredCode": "验证码无效或已过期",
     "failedToSendCode": "发送验证码失败，请确保服务器正在运行。",
-    "tagline": "将编码代理变成真正的团队成员"
+    "tagline": "将编码代理变成真正的团队成员",
+    "back": "返回"
   },
   "issues": {
     "title": "问题",
