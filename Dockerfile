@@ -5,10 +5,8 @@ RUN apk add --no-cache git
 
 WORKDIR /src
 
-COPY server/go.mod server/go.sum ./server/
-RUN cd server && go mod download
-
 COPY server/ ./server/
+RUN cd server && go mod download
 
 ARG VERSION=dev
 ARG COMMIT=unknown
