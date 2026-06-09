@@ -48,6 +48,8 @@ services:
 
   server:
     container_name: agentra-server
+    labels:
+      dev.orbstack.domains: server.agentra.orb.local:8080
     build:
       context: .
       target: server-runtime
@@ -94,6 +96,8 @@ services:
 
   web:
     container_name: agentra-web
+    labels:
+      dev.orbstack.domains: web.agentra.orb.local:3000
     build:
       context: .
       target: web-runtime
