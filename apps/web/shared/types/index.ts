@@ -32,3 +32,4 @@ export type { IssueSubscriber } from "./subscriber";
 export type * from "./events";
 export type * from "./api";
 export type { Attachment } from "./attachment";
+export type { Loop, LoopStatus, LoopStage, StartLoopRequest } from "./loop";

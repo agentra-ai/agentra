@@ -14,6 +14,7 @@ import {
   Link2,
   MoreHorizontal,
   PanelRight,
+  Play,
   Trash2,
   UserMinus,
   Users,
@@ -69,6 +70,7 @@ import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useIssueStore } from "@/features/issues";
+import { StartLoopDialog } from "@/features/loops";
 import { useIssueTimeline } from "@/features/issues/hooks/use-issue-timeline";
 import { useIssueReactions } from "@/features/issues/hooks/use-issue-reactions";
 import { useIssueSubscribers } from "@/features/issues/hooks/use-issue-subscribers";
@@ -197,6 +199,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(true);
+  const [startLoopOpen, setStartLoopOpen] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
@@ -207,6 +210,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const [issueLoading, setIssueLoading] = useState(!issue);
   const t = useTranslations("issues");
   const tCommon = useTranslations("common");
+  const tLoops = useTranslations("loops");
 
   // If issue isn't in the store yet, fetch and upsert it
   useEffect(() => {
@@ -442,6 +446,17 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                 </Tooltip>
               </div>
             )}
+            {(issue.status === "todo" || issue.status === "in_progress") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground gap-1"
+                onClick={() => setStartLoopOpen(true)}
+              >
+                <Play className="h-3.5 w-3.5" />
+                {tLoops("startLoop")}
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -629,6 +644,15 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+
+            <StartLoopDialog
+              open={startLoopOpen}
+              onOpenChange={setStartLoopOpen}
+              issueId={id}
+              onSuccess={(loop) => {
+                router.push(`/loops/${loop.id}`);
+              }}
+            />
           </div>
 
         {/* Content — scrollable */}

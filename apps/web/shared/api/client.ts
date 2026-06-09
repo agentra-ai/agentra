@@ -148,6 +148,16 @@ export class ApiClient {
     });
   }
 
+  async get<T>(path: string): Promise<T> {
+    return this.fetch<T>(path);
+  }
+
+  async post<T>(path: string, body?: unknown): Promise<T> {
+    return this.fetch<T>(path, {
+      method: "POST",
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  }
   async verifyCode(email: string, code: string): Promise<LoginResponse> {
     return this.fetch("/auth/verify-code", {
       method: "POST",

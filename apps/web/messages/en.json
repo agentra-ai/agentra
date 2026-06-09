@@ -452,5 +452,61 @@
     "repositoriesDescription": "GitHub repositories associated with this workspace. Agents use these to clone and work on code.",
     "repositoryPlaceholder": "git@github.com:owner/repo.git",
     "descriptionPlaceholder": "Description (e.g. Go backend + Next.js frontend)"
+  },
+  "loops": {
+    "title": "Loops",
+    "startLoop": "Run Loop",
+    "empty": "No loops yet",
+    "emptyHint": "Start one from an issue to automate the plan, develop, review, and fix cycle.",
+    "pr": "PR",
+    "iterationCounter": "Iteration {current} of {max}",
+    "failureReason": "Failure reason",
+    "status": {
+      "pending": "Pending",
+      "running": "Running",
+      "paused": "Paused",
+      "done": "Done",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "stage": {
+      "plan": "Plan",
+      "develop": "Develop",
+      "review": "Review",
+      "fix": "Fix"
+    },
+    "actions": {
+      "pause": "Pause",
+      "resume": "Resume",
+      "cancel": "Cancel"
+    },
+    "table": {
+      "id": "ID",
+      "issue": "Issue",
+      "status": "Status",
+      "stage": "Stage",
+      "iteration": "Iteration",
+      "pr": "PR",
+      "created": "Created"
+    },
+    "info": {
+      "issue": "Issue",
+      "branch": "Branch",
+      "pr": "Pull request",
+      "agent": "Agent",
+      "started": "Started",
+      "completed": "Completed",
+      "created": "Created"
+    },
+    "dialog": {
+      "title": "Start Agentic Loop",
+      "description": "Choose an agent and how many iterations to allow.",
+      "agent": "Agent",
+      "agentPlaceholder": "Select an agent",
+      "agentRequired": "Please select an agent",
+      "maxIterations": "Max iterations",
+      "invalidIterations": "Max iterations must be between 1 and 10",
+      "submit": "Start Loop"
+    }
   }
 }

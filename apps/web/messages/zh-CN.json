@@ -452,5 +452,61 @@
     "repositoriesDescription": "与工作空间关联的 GitHub 仓库。代理使用这些来克隆和处理代码。",
     "repositoryPlaceholder": "git@github.com:owner/repo.git",
     "descriptionPlaceholder": "描述（例如：Go 后端 + Next.js 前端）"
+  },
+  "loops": {
+    "title": "循环",
+    "startLoop": "运行循环",
+    "empty": "暂无循环",
+    "emptyHint": "从一个问题启动循环，自动完成规划、开发、审核和修复。",
+    "pr": "PR",
+    "iterationCounter": "迭代 {current} / {max}",
+    "failureReason": "失败原因",
+    "status": {
+      "pending": "等待中",
+      "running": "运行中",
+      "paused": "已暂停",
+      "done": "已完成",
+      "failed": "失败",
+      "cancelled": "已取消"
+    },
+    "stage": {
+      "plan": "规划",
+      "develop": "开发",
+      "review": "审核",
+      "fix": "修复"
+    },
+    "actions": {
+      "pause": "暂停",
+      "resume": "继续",
+      "cancel": "取消"
+    },
+    "table": {
+      "id": "ID",
+      "issue": "问题",
+      "status": "状态",
+      "stage": "阶段",
+      "iteration": "迭代",
+      "pr": "PR",
+      "created": "创建于"
+    },
+    "info": {
+      "issue": "问题",
+      "branch": "分支",
+      "pr": "拉取请求",
+      "agent": "代理",
+      "started": "开始于",
+      "completed": "完成于",
+      "created": "创建于"
+    },
+    "dialog": {
+      "title": "启动工程循环",
+      "description": "选择一个代理并设置允许的迭代次数。",
+      "agent": "代理",
+      "agentPlaceholder": "选择代理",
+      "agentRequired": "请选择代理",
+      "maxIterations": "最大迭代次数",
+      "invalidIterations": "最大迭代次数应在 1 到 10 之间",
+      "submit": "启动循环"
+    }
   }
 }

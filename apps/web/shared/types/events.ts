@@ -46,7 +46,12 @@ export type WSEventType =
   | "reaction:added"
   | "reaction:removed"
   | "issue_reaction:added"
-  | "issue_reaction:removed";
+  | "issue_reaction:removed"
+  | "loop:created"
+  | "loop:updated"
+  | "loop:stage_changed"
+  | "loop:completed"
+  | "loop:failed";
 
 export interface WSMessage<T = unknown> {
   type: WSEventType;
