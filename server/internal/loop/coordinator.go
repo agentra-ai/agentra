@@ -407,15 +407,25 @@ func (c *Coordinator) applyDecision(ctx context.Context, l *Loop, d Decision) er
 }
 
 func (c *Coordinator) createTaskForStage(ctx context.Context, l *Loop, d Decision) error {
+	// Resolve the agent for THIS stage: an override in loops.config.stage_agents
+	// wins; otherwise we fall back to loops.agent_id. The same id flows into
+	// both agent_id and runtime_id (via GetAgent), so review/develop can run
+	// on entirely different runtimes if the operator wired them up that way.
+	var stageOverride *string
+	if next := stageFromString(d.taskType); next != nil {
+		stageOverride = l.StageAgent(*next)
+	} else {
+		stageOverride = l.AgentID
+	}
 	agentID := pgtype.UUID{}
-	if l.AgentID != nil {
-		agentID = util.ParseUUID(*l.AgentID)
+	if stageOverride != nil {
+		agentID = util.ParseUUID(*stageOverride)
 	}
 	// agent_task_queue.runtime_id is NOT NULL (added in migration 004). Look it
 	// up from the agent row when we have one; otherwise the loop was created
 	// without an agent and CreateAgentTask will fail with a NOT NULL violation.
 	var runtimeID pgtype.UUID
-	if l.AgentID != nil {
+	if stageOverride != nil {
 		agent, err := c.queries.GetAgent(ctx, agentID)
 		if err != nil {
 			return fmt.Errorf("lookup agent for runtime_id: %w", err)

@@ -14,7 +14,10 @@ import (
 )
 
 // CreateLoop handles POST /api/loops.
-// Body: {"issue_id": "...", "max_iterations"?: int, "agent_id"?: "..."}.
+// Body: {"issue_id": "...", "max_iterations"?: int, "agent_id"?: "...",
+// "stage_agents"?: {"plan": "agent-uuid", "develop": "agent-uuid", ...}}.
+// stage_agents keys must be valid stages (plan, develop, review, fix); each
+// value overrides agent_id for that stage only.
 func (h *Handler) CreateLoop(w http.ResponseWriter, r *http.Request) {
 	workspaceID := resolveWorkspaceID(r)
 	if workspaceID == "" {
@@ -26,9 +29,10 @@ func (h *Handler) CreateLoop(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		IssueID       string  `json:"issue_id"`
-		MaxIterations *int    `json:"max_iterations"`
-		AgentID       *string `json:"agent_id"`
+		IssueID       string            `json:"issue_id"`
+		MaxIterations *int              `json:"max_iterations"`
+		AgentID       *string           `json:"agent_id"`
+		StageAgents   map[string]string `json:"stage_agents"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -47,12 +51,36 @@ func (h *Handler) CreateLoop(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "agent_id is required")
 		return
 	}
+	// Validate stage_agents keys against the known stage names so a typo
+	// (e.g. "develop_stage") fails loudly here instead of silently falling
+	// back to the default agent at run time.
+	for k := range req.StageAgents {
+		if !looppkg.Stage(k).IsValid() {
+			writeError(w, http.StatusBadRequest, "stage_agents: unknown stage "+k)
+			return
+		}
+	}
+
+	// Build the typed config blob from the stage_agents map. We don't
+	// preserve any other config keys here because the create path is the
+	// only writer — updates would go through a separate endpoint.
+	var configJSON []byte
+	if len(req.StageAgents) > 0 {
+		cfg := looppkg.LoopConfig{StageAgents: req.StageAgents}
+		buf, err := json.Marshal(cfg)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to encode stage_agents")
+			return
+		}
+		configJSON = buf
+	}
 
 	loop, err := h.LoopStore.CreateLoop(r.Context(), looppkg.CreateLoopInput{
 		IssueID:       req.IssueID,
 		WorkspaceID:   workspaceID,
 		MaxIterations: req.MaxIterations,
 		AgentID:       req.AgentID,
+		Config:        configJSON,
 	})
 	if err != nil {
 		slog.Warn("create loop failed", "error", err, "issue_id", req.IssueID, "workspace_id", workspaceID)

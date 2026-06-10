@@ -165,6 +165,28 @@ func (h *Handler) getWorkspaceMember(ctx context.Context, userID, workspaceID st
 	})
 }
 
+// listMembersQ is the minimal interface firstWorkspaceMember needs, so the
+// helper can be used from any path that has access to *db.Queries.
+type listMembersQ interface {
+	ListMembers(ctx context.Context, workspaceID pgtype.UUID) ([]db.Member, error)
+}
+
+// firstWorkspaceMember returns the user_id of the earliest-joined member,
+// which by convention is the workspace owner (created in the same transaction
+// as the workspace itself). Returns the zero UUID if the workspace has no
+// members yet or the query fails — callers should treat that as "use a null
+// owner" rather than aborting, since the agent.owner_id column is nullable.
+func firstWorkspaceMember(ctx context.Context, q listMembersQ, workspaceID pgtype.UUID) pgtype.UUID {
+	if !workspaceID.Valid {
+		return pgtype.UUID{}
+	}
+	members, err := q.ListMembers(ctx, workspaceID)
+	if err != nil || len(members) == 0 {
+		return pgtype.UUID{}
+	}
+	return members[0].UserID
+}
+
 func (h *Handler) requireWorkspaceMember(w http.ResponseWriter, r *http.Request, workspaceID, notFoundMsg string) (db.Member, bool) {
 	if workspaceID == "" {
 		handlerutil.WriteError(w, http.StatusBadRequest, "workspace_id is required")

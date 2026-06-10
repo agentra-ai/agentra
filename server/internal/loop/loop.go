@@ -3,7 +3,10 @@
 // Review → Fix stages implemented as agent_task_queue rows.
 package loop
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Status string
 
@@ -73,4 +76,43 @@ type Loop struct {
 	CompletedAt   *time.Time `json:"completed_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
+}
+
+// LoopConfig is the typed shape we expect inside the loops.config JSONB
+// column. It is intentionally a subset: unknown keys round-trip untouched
+// because we only marshal it back on writes, and reads go through the raw
+// Loop.Config bytes. StageAgents is a stage-name → agent-id map; entries
+// override Loop.AgentID for that one stage. Missing keys fall through to
+// Loop.AgentID.
+type LoopConfig struct {
+	StageAgents map[string]string `json:"stage_agents,omitempty"`
+}
+
+// ParseConfig decodes Loop.Config into a typed LoopConfig. A nil/empty
+// blob or any decode error returns the zero value — the loop is still
+// usable, callers just get fallback behavior (no per-stage overrides).
+// This is deliberately forgiving: corrupt config should not break the
+// state machine.
+func (l *Loop) ParseConfig() LoopConfig {
+	var cfg LoopConfig
+	if len(l.Config) == 0 {
+		return cfg
+	}
+	_ = json.Unmarshal(l.Config, &cfg)
+	return cfg
+}
+
+// StageAgent returns the agent id to use for a particular stage, honoring
+// any per-stage override in Loop.Config.stage_agents. Returns nil if no
+// override applies AND Loop.AgentID is nil — the coordinator treats that
+// as "use no agent" and the CreateAgentTask call will fail the NOT NULL
+// runtime_id check, which is the right loud failure mode.
+func (l *Loop) StageAgent(stage Stage) *string {
+	cfg := l.ParseConfig()
+	if cfg.StageAgents != nil {
+		if id, ok := cfg.StageAgents[string(stage)]; ok && id != "" {
+			return &id
+		}
+	}
+	return l.AgentID
 }

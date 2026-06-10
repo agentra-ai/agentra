@@ -246,3 +246,73 @@ func TestLoopListCmd_LimitDefaultIncluded(t *testing.T) {
 		t.Errorf("limit = %q, want %q", got, "50")
 	}
 }
+
+func TestParseStageAgents(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     []string
+		want    map[string]string
+		wantErr bool
+	}{
+		{
+			name: "single repeated flag, comma list",
+			raw:  []string{"plan=A,develop=B"},
+			want: map[string]string{"plan": "A", "develop": "B"},
+		},
+		{
+			name: "multiple --stages flag invocations",
+			raw:  []string{"plan=A", "develop=B", "review=C", "fix=D"},
+			want: map[string]string{"plan": "A", "develop": "B", "review": "C", "fix": "D"},
+		},
+		{
+			name: "trim whitespace around keys and values",
+			raw:  []string{" plan = A , develop = B "},
+			want: map[string]string{"plan": "A", "develop": "B"},
+		},
+		{
+			name:    "unknown stage rejected",
+			raw:     []string{"plan=A", "develop_stage=B"},
+			wantErr: true,
+		},
+		{
+			name:    "duplicate stage rejected",
+			raw:     []string{"plan=A", "plan=B"},
+			wantErr: true,
+		},
+		{
+			name:    "missing equals rejected",
+			raw:     []string{"planA"},
+			wantErr: true,
+		},
+		{
+			name:    "empty value rejected",
+			raw:     []string{"plan="},
+			wantErr: true,
+		},
+		{
+			name: "empty entries inside a comma list are skipped",
+			raw:  []string{"plan=A,,develop=B"},
+			want: map[string]string{"plan": "A", "develop": "B"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseStageAgents(tt.raw)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr = %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %d entries, want %d (%v)", len(got), len(tt.want), got)
+			}
+			for k, v := range tt.want {
+				if got[k] != v {
+					t.Errorf("got[%q] = %q, want %q", k, got[k], v)
+				}
+			}
+		})
+	}
+}

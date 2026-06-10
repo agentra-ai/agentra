@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -68,7 +69,9 @@ func init() {
 
 	// loop start
 	loopStartCmd.Flags().Int("max-iterations", 5, "Maximum fix iterations before failing the loop")
-	loopStartCmd.Flags().String("agent", "", "Agent ID to use for all stages of the loop")
+	loopStartCmd.Flags().String("agent", "", "Agent ID to use for all stages of the loop (fallback when --stages omits a stage)")
+	loopStartCmd.Flags().StringSlice("stages", nil,
+		"Per-stage agent overrides. Repeat or comma-separate, e.g. --stages plan=AGENT-UUID,develop=AGENT-UUID. Valid stages: plan, develop, review, fix.")
 	loopStartCmd.Flags().String("output", "json", "Output format: table or json")
 
 	// loop status
@@ -108,6 +111,14 @@ func runLoopStart(cmd *cobra.Command, args []string) error {
 	}
 	if agent, _ := cmd.Flags().GetString("agent"); agent != "" {
 		body["agent_id"] = agent
+	}
+	stagesRaw, _ := cmd.Flags().GetStringSlice("stages")
+	if len(stagesRaw) > 0 {
+		stageAgents, err := parseStageAgents(stagesRaw)
+		if err != nil {
+			return err
+		}
+		body["stage_agents"] = stageAgents
 	}
 
 	var result map[string]any
@@ -291,4 +302,41 @@ func buildLoopListQuery(cmd *cobra.Command, workspaceID string) string {
 		params.Set("limit", fmt.Sprintf("%d", v))
 	}
 	return params.Encode()
+}
+
+// validLoopStages is the closed set of stages the loop coordinator knows
+// about. Anything else from --stages is rejected client-side so users see
+// a friendly error before the request goes over the wire.
+var validLoopStages = map[string]struct{}{
+	"plan": {}, "develop": {}, "review": {}, "fix": {},
+}
+
+// parseStageAgents turns the raw --stages flag values (one per repetition
+// OR comma-separated) into a stage→agent map. Each entry must be
+// "stage=agent-id"; duplicates and unknown stages are rejected so the
+// loop doesn't silently start with a misconfigured pipeline.
+func parseStageAgents(raw []string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, entry := range raw {
+		for _, kv := range strings.Split(entry, ",") {
+			kv = strings.TrimSpace(kv)
+			if kv == "" {
+				continue
+			}
+			eq := strings.IndexByte(kv, '=')
+			if eq <= 0 || eq == len(kv)-1 {
+				return nil, fmt.Errorf("--stages: expected stage=agent-id, got %q", kv)
+			}
+			stage := strings.TrimSpace(kv[:eq])
+			agent := strings.TrimSpace(kv[eq+1:])
+			if _, ok := validLoopStages[stage]; !ok {
+				return nil, fmt.Errorf("--stages: unknown stage %q (valid: plan, develop, review, fix)", stage)
+			}
+			if _, dup := out[stage]; dup {
+				return nil, fmt.Errorf("--stages: stage %q specified more than once", stage)
+			}
+			out[stage] = agent
+		}
+	}
+	return out, nil
 }

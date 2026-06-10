@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
+	"github.com/agentra-ai/agentra/server/internal/agent/seed"
 	"github.com/agentra-ai/agentra/server/internal/service"
 	"github.com/agentra-ai/agentra/server/pkg/protocol"
 	"github.com/agentra-ai/agentra/server/pkg/redact"
@@ -158,6 +159,21 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 	// Reconcile agent statuses after daemon registration to handle the case
 	// where the daemon restarted and left agents in stale "working" status.
 	h.reconcileAgentsForWorkspace(req.WorkspaceID)
+
+	// Seed default specialist agents on first daemon registration. We use
+	// the first registered runtime as the runtime for the seeded agents —
+	// specialists don't pin a specific runtime, so any online one works.
+	// The first workspace member is used as the agent owner; if the
+	// workspace somehow has no members yet (shouldn't happen — workspace
+	// creation always creates an owner), the agents are inserted with a
+	// null owner, which the column allows.
+	if len(resp) > 0 {
+		owner := firstWorkspaceMember(r.Context(), h.Queries, parseUUID(req.WorkspaceID))
+		if _, err := seed.SeedForWorkspace(r.Context(), h.Queries, parseUUID(req.WorkspaceID), owner, parseUUID(resp[0].ID)); err != nil {
+			slog.Warn("seed default agents after daemon register failed",
+				"workspace_id", req.WorkspaceID, "error", err)
+		}
+	}
 
 	// Include workspace repos so the daemon can cache them locally.
 	var repos []RepoData
