@@ -60,6 +60,20 @@ describe("startLoop", () => {
     await startLoop({ issue_id: "issue-1", agent_id: "agent-1" });
     expect(mockPost).toHaveBeenCalledWith("/api/loops", { issue_id: "issue-1", agent_id: "agent-1" });
   });
+
+  it("forwards stage_agents in the POST body when provided", async () => {
+    mockPost.mockResolvedValueOnce(sampleLoop);
+    await startLoop({
+      issue_id: "issue-1",
+      agent_id: "agent-1",
+      stage_agents: { develop: "agent-2", review: "agent-3" },
+    });
+    expect(mockPost).toHaveBeenCalledWith("/api/loops", {
+      issue_id: "issue-1",
+      agent_id: "agent-1",
+      stage_agents: { develop: "agent-2", review: "agent-3" },
+    });
+  });
 });
 
 describe("pauseLoop", () => {
