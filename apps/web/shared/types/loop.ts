@@ -24,4 +24,5 @@ export interface StartLoopRequest {
   issue_id: string;
   agent_id: string;
   max_iterations?: number;
+  stage_agents?: Partial<Record<LoopStage, string>>;
 }
