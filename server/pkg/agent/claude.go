@@ -289,7 +289,13 @@ func translateToClaudeTools(tools []string) []string {
 // The execPath parameter is the path to the claude binary (unused for arg
 // construction, but kept for symmetry with the other providers' helpers).
 func buildClaudeArgs(opts ExecOptions, execPath string) []string {
+	// --bare skips SessionStart hooks and plugin sync. The agent runs in
+	// an automated loop where a host-installed SessionStart hook injects
+	// "you must use the Skill tool" instructions that override our
+	// stage-specific system prompt. The loop provides its own context,
+	// permissions, and skills via --allowedTools / --append-system-prompt.
 	args := []string{
+		"--bare",
 		"--output-format", "stream-json",
 		"--verbose",
 		"--permission-mode", "bypassPermissions",
