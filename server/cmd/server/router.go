@@ -202,6 +202,7 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 					r.Get("/", h.GetWorkspace)
 					r.Get("/members", h.ListMembersWithUser)
 					r.Post("/leave", h.LeaveWorkspace)
+					r.Post("/seed-specialists", h.SeedSpecialists)
 				})
 				// Admin-level access
 				r.Group(func(r chi.Router) {

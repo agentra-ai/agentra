@@ -52,15 +52,26 @@ var workspaceUnwatchCmd = &cobra.Command{
 	RunE:  runUnwatch,
 }
 
+var workspaceSeedSpecialistsCmd = &cobra.Command{
+	Use:   "seed-specialists [workspace-id]",
+	Short: "Backfill default specialist agent templates into a workspace",
+	Long: "Installs the default specialist agent templates (frontend engineer, backend engineer, etc.) into a workspace that " +
+		"missed the auto-seed on first daemon registration. Idempotent — already-present agents are skipped.",
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  runWorkspaceSeedSpecialists,
+}
+
 func init() {
 	workspaceCmd.AddCommand(workspaceListCmd)
 	workspaceCmd.AddCommand(workspaceGetCmd)
 	workspaceCmd.AddCommand(workspaceMembersCmd)
 	workspaceCmd.AddCommand(workspaceWatchCmd)
 	workspaceCmd.AddCommand(workspaceUnwatchCmd)
+	workspaceCmd.AddCommand(workspaceSeedSpecialistsCmd)
 
 	workspaceGetCmd.Flags().String("output", "json", "Output format: table or json")
 	workspaceMembersCmd.Flags().String("output", "table", "Output format: table or json")
+	workspaceSeedSpecialistsCmd.Flags().String("output", "json", "Output format: table or json")
 }
 
 func runWorkspaceList(cmd *cobra.Command, _ []string) error {
@@ -269,4 +280,46 @@ func runUnwatch(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "Stopped watching workspace %s\n", workspaceID)
 	return nil
+}
+
+func runWorkspaceSeedSpecialists(cmd *cobra.Command, args []string) error {
+	if err := requireAuth(cmd); err != nil {
+		return err
+	}
+	wsID := workspaceIDFromArgs(cmd, args)
+	if wsID == "" {
+		return fmt.Errorf("workspace ID is required: pass as argument or set AGENTRA_WORKSPACE_ID")
+	}
+
+	client, err := newAPIClient(cmd)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var resp struct {
+		Created []string `json:"created"`
+		Skipped []string `json:"skipped"`
+	}
+	if err := client.PostJSON(ctx, "/api/workspaces/"+wsID+"/seed-specialists", nil, &resp); err != nil {
+		return fmt.Errorf("seed specialists: %w", err)
+	}
+
+	output, _ := cmd.Flags().GetString("output")
+	switch output {
+	case "table":
+		w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(w, "KIND\tSLUG")
+		for _, slug := range resp.Created {
+			fmt.Fprintf(w, "created\t%s\n", slug)
+		}
+		for _, slug := range resp.Skipped {
+			fmt.Fprintf(w, "skipped\t%s\n", slug)
+		}
+		return w.Flush()
+	default:
+		return cli.PrintJSON(os.Stdout, resp)
+	}
 }
