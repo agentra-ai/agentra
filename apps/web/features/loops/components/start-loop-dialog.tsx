@@ -24,7 +24,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useWorkspaceStore } from "@/features/workspace";
 import { useStartLoop } from "../hooks";
-import type { Loop } from "@/shared/types/loop";
+import type { Loop, LoopStage, StartLoopRequest } from "@/shared/types/loop";
 
 interface StartLoopDialogProps {
   open: boolean;
@@ -33,12 +33,18 @@ interface StartLoopDialogProps {
   onSuccess?: (loop: Loop) => void;
 }
 
+type StageOverrides = Partial<Record<LoopStage, string>>;
+
+const STAGE_ORDER: LoopStage[] = ["plan", "develop", "review", "fix"];
+
 export function StartLoopDialog({ open, onOpenChange, issueId, onSuccess }: StartLoopDialogProps) {
   const t = useTranslations("loops");
+  const tStage = useTranslations("loops.stage");
   const tCommon = useTranslations("common");
   const agents = useWorkspaceStore((s) => s.agents);
   const activeAgents = useMemo(() => agents.filter((a) => !a.archived_at), [agents]);
   const [agentId, setAgentId] = useState<string>("");
+  const [stageOverrides, setStageOverrides] = useState<StageOverrides>({});
   const [maxIterations, setMaxIterations] = useState<string>("5");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,10 +53,16 @@ export function StartLoopDialog({ open, onOpenChange, issueId, onSuccess }: Star
   useEffect(() => {
     if (open) {
       setAgentId(activeAgents[0]?.id ?? "");
+      setStageOverrides({});
       setMaxIterations("5");
       setError(null);
     }
   }, [open, activeAgents]);
+
+  const defaultAgentName = useMemo(
+    () => activeAgents.find((a) => a.id === agentId)?.name ?? "",
+    [activeAgents, agentId],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,8 +77,23 @@ export function StartLoopDialog({ open, onOpenChange, issueId, onSuccess }: Star
     }
     setSubmitting(true);
     setError(null);
+
+    const cleaned: StageOverrides = {};
+    for (const [k, v] of Object.entries(stageOverrides)) {
+      if (v) cleaned[k as LoopStage] = v;
+    }
+
+    const body: StartLoopRequest = {
+      issue_id: issueId,
+      agent_id: agentId,
+      max_iterations: parsed,
+    };
+    if (Object.keys(cleaned).length > 0) {
+      body.stage_agents = cleaned;
+    }
+
     try {
-      const loop = await startLoop({ issue_id: issueId, agent_id: agentId, max_iterations: parsed });
+      const loop = await startLoop(body);
       onOpenChange(false);
       onSuccess?.(loop);
     } catch (e) {
@@ -102,6 +129,43 @@ export function StartLoopDialog({ open, onOpenChange, issueId, onSuccess }: Star
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>{t("dialog.perStageOverrides")}</Label>
+              {STAGE_ORDER.map((stage) => (
+                <div key={stage} className="space-y-1">
+                  <Label htmlFor={`loop-stage-${stage}`} className="text-xs text-muted-foreground">
+                    {tStage(stage)}
+                  </Label>
+                  <Select
+                    value={stageOverrides[stage] ?? ""}
+                    onValueChange={(v) =>
+                      setStageOverrides((prev) => {
+                        const next = { ...prev };
+                        if (v) next[stage] = v;
+                        else delete next[stage];
+                        return next;
+                      })
+                    }
+                  >
+                    <SelectTrigger id={`loop-stage-${stage}`} className="w-full">
+                      <SelectValue
+                        placeholder={t("dialog.stageOverridePlaceholder", {
+                          agent: defaultAgentName || t("dialog.agent"),
+                        })}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeAgents.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
             </div>
 
             <div className="space-y-1.5">
