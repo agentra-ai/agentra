@@ -4,7 +4,7 @@ import { useEffect, useCallback } from "react";
 import * as loopsApi from "@/shared/api/loops";
 import { useLoopStore } from "./store";
 import { useWSEvent } from "@/features/realtime";
-import type { Loop } from "@/shared/types/loop";
+import type { Loop, StartLoopRequest } from "@/shared/types/loop";
 
 function isLoop(value: unknown): value is Loop {
   if (typeof value !== "object" || value === null) return false;
@@ -81,7 +81,7 @@ export function useStartLoop() {
   const upsertLoop = useLoopStore((s) => s.upsertLoop);
   const setLoops = useLoopStore((s) => s.setLoops);
 
-  return useCallback(async (input: { issue_id: string; agent_id: string; max_iterations?: number }): Promise<Loop> => {
+  return useCallback(async (input: StartLoopRequest): Promise<Loop> => {
     const loop = await loopsApi.startLoop(input);
     upsertLoop(loop);
     loopsApi.listLoops()
