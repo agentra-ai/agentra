@@ -506,7 +506,9 @@
       "agentRequired": "请选择代理",
       "maxIterations": "最大迭代次数",
       "invalidIterations": "最大迭代次数应在 1 到 10 之间",
-      "submit": "启动循环"
+      "submit": "启动循环",
+      "perStageOverrides": "按阶段覆盖",
+      "stageOverridePlaceholder": "使用默认 ({agent})"
     }
   }
 }

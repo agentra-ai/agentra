@@ -506,7 +506,9 @@
       "agentRequired": "Please select an agent",
       "maxIterations": "Max iterations",
       "invalidIterations": "Max iterations must be between 1 and 10",
-      "submit": "Start Loop"
+      "submit": "Start Loop",
+      "perStageOverrides": "Per-stage overrides",
+      "stageOverridePlaceholder": "Use default ({agent})"
     }
   }
 }
