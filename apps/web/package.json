@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "check-i18n": "node scripts/check-i18n.mjs",
+    "predev": "pnpm run check-i18n",
+    "prebuild": "pnpm run check-i18n",
     "dev": "sh -c 'next dev --port \"${FRONTEND_PORT:-3000}\"'",
     "build": "next build",
     "start": "next start",
