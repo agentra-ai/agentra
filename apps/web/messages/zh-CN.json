@@ -84,8 +84,10 @@
     "profile": "个人资料",
     "appearance": "外观",
     "tokens": "API 令牌",
+    "memory": "记忆",
     "general": "通用",
     "repositories": "仓库",
+    "myAccount": "我的账号",
     "language": "语言",
     "languageDescription": "选择您的首选语言",
     "theme": "主题",
@@ -93,6 +95,17 @@
     "light": "浅色",
     "dark": "深色",
     "system": "跟随系统"
+  },
+  "memory": {
+    "searchPlaceholder": "搜索记忆...",
+    "filter": {
+      "all": "全部",
+      "learnings": "学习",
+      "results": "结果",
+      "context": "上下文",
+      "patterns": "模式"
+    },
+    "empty": "暂无记忆。"
   },
   "navigation": {
     "dashboard": "仪表盘",

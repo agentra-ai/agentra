@@ -1,6 +1,6 @@
 "use client";
 
-import { User, Palette, Key, Settings, Users, FolderGit2 } from "lucide-react";
+import { User, Palette, Key, Settings, Users, FolderGit2, Brain } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useWorkspaceStore } from "@/features/workspace";
 import { AccountTab } from "./_components/account-tab";
@@ -9,11 +9,13 @@ import { TokensTab } from "./_components/tokens-tab";
 import { WorkspaceTab } from "./_components/workspace-tab";
 import { MembersTab } from "./_components/members-tab";
 import { RepositoriesTab } from "./_components/repositories-tab";
+import { MemoryTab } from "./_components/memory-tab";
 
 const accountTabs = [
   { value: "profile", label: "Profile", icon: User },
   { value: "appearance", label: "Appearance", icon: Palette },
   { value: "tokens", label: "API Tokens", icon: Key },
+  { value: "memory", label: "Memory", icon: Brain },
 ];
 
 const workspaceTabs = [
@@ -61,6 +63,7 @@ export default function SettingsPage() {
           <TabsContent value="profile"><AccountTab /></TabsContent>
           <TabsContent value="appearance"><AppearanceTab /></TabsContent>
           <TabsContent value="tokens"><TokensTab /></TabsContent>
+          <TabsContent value="memory"><MemoryTab /></TabsContent>
           <TabsContent value="workspace"><WorkspaceTab /></TabsContent>
           <TabsContent value="repositories"><RepositoriesTab /></TabsContent>
           <TabsContent value="members"><MembersTab /></TabsContent>

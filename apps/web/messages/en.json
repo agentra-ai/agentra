@@ -84,8 +84,10 @@
     "profile": "Profile",
     "appearance": "Appearance",
     "tokens": "API Tokens",
+    "memory": "Memory",
     "general": "General",
     "repositories": "Repositories",
+    "myAccount": "My Account",
     "language": "Language",
     "languageDescription": "Select your preferred language",
     "theme": "Theme",
@@ -93,6 +95,17 @@
     "light": "Light",
     "dark": "Dark",
     "system": "System"
+  },
+  "memory": {
+    "searchPlaceholder": "Search memories...",
+    "filter": {
+      "all": "All",
+      "learnings": "Learnings",
+      "results": "Results",
+      "context": "Context",
+      "patterns": "Patterns"
+    },
+    "empty": "No memories yet."
   },
   "navigation": {
     "dashboard": "Dashboard",
