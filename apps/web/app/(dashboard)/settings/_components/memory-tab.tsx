@@ -72,7 +72,9 @@ export function MemoryTab() {
               <Brain />
             </EmptyMedia>
             <EmptyTitle>No memories yet.</EmptyTitle>
-            <EmptyDescription>Search memories...</EmptyDescription>
+            <EmptyDescription>
+              Memories you save will show up here. Use search or filters to find them later.
+            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       </section>

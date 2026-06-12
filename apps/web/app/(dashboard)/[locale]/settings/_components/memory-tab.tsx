@@ -75,7 +75,7 @@ export function MemoryTab() {
               <Brain />
             </EmptyMedia>
             <EmptyTitle>{t("empty")}</EmptyTitle>
-            <EmptyDescription>{t("searchPlaceholder")}</EmptyDescription>
+            <EmptyDescription>{t("emptyDescription")}</EmptyDescription>
           </EmptyHeader>
         </Empty>
       </section>

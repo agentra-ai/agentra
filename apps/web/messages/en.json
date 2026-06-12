@@ -105,7 +105,8 @@
       "context": "Context",
       "patterns": "Patterns"
     },
-    "empty": "No memories yet."
+    "empty": "No memories yet.",
+    "emptyDescription": "Memories you save will show up here. Use search or filters to find them later."
   },
   "navigation": {
     "dashboard": "Dashboard",

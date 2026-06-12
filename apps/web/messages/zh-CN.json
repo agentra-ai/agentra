@@ -105,7 +105,8 @@
       "context": "上下文",
       "patterns": "模式"
     },
-    "empty": "暂无记忆。"
+    "empty": "暂无记忆。",
+    "emptyDescription": "保存的记忆会显示在此处。可使用搜索或筛选来查找它们。"
   },
   "navigation": {
     "dashboard": "仪表盘",
