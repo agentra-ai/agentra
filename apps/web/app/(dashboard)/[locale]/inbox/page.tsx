@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { useDefaultLayout } from "react-resizable-panels";
+import { useTranslations } from "next-intl";
 import { useInboxStore } from "@/features/inbox";
 import { IssueDetail, StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { STATUS_CONFIG, PRIORITY_CONFIG } from "@/features/issues/config";
@@ -39,21 +40,37 @@ import { api } from "@/shared/api";
 // Helpers
 // ---------------------------------------------------------------------------
 
-const typeLabels: Record<InboxItemType, string> = {
-  issue_assigned: "Assigned",
-  unassigned: "Unassigned",
-  assignee_changed: "Assignee changed",
-  status_changed: "Status changed",
-  priority_changed: "Priority changed",
-  due_date_changed: "Due date changed",
-  new_comment: "New comment",
-  mentioned: "Mentioned",
-  review_requested: "Review requested",
-  task_completed: "Task completed",
-  task_failed: "Task failed",
-  agent_blocked: "Agent blocked",
-  agent_completed: "Agent completed",
-  reaction_added: "Reacted",
+type TypeKey =
+  | "issue_assigned"
+  | "unassigned"
+  | "assignee_changed"
+  | "status_changed"
+  | "priority_changed"
+  | "due_date_changed"
+  | "new_comment"
+  | "mentioned"
+  | "review_requested"
+  | "task_completed"
+  | "task_failed"
+  | "agent_blocked"
+  | "agent_completed"
+  | "reaction_added";
+
+const typeKeys: Record<InboxItemType, TypeKey> = {
+  issue_assigned: "issue_assigned",
+  unassigned: "unassigned",
+  assignee_changed: "assignee_changed",
+  status_changed: "status_changed",
+  priority_changed: "priority_changed",
+  due_date_changed: "due_date_changed",
+  new_comment: "new_comment",
+  mentioned: "mentioned",
+  review_requested: "review_requested",
+  task_completed: "task_completed",
+  task_failed: "task_failed",
+  agent_blocked: "agent_blocked",
+  agent_completed: "agent_completed",
+  reaction_added: "reaction_added",
 };
 
 function timeAgo(dateStr: string): string {
@@ -80,27 +97,29 @@ function shortDate(dateStr: string): string {
 // ---------------------------------------------------------------------------
 
 function InboxDetailLabel({ item }: { item: InboxItem }) {
+  const t = useTranslations("inbox.details");
+  const tTypes = useTranslations("inbox.types");
   const { getActorName } = useActorName();
   const details = item.details ?? {};
 
   switch (item.type) {
     case "status_changed": {
-      if (!details.to) return <span>{typeLabels[item.type]}</span>;
+      if (!details.to) return <span>{tTypes(typeKeys[item.type])}</span>;
       const label = STATUS_CONFIG[details.to as IssueStatus]?.label ?? details.to;
       return (
         <span className="inline-flex items-center gap-1">
-          Set status to
+          {t("setStatusTo")}
           <StatusIcon status={details.to as IssueStatus} className="h-3 w-3" />
           {label}
         </span>
       );
     }
     case "priority_changed": {
-      if (!details.to) return <span>{typeLabels[item.type]}</span>;
+      if (!details.to) return <span>{tTypes(typeKeys[item.type])}</span>;
       const label = PRIORITY_CONFIG[details.to as IssuePriority]?.label ?? details.to;
       return (
         <span className="inline-flex items-center gap-1">
-          Set priority to
+          {t("setPriorityTo")}
           <PriorityIcon priority={details.to as IssuePriority} className="h-3 w-3" />
           {label}
         </span>
@@ -108,33 +127,33 @@ function InboxDetailLabel({ item }: { item: InboxItem }) {
     }
     case "issue_assigned": {
       if (details.new_assignee_id) {
-        return <span>Assigned to {getActorName(details.new_assignee_type ?? "member", details.new_assignee_id)}</span>;
+        return <span>{t("assignedTo", { name: getActorName(details.new_assignee_type ?? "member", details.new_assignee_id) })}</span>;
       }
-      return <span>{typeLabels[item.type]}</span>;
+      return <span>{tTypes(typeKeys[item.type])}</span>;
     }
     case "unassigned":
-      return <span>Removed assignee</span>;
+      return <span>{t("removedAssignee")}</span>;
     case "assignee_changed": {
       if (details.new_assignee_id) {
-        return <span>Assigned to {getActorName(details.new_assignee_type ?? "member", details.new_assignee_id)}</span>;
+        return <span>{t("assignedTo", { name: getActorName(details.new_assignee_type ?? "member", details.new_assignee_id) })}</span>;
       }
-      return <span>{typeLabels[item.type]}</span>;
+      return <span>{tTypes(typeKeys[item.type])}</span>;
     }
     case "due_date_changed": {
-      if (details.to) return <span>Set due date to {shortDate(details.to)}</span>;
-      return <span>Removed due date</span>;
+      if (details.to) return <span>{t("setDueDateTo", { date: shortDate(details.to) })}</span>;
+      return <span>{t("removedDueDate")}</span>;
     }
     case "new_comment": {
       if (item.body) return <span>{item.body}</span>;
-      return <span>{typeLabels[item.type]}</span>;
+      return <span>{tTypes(typeKeys[item.type])}</span>;
     }
     case "reaction_added": {
       const emoji = details.emoji;
-      if (emoji) return <span>Reacted {emoji} to your comment</span>;
-      return <span>{typeLabels[item.type]}</span>;
+      if (emoji) return <span>{t("reacted", { emoji })}</span>;
+      return <span>{tTypes(typeKeys[item.type])}</span>;
     }
     default:
-      return <span>{typeLabels[item.type] ?? item.type}</span>;
+      return <span>{tTypes(typeKeys[item.type] as TypeKey) ?? item.type}</span>;
   }
 }
 
@@ -153,6 +172,7 @@ function InboxListItem({
   onClick: () => void;
   onArchive: () => void;
 }) {
+  const t = useTranslations("inbox");
   return (
     <button
       onClick={onClick}
@@ -181,7 +201,8 @@ function InboxListItem({
             <span
               role="button"
               tabIndex={-1}
-              title="Archive"
+              title={t("archiveAria")}
+              aria-label={t("archiveAria")}
               onClick={(e) => {
                 e.stopPropagation();
                 onArchive();
@@ -219,6 +240,8 @@ function InboxListItem({
 // ---------------------------------------------------------------------------
 
 export default function InboxPage() {
+  const t = useTranslations("inbox");
+  const tTypes = useTranslations("inbox.types");
   const searchParams = useSearchParams();
   const urlIssue = searchParams.get("issue") ?? "";
 
@@ -255,7 +278,7 @@ export default function InboxPage() {
       } catch {
         // Rollback: refetch to get server truth
         useInboxStore.getState().fetch();
-        toast.error("Failed to mark as read");
+        toast.error(t("markReadFailed"));
       }
     }
   };
@@ -267,7 +290,7 @@ export default function InboxPage() {
       const archived = items.find((i) => i.id === id);
       if (archived && (archived.issue_id ?? archived.id) === selectedKey) setSelectedKey("");
     } catch {
-      toast.error("Failed to archive");
+      toast.error(t("archiveFailed"));
     }
   };
 
@@ -277,7 +300,7 @@ export default function InboxPage() {
       useInboxStore.getState().markAllRead();
       await api.markAllInboxRead();
     } catch {
-      toast.error("Failed to mark all as read");
+      toast.error(t("markAllReadFailed"));
       useInboxStore.getState().fetch();
     }
   };
@@ -288,7 +311,7 @@ export default function InboxPage() {
       setSelectedKey("");
       await api.archiveAllInbox();
     } catch {
-      toast.error("Failed to archive all");
+      toast.error(t("archiveAllFailed"));
       useInboxStore.getState().fetch();
     }
   };
@@ -300,7 +323,7 @@ export default function InboxPage() {
       if (readKeys.includes(selectedKey)) setSelectedKey("");
       await api.archiveAllReadInbox();
     } catch {
-      toast.error("Failed to archive read items");
+      toast.error(t("archiveReadFailed"));
       useInboxStore.getState().fetch();
     }
   };
@@ -311,7 +334,7 @@ export default function InboxPage() {
       setSelectedKey("");
       await useInboxStore.getState().fetch();
     } catch {
-      toast.error("Failed to archive completed");
+      toast.error(t("archiveCompletedFailed"));
     }
   };
 
@@ -354,7 +377,7 @@ export default function InboxPage() {
       <div className="flex flex-col border-r h-full">
         <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
           <div className="flex items-center gap-2">
-            <h1 className="text-sm font-semibold">Inbox</h1>
+            <h1 className="text-sm font-semibold">{t("title")}</h1>
             {unreadCount > 0 && (
               <span className="text-xs text-muted-foreground">
                 {unreadCount}
@@ -376,20 +399,20 @@ export default function InboxPage() {
             <DropdownMenuContent align="end" className="w-auto">
               <DropdownMenuItem onClick={handleMarkAllRead}>
                 <CheckCheck className="h-4 w-4" />
-                Mark all as read
+                {t("markAllRead")}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleArchiveAll}>
                 <Archive className="h-4 w-4" />
-                Archive all
+                {t("archiveAll")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleArchiveAllRead}>
                 <BookCheck className="h-4 w-4" />
-                Archive all read
+                {t("archiveAllRead")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleArchiveCompleted}>
                 <ListChecks className="h-4 w-4" />
-                Archive completed
+                {t("archiveCompleted")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -399,7 +422,7 @@ export default function InboxPage() {
         {items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Inbox className="mb-3 h-8 w-8 text-muted-foreground/50" />
-            <p className="text-sm">No notifications</p>
+            <p className="text-sm">{t("noNotifications")}</p>
           </div>
         ) : (
           <div>
@@ -436,7 +459,7 @@ export default function InboxPage() {
           <div className="p-6">
             <h2 className="text-lg font-semibold">{selected.title}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {typeLabels[selected.type]} · {timeAgo(selected.created_at)}
+              {tTypes(typeKeys[selected.type])} · {timeAgo(selected.created_at)}
             </p>
             {selected.body && (
               <div className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">
@@ -450,7 +473,7 @@ export default function InboxPage() {
                 onClick={() => handleArchive(selected.id)}
               >
                 <Archive className="mr-1.5 h-3.5 w-3.5" />
-                Archive
+                {t("archive")}
               </Button>
             </div>
           </div>
@@ -458,9 +481,7 @@ export default function InboxPage() {
           <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
             <Inbox className="mb-3 h-10 w-10 text-muted-foreground/30" />
             <p className="text-sm">
-              {items.length === 0
-                ? "Your inbox is empty"
-                : "Select a notification to view details"}
+              {items.length === 0 ? t("inboxEmpty") : t("selectNotification")}
             </p>
           </div>
         )}
