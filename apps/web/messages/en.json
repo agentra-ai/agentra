@@ -285,12 +285,6 @@
     },
     "noRuntimes": "No runtimes configured"
   },
-  "inbox": {
-    "title": "Inbox",
-    "notifications": "Notifications",
-    "markAllRead": "Mark all as read",
-    "noNotifications": "No new notifications"
-  },
   "modals": {
     "createIssue": "Create Issue",
     "editIssue": "Edit Issue",

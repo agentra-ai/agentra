@@ -285,12 +285,6 @@
     },
     "noRuntimes": "暂无配置的运行时"
   },
-  "inbox": {
-    "title": "收件箱",
-    "notifications": "通知",
-    "markAllRead": "全部标记为已读",
-    "noNotifications": "暂无新通知"
-  },
   "modals": {
     "createIssue": "创建问题",
     "editIssue": "编辑问题",
