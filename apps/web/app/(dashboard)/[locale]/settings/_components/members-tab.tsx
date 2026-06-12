@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Crown, Shield, User, Plus, MoreHorizontal, UserMinus, Users } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import type { MemberWithUser, MemberRole } from "@/shared/types";
 import { Input } from "@/components/ui/input";
@@ -40,10 +41,12 @@ import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
 import { api } from "@/shared/api";
 
-const roleConfig: Record<MemberRole, { label: string; icon: typeof Crown; description: string }> = {
-  owner: { label: "Owner", icon: Crown, description: "Full access, manage all settings" },
-  admin: { label: "Admin", icon: Shield, description: "Manage members and settings" },
-  member: { label: "Member", icon: User, description: "Create and work on issues" },
+type RoleMeta = { labelKey: "ownerLabel" | "adminLabel" | "memberLabel"; descriptionKey: "ownerDescription" | "adminDescription" | "memberDescription"; icon: typeof Crown };
+
+const roleConfig: Record<MemberRole, RoleMeta> = {
+  owner: { labelKey: "ownerLabel", descriptionKey: "ownerDescription", icon: Crown },
+  admin: { labelKey: "adminLabel", descriptionKey: "adminDescription", icon: Shield },
+  member: { labelKey: "memberLabel", descriptionKey: "memberDescription", icon: User },
 };
 
 function MemberRow({
@@ -63,6 +66,7 @@ function MemberRow({
   onRoleChange: (role: MemberRole) => void;
   onRemove: () => void;
 }) {
+  const t = useTranslations("membersTab");
   const rc = roleConfig[member.role];
   const RoleIcon = rc.icon;
   const canEditRole = canManage && !isSelf && (member.role !== "owner" || canManageOwners);
@@ -90,10 +94,10 @@ function MemberRow({
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
                   <Shield className="h-3.5 w-3.5" />
-                  Change role
+                  {t("changeRole")}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="w-auto">
-                  {(Object.entries(roleConfig) as [MemberRole, (typeof roleConfig)[MemberRole]][]).map(
+                  {(Object.entries(roleConfig) as [MemberRole, RoleMeta][]).map(
                     ([role, config]) => {
                       if (role === "owner" && !canManageOwners) return null;
                       const Icon = config.icon;
@@ -104,9 +108,9 @@ function MemberRow({
                         >
                           <Icon className="h-3.5 w-3.5" />
                           <div className="flex flex-col">
-                            <span>{config.label}</span>
+                            <span>{t(config.labelKey)}</span>
                             <span className="text-xs text-muted-foreground font-normal">
-                              {config.description}
+                              {t(config.descriptionKey)}
                             </span>
                           </div>
                           {member.role === role && (
@@ -123,7 +127,7 @@ function MemberRow({
             {canRemove && (
               <DropdownMenuItem variant="destructive" onClick={onRemove}>
                 <UserMinus className="h-3.5 w-3.5" />
-                Remove from workspace
+                {t("removeFromWorkspace")}
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
@@ -131,13 +135,15 @@ function MemberRow({
       )}
       <Badge variant="secondary">
         <RoleIcon className="h-3 w-3" />
-        {rc.label}
+        {t(rc.labelKey)}
       </Badge>
     </div>
   );
 }
 
 export function MembersTab() {
+  const t = useTranslations("membersTab");
+  const tCommon = useTranslations("common");
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.workspace);
   const members = useWorkspaceStore((s) => s.members);
@@ -169,9 +175,9 @@ export function MembersTab() {
       setInviteEmail("");
       setInviteRole("member");
       await refreshMembers();
-      toast.success("Member added");
+      toast.success(t("added"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to add member");
+      toast.error(e instanceof Error ? e.message : t("addFailed"));
     } finally {
       setInviteLoading(false);
     }
@@ -183,9 +189,9 @@ export function MembersTab() {
     try {
       await api.updateMember(workspace.id, memberId, { role });
       await refreshMembers();
-      toast.success("Role updated");
+      toast.success(t("roleUpdated"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to update member");
+      toast.error(e instanceof Error ? e.message : t("updateFailed"));
     } finally {
       setMemberActionId(null);
     }
@@ -194,17 +200,17 @@ export function MembersTab() {
   const handleRemoveMember = (member: MemberWithUser) => {
     if (!workspace) return;
     setConfirmAction({
-      title: `Remove ${member.name}`,
-      description: `Remove ${member.name} from ${workspace.name}? They will lose access to this workspace.`,
+      title: t("removeTitle", { name: member.name }),
+      description: t("removeDescription", { name: member.name, workspace: workspace.name }),
       variant: "destructive",
       onConfirm: async () => {
         setMemberActionId(member.id);
         try {
           await api.deleteMember(workspace.id, member.id);
           await refreshMembers();
-          toast.success("Member removed");
+          toast.success(t("removed"));
         } catch (e) {
-          toast.error(e instanceof Error ? e.message : "Failed to remove member");
+          toast.error(e instanceof Error ? e.message : t("removeFailed"));
         } finally {
           setMemberActionId(null);
         }
@@ -219,7 +225,7 @@ export function MembersTab() {
       <section className="space-y-4">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold">Members ({members.length})</h2>
+          <h2 className="text-sm font-semibold">{t("title", { count: members.length })}</h2>
         </div>
 
         {canManageWorkspace && (
@@ -227,28 +233,28 @@ export function MembersTab() {
             <CardContent className="space-y-3">
               <div className="flex items-center gap-2">
                 <Plus className="h-4 w-4 text-muted-foreground" />
-                <h3 className="text-sm font-medium">Add member</h3>
+                <h3 className="text-sm font-medium">{t("addMember")}</h3>
               </div>
               <div className="grid gap-3 sm:grid-cols-[1fr_120px_auto]">
                 <Input
                   type="email"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="user@company.com"
+                  placeholder={t("emailPlaceholder")}
                 />
                 <Select value={inviteRole} onValueChange={(value) => setInviteRole(value as MemberRole)}>
                   <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="member">Member</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    {isOwner && <SelectItem value="owner">Owner</SelectItem>}
+                    <SelectItem value="member">{t("memberLabel")}</SelectItem>
+                    <SelectItem value="admin">{t("adminLabel")}</SelectItem>
+                    {isOwner && <SelectItem value="owner">{t("ownerLabel")}</SelectItem>}
                   </SelectContent>
                 </Select>
                 <Button
                   onClick={handleAddMember}
                   disabled={inviteLoading || !inviteEmail.trim()}
                 >
-                  {inviteLoading ? "Adding..." : "Add"}
+                  {inviteLoading ? t("adding") : t("add")}
                 </Button>
               </div>
             </CardContent>
@@ -272,7 +278,7 @@ export function MembersTab() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No members found.</p>
+          <p className="text-sm text-muted-foreground">{t("noMembers")}</p>
         )}
       </section>
 
@@ -283,7 +289,7 @@ export function MembersTab() {
             <AlertDialogDescription>{confirmAction?.description}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               variant={confirmAction?.variant === "destructive" ? "destructive" : "default"}
               onClick={async () => {
@@ -291,7 +297,7 @@ export function MembersTab() {
                 setConfirmAction(null);
               }}
             >
-              Confirm
+              {tCommon("confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
