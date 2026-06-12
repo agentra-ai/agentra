@@ -1,7 +1,7 @@
 "use client";
 
 import { useTheme } from "next-themes";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { useRouter, usePathname } from "next/navigation";
 
@@ -81,14 +81,14 @@ function WindowMockup({
 }
 
 const themeOptions = [
-  { value: "light" as const, label: "Light" },
-  { value: "dark" as const, label: "Dark" },
-  { value: "system" as const, label: "System" },
+  { value: "light" as const, i18nKey: "light" as const },
+  { value: "dark" as const, i18nKey: "dark" as const },
+  { value: "system" as const, i18nKey: "system" as const },
 ];
 
 const languageOptions = [
-  { value: "en", label: "English", flag: "🇺🇸" },
-  { value: "zh-CN", label: "简体中文", flag: "🇨🇳" },
+  { value: "en", flag: "🇺🇸" },
+  { value: "zh-CN", flag: "🇨🇳" },
 ];
 
 export function AppearanceTab() {
@@ -96,6 +96,9 @@ export function AppearanceTab() {
   const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
+  const t = useTranslations("appearance");
+  const tSettings = useTranslations("settings");
+  const tLanguage = useTranslations("languageNames");
 
   const handleLanguageChange = async (newLocale: string) => {
     // Set cookie for server-side locale detection
@@ -112,19 +115,20 @@ export function AppearanceTab() {
   return (
     <div className="space-y-8">
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold">Language</h2>
+        <h2 className="text-sm font-semibold">{t("language")}</h2>
         <p className="text-sm text-muted-foreground">
-          Select your preferred language for the interface.
+          {t("languageDescription")}
         </p>
-        <div className="flex gap-3" role="radiogroup" aria-label="Language">
+        <div className="flex gap-3" role="radiogroup" aria-label={t("language")}>
           {languageOptions.map((opt) => {
             const isActive = locale === opt.value;
+            const label = tLanguage(opt.value as "en" | "zh-CN");
             return (
               <button
                 key={opt.value}
                 role="radio"
                 aria-checked={isActive}
-                aria-label={`Select ${opt.label}`}
+                aria-label={t("selectLanguageAria", { label })}
                 onClick={() => handleLanguageChange(opt.value)}
                 className={cn(
                   "flex items-center gap-3 rounded-lg border px-4 py-3 transition-all",
@@ -134,7 +138,7 @@ export function AppearanceTab() {
                 )}
               >
                 <span className="text-xl">{opt.flag}</span>
-                <span className="text-sm font-medium">{opt.label}</span>
+                <span className="text-sm font-medium">{label}</span>
               </button>
             );
           })}
@@ -142,16 +146,17 @@ export function AppearanceTab() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold">Theme</h2>
-        <div className="flex gap-6" role="radiogroup" aria-label="Theme">
+        <h2 className="text-sm font-semibold">{t("theme")}</h2>
+        <div className="flex gap-6" role="radiogroup" aria-label={t("theme")}>
           {themeOptions.map((opt) => {
             const active = theme === opt.value;
+            const label = tSettings(opt.i18nKey);
             return (
               <button
                 key={opt.value}
                 role="radio"
                 aria-checked={active}
-                aria-label={`Select ${opt.label} theme`}
+                aria-label={t("selectThemeAria", { label })}
                 onClick={() => setTheme(opt.value)}
                 className="group flex flex-col items-center gap-2"
               >
@@ -186,7 +191,7 @@ export function AppearanceTab() {
                       : "text-muted-foreground"
                   )}
                 >
-                  {opt.label}
+                  {label}
                 </span>
               </button>
             );

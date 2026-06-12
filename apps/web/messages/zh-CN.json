@@ -108,6 +108,28 @@
     "empty": "暂无记忆。",
     "emptyDescription": "保存的记忆会显示在此处。可使用搜索或筛选来查找它们。"
   },
+  "account": {
+    "profile": "个人资料",
+    "name": "姓名",
+    "clickToUploadAvatar": "点击上传头像",
+    "updateProfile": "更新个人资料",
+    "updating": "更新中...",
+    "avatarUpdated": "头像已更新",
+    "profileUpdated": "个人资料已更新",
+    "failedToUploadAvatar": "头像上传失败",
+    "failedToUpdateProfile": "个人资料更新失败"
+  },
+  "appearance": {
+    "language": "语言",
+    "languageDescription": "选择界面使用的首选语言。",
+    "theme": "主题",
+    "selectLanguageAria": "选择 {label}",
+    "selectThemeAria": "选择 {label} 主题"
+  },
+  "languageNames": {
+    "en": "English",
+    "zh-CN": "简体中文"
+  },
   "navigation": {
     "dashboard": "仪表盘",
     "issues": "问题",

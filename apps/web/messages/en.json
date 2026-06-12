@@ -108,6 +108,28 @@
     "empty": "No memories yet.",
     "emptyDescription": "Memories you save will show up here. Use search or filters to find them later."
   },
+  "account": {
+    "profile": "Profile",
+    "name": "Name",
+    "clickToUploadAvatar": "Click to upload avatar",
+    "updateProfile": "Update Profile",
+    "updating": "Updating...",
+    "avatarUpdated": "Avatar updated",
+    "profileUpdated": "Profile updated",
+    "failedToUploadAvatar": "Failed to upload avatar",
+    "failedToUpdateProfile": "Failed to update profile"
+  },
+  "appearance": {
+    "language": "Language",
+    "languageDescription": "Select your preferred language for the interface.",
+    "theme": "Theme",
+    "selectLanguageAria": "Select {label}",
+    "selectThemeAria": "Select {label} theme"
+  },
+  "languageNames": {
+    "en": "English",
+    "zh-CN": "简体中文"
+  },
   "navigation": {
     "dashboard": "Dashboard",
     "issues": "Issues",
