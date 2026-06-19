@@ -73,14 +73,13 @@ func SeedForWorkspace(ctx context.Context, q Q, workspaceID, ownerID, runtimeID 
 		}
 		toolsJSON, _ := json.Marshal(t.Tools)
 		triggersJSON, _ := json.Marshal(t.Triggers)
-		runtimeConfig, _ := json.Marshal(map[string]any{})
 		_, err := q.CreateAgent(ctx, dbpkg.CreateAgentParams{
 			WorkspaceID:        workspaceID,
 			Name:               t.Name,
 			Description:        t.Description,
 			AvatarUrl:          pgtype.Text{},
 			RuntimeMode:        "local",
-			RuntimeConfig:      runtimeConfig,
+			RuntimeConfig:      []byte("{}"),
 			RuntimeID:          runtimeID,
 			Visibility:         "workspace",
 			MaxConcurrentTasks: 6,
