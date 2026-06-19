@@ -10,7 +10,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/agentra-ai/agentra/server/internal/handlerutil"
 	looppkg "github.com/agentra-ai/agentra/server/internal/loop"
+	dbpkg "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
 
 // CreateLoop handles POST /api/loops.
@@ -57,6 +59,37 @@ func (h *Handler) CreateLoop(w http.ResponseWriter, r *http.Request) {
 	for k := range req.StageAgents {
 		if !looppkg.Stage(k).IsValid() {
 			writeError(w, http.StatusBadRequest, "stage_agents: unknown stage "+k)
+			return
+		}
+	}
+
+	// Cross-tenant guard: the loop row will be stamped with the caller's
+	// workspaceID, but issue_id and every agent_id (default + per-stage)
+	// must also belong to that workspace. Without this check, a member of
+	// workspace A could create a loop targeting an issue in workspace B
+	// (or wire in a B-workspace agent), which is a privilege boundary
+	// violation even though the loop itself ends up in A.
+	wsUUID := handlerutil.ParseUUID(workspaceID)
+	if _, err := h.Queries.GetIssueInWorkspace(r.Context(), dbpkg.GetIssueInWorkspaceParams{
+		ID:          handlerutil.ParseUUID(req.IssueID),
+		WorkspaceID: wsUUID,
+	}); err != nil {
+		writeError(w, http.StatusNotFound, "issue not found")
+		return
+	}
+	if _, err := h.Queries.GetAgentInWorkspace(r.Context(), dbpkg.GetAgentInWorkspaceParams{
+		ID:          handlerutil.ParseUUID(*req.AgentID),
+		WorkspaceID: wsUUID,
+	}); err != nil {
+		writeError(w, http.StatusBadRequest, "agent_id: agent not found in workspace")
+		return
+	}
+	for stage, agentID := range req.StageAgents {
+		if _, err := h.Queries.GetAgentInWorkspace(r.Context(), dbpkg.GetAgentInWorkspaceParams{
+			ID:          handlerutil.ParseUUID(agentID),
+			WorkspaceID: wsUUID,
+		}); err != nil {
+			writeError(w, http.StatusBadRequest, "stage_agents: agent for stage "+stage+" not found in workspace")
 			return
 		}
 	}

@@ -228,6 +228,124 @@ func TestCreateLoop_MissingWorkspace(t *testing.T) {
 	}
 }
 
+// TestCreateLoop_RejectsIssueFromOtherWorkspace verifies the cross-tenant
+// guard: a member of workspace A cannot create a loop targeting an issue in
+// workspace B by passing X-Workspace-ID=A. Without the guard the loop row
+// would be stamped with workspace A but reference an issue belonging to B,
+// crossing the privilege boundary.
+func TestCreateLoop_RejectsIssueFromOtherWorkspace(t *testing.T) {
+	otherWS := createLoopTestWorkspace(t)
+
+	// Insert an issue directly into the other workspace, bypassing
+	// createLoopTestIssue (which is hardcoded to testWorkspaceID).
+	otherIssueID := uuid.NewString()
+	_, err := testPool.Exec(context.Background(), `
+		INSERT INTO issue (id, workspace_id, title, creator_type, creator_id, number)
+		VALUES ($1, $2, $3, 'member', $4, 1)`,
+		otherIssueID, otherWS, "cross-ws issue", testUserID)
+	if err != nil {
+		t.Fatalf("seed issue in other workspace: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM issue WHERE id = $1`, otherIssueID)
+	})
+
+	agentID := createLoopTestAgent(t)
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{
+		"issue_id": otherIssueID,
+		"agent_id": agentID,
+	})
+	testHandler.CreateLoop(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("CreateLoop (cross-ws issue): expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "issue") {
+		t.Errorf("expected error body to mention issue, got: %s", w.Body.String())
+	}
+}
+
+// TestCreateLoop_RejectsAgentFromOtherWorkspace verifies the same guard for
+// the default agent_id field. A workspace A member cannot wire in a
+// workspace B agent — the loop would otherwise dispatch tasks to a runtime
+// the caller's workspace has no claim on.
+func TestCreateLoop_RejectsAgentFromOtherWorkspace(t *testing.T) {
+	issueID := createLoopTestIssue(t, "loop cross-ws agent")
+	otherWS := createLoopTestWorkspace(t)
+	otherAgentID := seedAgentInWorkspace(t, otherWS)
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{
+		"issue_id": issueID,
+		"agent_id": otherAgentID,
+	})
+	testHandler.CreateLoop(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("CreateLoop (cross-ws agent): expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "agent_id") {
+		t.Errorf("expected error body to mention agent_id, got: %s", w.Body.String())
+	}
+}
+
+// TestCreateLoop_RejectsStageAgentFromOtherWorkspace covers the per-stage
+// override path: even if the default agent_id is in the right workspace, a
+// stage_agents entry pointing at a B-workspace agent must be rejected.
+// Without this case the cross-tenant guard would have a stage-shaped hole.
+func TestCreateLoop_RejectsStageAgentFromOtherWorkspace(t *testing.T) {
+	issueID := createLoopTestIssue(t, "loop cross-ws stage agent")
+	defaultAgent := createLoopTestAgent(t)
+	otherWS := createLoopTestWorkspace(t)
+	otherAgentID := seedAgentInWorkspace(t, otherWS)
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{
+		"issue_id": issueID,
+		"agent_id": defaultAgent,
+		"stage_agents": map[string]string{
+			"develop": otherAgentID,
+		},
+	})
+	testHandler.CreateLoop(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("CreateLoop (cross-ws stage agent): expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "develop") {
+		t.Errorf("expected error body to mention the offending stage 'develop', got: %s", w.Body.String())
+	}
+}
+
+// seedAgentInWorkspace creates an agent_runtime + agent in the given
+// workspace via direct SQL and returns the agent id. Used to set up
+// cross-tenant fixtures without going through the public API (which would
+// require a different auth context). The runtime/agent are cleaned up when
+// the test ends.
+func seedAgentInWorkspace(t *testing.T, workspaceID string) string {
+	t.Helper()
+	runtimeID := uuid.NewString()
+	_, err := testPool.Exec(context.Background(), `
+		INSERT INTO agent_runtime (id, workspace_id, name, runtime_mode, provider)
+		VALUES ($1, $2, 'cross-ws-runtime', 'local', 'claude')`,
+		runtimeID, workspaceID)
+	if err != nil {
+		t.Fatalf("seed agent_runtime: %v", err)
+	}
+	agentID := uuid.NewString()
+	_, err = testPool.Exec(context.Background(), `
+		INSERT INTO agent (id, workspace_id, name, runtime_mode, runtime_id, owner_id)
+		VALUES ($1, $2, 'cross-ws-agent', 'local', $3, $4)`,
+		agentID, workspaceID, runtimeID, testUserID)
+	if err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM agent WHERE id = $1`, agentID)
+		testPool.Exec(context.Background(), `DELETE FROM agent_runtime WHERE id = $1`, runtimeID)
+	})
+	return agentID
+}
+
 func TestGetLoop_HappyPath(t *testing.T) {
 	issueID := createLoopTestIssue(t, "loop get happy")
 	agentID := createLoopTestAgent(t)
