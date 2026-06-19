@@ -151,9 +151,11 @@ export function StartLoopDialog({ open, onOpenChange, issueId, onSuccess }: Star
                   >
                     <SelectTrigger id={`loop-stage-${stage}`} className="w-full">
                       <SelectValue
-                        placeholder={t("dialog.stageOverridePlaceholder", {
-                          agent: defaultAgentName || t("dialog.agent"),
-                        })}
+                        placeholder={
+                          defaultAgentName
+                            ? t("dialog.stageOverridePlaceholder", { agent: defaultAgentName })
+                            : t("dialog.stageOverridePlaceholderNoAgent")
+                        }
                       />
                     </SelectTrigger>
                     <SelectContent>

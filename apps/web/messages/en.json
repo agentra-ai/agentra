@@ -508,7 +508,8 @@
       "invalidIterations": "Max iterations must be between 1 and 10",
       "submit": "Start Loop",
       "perStageOverrides": "Per-stage overrides",
-      "stageOverridePlaceholder": "Use default ({agent})"
+      "stageOverridePlaceholder": "Use default ({agent})",
+      "stageOverridePlaceholderNoAgent": "Use default"
     }
   }
 }
