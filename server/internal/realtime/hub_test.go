@@ -46,7 +46,20 @@ func newTestHub(t *testing.T) (*Hub, *httptest.Server) {
 		HandleWebSocket(hub, mc, w, r)
 	})
 	server := httptest.NewServer(mux)
+
+	// The default wsUpgrader has a nil allowList (fail-closed). Let the test
+	// server's own origin through so the DefaultDialer (which always sends
+	// Origin via gorilla/websocket) can connect.
+	SetWSAllowedOrigins([]string{"http://" + stringsHost(server.URL)})
+
 	return hub, server
+}
+
+// stringsHost strips "http://" prefix so we can reconstruct the origin.
+func stringsHost(rawURL string) string {
+	h := strings.TrimPrefix(rawURL, "http://")
+	h = strings.TrimPrefix(h, "https://")
+	return h
 }
 
 func connectWS(t *testing.T, server *httptest.Server) *websocket.Conn {

@@ -72,6 +72,11 @@ func TestMain(m *testing.M) {
 	registerListeners(bus, hub)
 	router := NewRouter(pool, hub, bus)
 	testServer = httptest.NewServer(router)
+	// Allow the test server's own loopback origin for WebSocket upgrades.
+	// NewRouter wires corsconfig.AllowedOrigins() which reads FRONTEND_ORIGIN
+	// (set to web.agentra.orb.local in .env) — that doesn't match the
+	// 127.0.0.1:PORT test server, so we override the allowList here.
+	realtime.SetWSAllowedOrigins([]string{"http://" + stringsHost(testServer.URL)})
 
 	// Generate a JWT token directly for the test user
 	testToken, err = generateTestJWT(testUserID, integrationTestEmail, integrationTestName)
@@ -837,4 +842,11 @@ func TestWebSocketIntegration(t *testing.T) {
 	if deleteMsg["type"] != "issue:deleted" {
 		t.Fatalf("expected type 'issue:deleted', got '%s'", deleteMsg["type"])
 	}
+}
+
+// stringsHost strips scheme prefixes so we can reconstruct an origin string.
+func stringsHost(rawURL string) string {
+	h := strings.TrimPrefix(rawURL, "http://")
+	h = strings.TrimPrefix(h, "https://")
+	return h
 }
