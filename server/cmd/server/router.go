@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -14,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/agentra-ai/agentra/server/internal/auth"
-	"github.com/agentra-ai/agentra/server/internal/cli"
+	"github.com/agentra-ai/agentra/server/internal/corsconfig"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/handler"
 	"github.com/agentra-ai/agentra/server/internal/loop"
@@ -27,30 +26,12 @@ import (
 	"github.com/agentra-ai/agentra/pkg/taskgraph"
 )
 
+// allowedOrigins delegates to internal/corsconfig so the resolution logic
+// can be unit-tested without booting the database. A nil return means
+// "do not enable CORS at all" — empty slice would silently allow all
+// origins in go-chi/cors.
 func allowedOrigins() []string {
-	raw := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS"))
-	if raw == "" {
-		raw = strings.TrimSpace(os.Getenv("FRONTEND_ORIGIN"))
-	}
-	if raw == "" {
-		raw = cli.ResolveSiteURLFromEnv()
-	}
-	if raw == "" {
-		return []string{}
-	}
-
-	parts := strings.Split(raw, ",")
-	origins := make([]string, 0, len(parts))
-	for _, part := range parts {
-		origin := strings.TrimSpace(part)
-		if origin != "" {
-			origins = append(origins, origin)
-		}
-	}
-	if len(origins) == 0 {
-		return []string{}
-	}
-	return origins
+	return corsconfig.AllowedOrigins()
 }
 
 // NewRouter creates the fully-configured Chi router with all middleware and routes.
@@ -118,13 +99,17 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 	r.Use(chimw.RequestID)
 	r.Use(middleware.RequestLogger)
 	r.Use(chimw.Recoverer)
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   allowedOrigins(),
-		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Workspace-ID", "X-Request-ID", "X-Agent-ID", "X-Task-ID"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
+	if origins := allowedOrigins(); origins != nil {
+		r.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   origins,
+			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Workspace-ID", "X-Request-ID", "X-Agent-ID", "X-Task-ID"},
+			AllowCredentials: true,
+			MaxAge:           300,
+		}))
+	} else {
+		slog.Warn("CORS not configured: set CORS_ALLOWED_ORIGINS or FRONTEND_ORIGIN; cross-origin browser requests will fail")
+	}
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +131,6 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 	// Auth (public)
 	r.Post("/auth/send-code", h.SendCode)
 	r.Post("/auth/verify-code", h.VerifyCode)
-	r.Get("/api/files/{key}", h.GetPublicFile)
 
 	// GitHub OAuth (public)
 	githubOAuth := handler.NewGitHubOAuthHandler(
@@ -191,6 +175,7 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 		r.Get("/api/me", h.GetMe)
 		r.Patch("/api/me", h.UpdateMe)
 		r.Post("/api/upload-file", h.UploadFile)
+		r.Get("/api/files/{key}", h.GetPublicFile)
 
 		r.Route("/api/workspaces", func(r chi.Router) {
 			r.Get("/", h.ListWorkspaces)
