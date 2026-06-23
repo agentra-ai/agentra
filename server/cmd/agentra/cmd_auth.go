@@ -62,6 +62,13 @@ func resolveToken(cmd *cobra.Command) string {
 }
 
 func resolveAppURL(cmd *cobra.Command) string {
+	// AGENTRA_CLI_APP_URL is the host-mode override for the same reason as
+	// AGENTRA_CLI_SERVER_URL — see resolveServerURL. Without it the host CLI
+	// uses NEXT_PUBLIC_SITE_URL / AGENTRA_APP_URL, which in a compose
+	// deployment point at hostnames the host can't always reach.
+	if v := strings.TrimSpace(os.Getenv("AGENTRA_CLI_APP_URL")); v != "" {
+		return strings.TrimRight(v, "/")
+	}
 	if siteURL := cli.ResolveSiteURLFromEnv(); siteURL != "" {
 		return siteURL
 	}
@@ -111,6 +118,15 @@ func runAuthLoginBrowser(cmd *cobra.Command) error {
 	}
 	if appURL == "" {
 		return fmt.Errorf("app URL not set: use AGENTRA_APP_URL, FRONTEND_ORIGIN, NEXT_PUBLIC_SITE_URL, or 'agentra config set app_url <url>'")
+	}
+
+	// In OrbStack / docker compose deployments, server.agentra.orb.local /
+	// web.agentra.orb.local are reachable but localhost:PORT typically is
+	// not (since commit 98b6f1c removed host port publishing). Warn so the
+	// user can switch before going through the browser dance.
+	if strings.Contains(serverURL, "localhost") || strings.Contains(serverURL, "127.0.0.1") ||
+		strings.Contains(appURL, "localhost") || strings.Contains(appURL, "127.0.0.1") {
+		fmt.Fprintf(os.Stderr, "Warning: server/app URL targets localhost:\n  server: %s\n  app:    %s\nIf you deployed via docker compose, these probably won't reach the containers. Set AGENTRA_CLI_SERVER_URL and AGENTRA_CLI_APP_URL (e.g. http://server.agentra.orb.local and http://web.agentra.orb.local) before retrying.\n\n", serverURL, appURL)
 	}
 
 	// Start a local HTTP server on a random port to receive the callback.

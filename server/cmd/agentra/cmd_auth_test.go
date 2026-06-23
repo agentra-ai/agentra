@@ -19,7 +19,19 @@ func testCmd() *cobra.Command {
 func TestResolveAppURL(t *testing.T) {
 	cmd := testCmd()
 
+	t.Run("AGENTRA_CLI_APP_URL wins over everything", func(t *testing.T) {
+		t.Setenv("AGENTRA_CLI_APP_URL", "http://cli.example")
+		t.Setenv("NEXT_PUBLIC_SITE_URL", "http://nps.example")
+		t.Setenv("AGENTRA_APP_URL", "http://app.example")
+		t.Setenv("FRONTEND_ORIGIN", "http://fe.example")
+
+		if got := resolveAppURL(cmd); got != "http://cli.example" {
+			t.Fatalf("resolveAppURL() = %q, want %q", got, "http://cli.example")
+		}
+	})
+
 	t.Run("prefers NEXT_PUBLIC_SITE_URL", func(t *testing.T) {
+		t.Setenv("AGENTRA_CLI_APP_URL", "")
 		t.Setenv("NEXT_PUBLIC_SITE_URL", "http://env.example")
 		t.Setenv("AGENTRA_APP_URL", "http://localhost:14000")
 		t.Setenv("FRONTEND_ORIGIN", "http://localhost:13000")
@@ -30,6 +42,7 @@ func TestResolveAppURL(t *testing.T) {
 	})
 
 	t.Run("prefers AGENTRA_APP_URL", func(t *testing.T) {
+		t.Setenv("AGENTRA_CLI_APP_URL", "")
 		t.Setenv("NEXT_PUBLIC_SITE_URL", "")
 		t.Setenv("AGENTRA_APP_URL", "http://localhost:14000")
 		t.Setenv("FRONTEND_ORIGIN", "http://localhost:13000")
@@ -40,6 +53,7 @@ func TestResolveAppURL(t *testing.T) {
 	})
 
 	t.Run("falls back to FRONTEND_ORIGIN", func(t *testing.T) {
+		t.Setenv("AGENTRA_CLI_APP_URL", "")
 		t.Setenv("NEXT_PUBLIC_SITE_URL", "")
 		t.Setenv("AGENTRA_APP_URL", "")
 		t.Setenv("FRONTEND_ORIGIN", "http://localhost:13026")
@@ -50,6 +64,7 @@ func TestResolveAppURL(t *testing.T) {
 	})
 
 	t.Run("returns empty when nothing is configured", func(t *testing.T) {
+		t.Setenv("AGENTRA_CLI_APP_URL", "")
 		t.Setenv("NEXT_PUBLIC_SITE_URL", "")
 		t.Setenv("AGENTRA_APP_URL", "")
 		t.Setenv("FRONTEND_ORIGIN", "")
@@ -61,6 +76,7 @@ func TestResolveAppURL(t *testing.T) {
 	})
 
 	t.Run("ignores legacy production config", func(t *testing.T) {
+		t.Setenv("AGENTRA_CLI_APP_URL", "")
 		t.Setenv("NEXT_PUBLIC_SITE_URL", "")
 		t.Setenv("AGENTRA_APP_URL", "")
 		t.Setenv("FRONTEND_ORIGIN", "")
@@ -81,7 +97,28 @@ func TestResolveAppURL(t *testing.T) {
 func TestResolveServerURL(t *testing.T) {
 	cmd := testCmd()
 
+	t.Run("AGENTRA_CLI_SERVER_URL wins over AGENTRA_SERVER_URL", func(t *testing.T) {
+		t.Setenv("AGENTRA_CLI_SERVER_URL", "http://cli.example")
+		t.Setenv("AGENTRA_SERVER_URL", "ws://compose-internal:8080/ws")
+		t.Setenv("HOME", t.TempDir())
+
+		if got := resolveServerURL(cmd); got != "http://cli.example" {
+			t.Fatalf("resolveServerURL() = %q, want %q", got, "http://cli.example")
+		}
+	})
+
+	t.Run("falls back to AGENTRA_SERVER_URL", func(t *testing.T) {
+		t.Setenv("AGENTRA_CLI_SERVER_URL", "")
+		t.Setenv("AGENTRA_SERVER_URL", "http://server.example")
+		t.Setenv("HOME", t.TempDir())
+
+		if got := resolveServerURL(cmd); got != "http://server.example" {
+			t.Fatalf("resolveServerURL() = %q, want %q", got, "http://server.example")
+		}
+	})
+
 	t.Run("returns empty when nothing is configured", func(t *testing.T) {
+		t.Setenv("AGENTRA_CLI_SERVER_URL", "")
 		t.Setenv("AGENTRA_SERVER_URL", "")
 		t.Setenv("HOME", t.TempDir())
 
@@ -91,6 +128,7 @@ func TestResolveServerURL(t *testing.T) {
 	})
 
 	t.Run("ignores legacy production config", func(t *testing.T) {
+		t.Setenv("AGENTRA_CLI_SERVER_URL", "")
 		t.Setenv("AGENTRA_SERVER_URL", "")
 		t.Setenv("HOME", t.TempDir())
 

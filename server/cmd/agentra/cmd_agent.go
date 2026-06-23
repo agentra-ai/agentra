@@ -184,9 +184,21 @@ func newAPIClient(cmd *cobra.Command) (*cli.APIClient, error) {
 }
 
 func resolveServerURL(cmd *cobra.Command) string {
-	val := cli.FlagOrEnv(cmd, "server-url", "AGENTRA_SERVER_URL", "")
-	if val != "" {
+	// AGENTRA_CLI_SERVER_URL is the host-mode override. AGENTRA_SERVER_URL is
+	// shared with the gateway container, which in compose deployments points
+	// at the docker-internal hostname `server` (which doesn't resolve on the
+	// host). Setting AGENTRA_CLI_SERVER_URL lets the host CLI/daemon use the
+	// publicly-reachable URL (e.g. http://server.agentra.orb.local) without
+	// breaking the gateway container's config.
+	if cmd.Flags().Changed("server-url") {
+		val, _ := cmd.Flags().GetString("server-url")
 		return normalizeAPIBaseURL(val)
+	}
+	if v := strings.TrimSpace(os.Getenv("AGENTRA_CLI_SERVER_URL")); v != "" {
+		return normalizeAPIBaseURL(v)
+	}
+	if v := strings.TrimSpace(os.Getenv("AGENTRA_SERVER_URL")); v != "" {
+		return normalizeAPIBaseURL(v)
 	}
 	profile := resolveProfile(cmd)
 	cfg, err := cli.LoadCLIConfigForProfile(profile)

@@ -58,8 +58,17 @@ type Overrides struct {
 // LoadConfig builds the daemon configuration from environment variables
 // and optional CLI flag overrides.
 func LoadConfig(overrides Overrides) (Config, error) {
-	// Server URL: override > env > default
-	rawServerURL := strings.TrimSpace(os.Getenv("AGENTRA_SERVER_URL"))
+	// Server URL: override > AGENTRA_CLI_SERVER_URL > AGENTRA_SERVER_URL.
+	// AGENTRA_CLI_SERVER_URL is the host-mode override: in compose deployments
+	// AGENTRA_SERVER_URL points at the docker-internal hostname `server` so the
+	// gateway container can find it, but that name doesn't resolve from the
+	// host. Setting AGENTRA_CLI_SERVER_URL lets the host daemon use the
+	// publicly-reachable URL (e.g. http://server.agentra.orb.local) without
+	// disturbing the gateway container's environment.
+	rawServerURL := strings.TrimSpace(os.Getenv("AGENTRA_CLI_SERVER_URL"))
+	if rawServerURL == "" {
+		rawServerURL = strings.TrimSpace(os.Getenv("AGENTRA_SERVER_URL"))
+	}
 	if overrides.ServerURL != "" {
 		rawServerURL = overrides.ServerURL
 	}
