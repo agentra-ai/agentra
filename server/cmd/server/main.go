@@ -11,8 +11,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/logger"
+	"github.com/agentra-ai/agentra/server/internal/corsconfig"
 	"github.com/agentra-ai/agentra/server/internal/realtime"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
@@ -46,6 +48,14 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("connected to database")
+
+	// Fail fast on a weak or missing JWT secret. The auth package panics
+	// on misconfiguration; do the same here with a friendly message so the
+	// operator sees the cause before the first request.
+	_ = auth.JWTSecret()
+
+	// Restrict WebSocket upgrades to the same origins configured for CORS.
+	realtime.SetWSAllowedOrigins(corsconfig.AllowedOrigins())
 
 	bus := events.New()
 	hub := realtime.NewHub()
