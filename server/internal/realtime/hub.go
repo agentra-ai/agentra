@@ -19,11 +19,26 @@ type MembershipChecker interface {
 	IsMember(ctx context.Context, userID, workspaceID string) bool
 }
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		// TODO: Restrict origins in production
-		return true
-	},
+// wsUpgrader is constructed via newWSUpgrader() so the origin allow-list
+// can be injected. Default (in tests) fails closed: empty allow list rejects
+// all WebSocket upgrades. Production wires the actual allow-list at
+// construction time in main.go.
+var wsUpgrader = newWSUpgrader(nil)
+
+// SetWSAllowedOrigins reconfigures the WebSocket origin allow-list.
+// Call once at process start, before serving any requests, with the
+// CORS-allowed origins. Production code should pass the same origins
+// used for HTTP CORS.
+func SetWSAllowedOrigins(allowList []string) {
+	wsUpgrader = newWSUpgrader(allowList)
+}
+
+func newWSUpgrader(allowList []string) websocket.Upgrader {
+	return websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return CheckWSOrigin(r, allowList)
+		},
+	}
 }
 
 // Client represents a single WebSocket connection with identity.
@@ -287,7 +302,7 @@ func HandleWebSocket(hub *Hub, mc MembershipChecker, w http.ResponseWriter, r *h
 		return
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Error("websocket upgrade failed", "error", err)
 		return
@@ -384,7 +399,7 @@ func HandleGatewayWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		// In production, validate against a shared secret or JWT
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Error("gateway websocket upgrade failed", "error", err, "gateway_id", gatewayID)
 		return
