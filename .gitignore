@@ -50,3 +50,6 @@ server/server
 .playwright-mcp
 .omx
 .worktrees/
+
+# pnpm cache (not source)
+.pnpm-store/
