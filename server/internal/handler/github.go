@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/go-chi/chi"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/agentra-ai/agentra/server/internal/util"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
+	"github.com/go-chi/chi"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type GitHubHandler struct {
@@ -24,9 +24,26 @@ func (h *GitHubHandler) RegisterRoutes(r chi.Router) {
 	r.Delete("/workspaces/{id}/github/disconnect", h.DisconnectGitHub)
 }
 
-func (h *GitHubHandler) ListInstallations(w http.ResponseWriter, r *http.Request) {
+// requireWorkspaceUUID pulls the {id} path param and returns it as a
+// pgtype.UUID. If the path param is not a valid UUID it writes a 400
+// response and returns ok=false — used by every handler in this file
+// so they don't have to repeat the parse + error-write pattern.
+func (h *GitHubHandler) requireWorkspaceUUID(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {
 	workspaceID := chi.URLParam(r, "id")
-	inst, err := h.queries.GetInstallation(r.Context(), pgtype.UUID{Bytes: uuid.MustParse(workspaceID), Valid: true})
+	u := util.ParseUUID(workspaceID)
+	if !u.Valid {
+		http.Error(w, "invalid workspace id", http.StatusBadRequest)
+		return pgtype.UUID{}, false
+	}
+	return u, true
+}
+
+func (h *GitHubHandler) ListInstallations(w http.ResponseWriter, r *http.Request) {
+	wsUUID, ok := h.requireWorkspaceUUID(w, r)
+	if !ok {
+		return
+	}
+	inst, err := h.queries.GetInstallation(r.Context(), wsUUID)
 	if err != nil {
 		http.Error(w, "not found", 404)
 		return
@@ -35,24 +52,30 @@ func (h *GitHubHandler) ListInstallations(w http.ResponseWriter, r *http.Request
 }
 
 func (h *GitHubHandler) ConnectGitHub(w http.ResponseWriter, r *http.Request) {
-	workspaceID := chi.URLParam(r, "id")
+	wsUUID, ok := h.requireWorkspaceUUID(w, r)
+	if !ok {
+		return
+	}
 	var req struct {
 		InstallationID int64  `json:"installation_id"`
-		AccountLogin  string `json:"account_login"`
-		AccountType   string `json:"account_type"`
-		AccessToken  string `json:"access_token"`
+		AccountLogin   string `json:"account_login"`
+		AccountType    string `json:"account_type"`
+		AccessToken    string `json:"access_token"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
 
 	inst, err := h.queries.CreateInstallation(r.Context(), db.CreateInstallationParams{
-		WorkspaceID:    pgtype.UUID{Bytes: uuid.MustParse(workspaceID), Valid: true},
+		WorkspaceID:    wsUUID,
 		InstallationID: req.InstallationID,
-		AccountLogin:  req.AccountLogin,
-		AccountType:   req.AccountType,
-		AccessToken:   req.AccessToken,
-		RefreshToken:  pgtype.Text{},
+		AccountLogin:   req.AccountLogin,
+		AccountType:    req.AccountType,
+		AccessToken:    req.AccessToken,
+		RefreshToken:   pgtype.Text{},
 		TokenExpiresAt: pgtype.Timestamptz{},
-		Repositories:  []byte("[]"),
+		Repositories:   []byte("[]"),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -62,12 +85,18 @@ func (h *GitHubHandler) ConnectGitHub(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GitHubHandler) DisconnectGitHub(w http.ResponseWriter, r *http.Request) {
-	workspaceID := chi.URLParam(r, "id")
-	inst, err := h.queries.GetInstallation(r.Context(), pgtype.UUID{Bytes: uuid.MustParse(workspaceID), Valid: true})
+	wsUUID, ok := h.requireWorkspaceUUID(w, r)
+	if !ok {
+		return
+	}
+	inst, err := h.queries.GetInstallation(r.Context(), wsUUID)
 	if err != nil {
 		http.Error(w, "not found", 404)
 		return
 	}
-	h.queries.DeleteInstallation(r.Context(), inst.ID)
+	if err := h.queries.DeleteInstallation(r.Context(), inst.ID); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 	w.WriteHeader(204)
 }

@@ -43,7 +43,11 @@ func (a *Authenticator) ValidateAPIKey(ctx context.Context, apiKey string) (uuid
 		return uuid.Nil, NewUnauthorizedError("API key not found or expired")
 	}
 
-	return uuid.MustParse(workspaceID), nil
+	parsed, err := uuid.Parse(workspaceID)
+	if err != nil {
+		return uuid.Nil, NewUnauthorizedError("invalid workspace id in API key")
+	}
+	return parsed, nil
 }
 
 // ExtractWorkspaceID extracts workspace ID from API key format: agentra_api_{workspace_id}_{random}
