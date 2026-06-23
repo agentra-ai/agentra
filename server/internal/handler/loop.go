@@ -74,14 +74,14 @@ func (h *Handler) CreateLoop(w http.ResponseWriter, r *http.Request) {
 		ID:          handlerutil.ParseUUID(req.IssueID),
 		WorkspaceID: wsUUID,
 	}); err != nil {
-		writeError(w, http.StatusNotFound, "issue not found")
+		writeLoopLookupError(w, err, http.StatusNotFound, "issue not found", "issue")
 		return
 	}
 	if _, err := h.Queries.GetAgentInWorkspace(r.Context(), dbpkg.GetAgentInWorkspaceParams{
 		ID:          handlerutil.ParseUUID(*req.AgentID),
 		WorkspaceID: wsUUID,
 	}); err != nil {
-		writeError(w, http.StatusBadRequest, "agent_id: agent not found in workspace")
+		writeLoopLookupError(w, err, http.StatusBadRequest, "agent_id: agent not found in workspace", "agent_id")
 		return
 	}
 	for stage, agentID := range req.StageAgents {
@@ -89,7 +89,7 @@ func (h *Handler) CreateLoop(w http.ResponseWriter, r *http.Request) {
 			ID:          handlerutil.ParseUUID(agentID),
 			WorkspaceID: wsUUID,
 		}); err != nil {
-			writeError(w, http.StatusBadRequest, "stage_agents: agent for stage "+stage+" not found in workspace")
+			writeLoopLookupError(w, err, http.StatusBadRequest, "stage_agents: agent for stage "+stage+" not found in workspace", "stage_agents")
 			return
 		}
 	}
@@ -144,6 +144,20 @@ func (h *Handler) CreateLoop(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("loop created", "loop_id", loop.ID, "issue_id", loop.IssueID, "workspace_id", workspaceID)
 	writeJSON(w, http.StatusCreated, loop)
+}
+
+// writeLoopLookupError maps a workspace-scoped validation lookup error to an
+// HTTP response. A missing row (pgx.ErrNoRows) is the caller's fault and uses
+// notFoundStatus + notFoundMsg; anything else is a transient/infra error and
+// becomes a 500 so callers don't mistake a DB blip for a permanent rejection.
+// Mirrors GetLoop's error handling.
+func writeLoopLookupError(w http.ResponseWriter, err error, notFoundStatus int, notFoundMsg, field string) {
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, notFoundStatus, notFoundMsg)
+		return
+	}
+	slog.Warn("create loop: validation lookup failed", "field", field, "error", err)
+	writeError(w, http.StatusInternalServerError, "failed to validate "+field)
 }
 
 // GetLoop handles GET /api/loops/{id}.

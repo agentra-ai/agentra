@@ -316,6 +316,34 @@ func TestCreateLoop_RejectsStageAgentFromOtherWorkspace(t *testing.T) {
 	}
 }
 
+// TestCreateLoop_InfraErrorReturns500 verifies the cross-tenant guard
+// distinguishes pgx.ErrNoRows (genuine not-found → 4xx) from any other
+// error (transient/infra → 500). A cancelled context forces the underlying
+// pgx call to fail with context.Canceled, which must surface as 500 so
+// callers don't mistake a DB blip for a permanent rejection.
+func TestCreateLoop_InfraErrorReturns500(t *testing.T) {
+	issueID := createLoopTestIssue(t, "loop infra error")
+	agentID := createLoopTestAgent(t)
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{
+		"issue_id": issueID,
+		"agent_id": agentID,
+	})
+	// Force the very first lookup (GetIssueInWorkspace) to fail with a non-
+	// ErrNoRows error by passing a cancelled context. pgx propagates
+	// context.Canceled through the Scan, which the handler must classify
+	// as infrastructure failure.
+	ctx, cancel := context.WithCancel(req.Context())
+	cancel()
+	req = req.WithContext(ctx)
+
+	testHandler.CreateLoop(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("CreateLoop (cancelled ctx): expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 // seedAgentInWorkspace creates an agent_runtime + agent in the given
 // workspace via direct SQL and returns the agent id. Used to set up
 // cross-tenant fixtures without going through the public API (which would
