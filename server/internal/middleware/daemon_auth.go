@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"time"
+
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/agentra-ai/agentra/server/internal/auth"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
@@ -77,7 +79,12 @@ func DaemonAuth(queries *db.Queries) func(http.Handler) http.Handler {
 					return
 				}
 				r.Header.Set("X-User-ID", uuidToString(pat.UserID))
-				go queries.UpdatePersonalAccessTokenLastUsed(context.Background(), pat.ID)
+				// Run the audit update inline (no goroutine) so PAT-authenticated
+				// daemon requests don't leak a goroutine per call. The 2s timeout
+				// keeps a stuck DB from blocking the request indefinitely.
+				updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+				_ = queries.UpdatePersonalAccessTokenLastUsed(updateCtx, pat.ID)
 				next.ServeHTTP(w, r)
 				return
 			}

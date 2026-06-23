@@ -3,11 +3,12 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/agentra-ai/agentra/server/internal/auth"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func generateToken(claims jwt.MapClaims, secret []byte) string {
@@ -24,9 +25,12 @@ func validClaims() jwt.MapClaims {
 	}
 }
 
-// authMiddleware returns the Auth middleware with nil queries (JWT-only tests).
+// authMiddleware returns the Auth middleware with no PAT store. We use
+// AuthWithPATStore(nil) directly so the interface is a true nil (rather
+// than a typed-nil *db.Queries, which would not equal nil in an interface
+// comparison and would panic when methods are called on it).
 func authMiddleware(next http.Handler) http.Handler {
-	return Auth(nil)(next)
+	return AuthWithPATStore(nil)(next)
 }
 
 func TestAuth_MissingHeader(t *testing.T) {
@@ -194,4 +198,14 @@ func TestAuth_InvalidPAT(t *testing.T) {
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", w.Code)
 	}
+}
+
+// TestMain sets a strong JWT_SECRET before any test runs, because
+// auth.JWTSecret() now refuses to return a placeholder/short secret.
+// Tests that need the actual secret call auth.JWTSecret().
+func TestMain(m *testing.M) {
+	os.Setenv("JWT_SECRET", "test-jwt-secret-with-enough-bytes-1234567890")
+	// Reset the cached secret so it picks up the new value.
+	auth.ResetSecretForTesting()
+	os.Exit(m.Run())
 }
