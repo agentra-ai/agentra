@@ -2,22 +2,20 @@ package handler
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/subtle"
-	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/logger"
+	"github.com/agentra-ai/agentra/server/internal/otpcode"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type UserResponse struct {
@@ -167,12 +165,7 @@ func (h *Handler) ensureUserWorkspace(ctx context.Context, user db.User) error {
 }
 
 func generateCode() (string, error) {
-	var buf [4]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		return "", err
-	}
-	n := binary.BigEndian.Uint32(buf[:]) % 1000000
-	return fmt.Sprintf("%06d", n), nil
+	return otpcode.Generate()
 }
 
 func (h *Handler) issueJWT(user db.User) (string, error) {
