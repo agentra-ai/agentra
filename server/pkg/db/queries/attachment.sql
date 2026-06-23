@@ -40,3 +40,8 @@ WHERE issue_id = $2
 
 -- name: DeleteAttachment :exec
 DELETE FROM attachment WHERE id = $1 AND workspace_id = $2;
+
+-- name: GetAttachmentByURL :one
+SELECT * FROM attachment
+WHERE url = $1
+LIMIT 1;
