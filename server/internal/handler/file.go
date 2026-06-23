@@ -11,6 +11,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/agentra-ai/agentra/server/internal/fileauth"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -213,6 +214,16 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 
 // ---------------------------------------------------------------------------
 // GetPublicFile — GET /api/files/{key}
+//
+// The /api/files/{key} URL is the unguessable handle that the rest of
+// the app hands to users as the DownloadURL on attachments. It must
+// therefore be authenticated: anyone who learns the key could otherwise
+// read the file directly. The check delegates to fileauth.Decide, which
+// verifies the caller is a member of the workspace the attachment
+// belongs to. The file key itself has 128 bits of entropy, so this
+// auth layer protects against accidental link sharing and CSRF
+// shenanigans, not against a determined attacker who already has the
+// link.
 // ---------------------------------------------------------------------------
 
 func (h *Handler) GetPublicFile(w http.ResponseWriter, r *http.Request) {
@@ -224,6 +235,13 @@ func (h *Handler) GetPublicFile(w http.ResponseWriter, r *http.Request) {
 	key := chi.URLParam(r, "key")
 	if key == "" {
 		writeError(w, http.StatusBadRequest, "missing file key")
+		return
+	}
+
+	userID := requestUserID(r)
+	d := fileauth.Decide(r.Context(), fileAuthStore{q: h.Queries}, userID, key)
+	if !d.Allowed {
+		writeError(w, d.Status, d.Message)
 		return
 	}
 
