@@ -837,9 +837,19 @@ export function LandingProofScene({
         ref={mountRef}
         className={renderMode === "webgl" ? "h-full w-full" : "hidden"}
       />
-      {renderMode === "fallback" ? (
-        <div className="h-full w-full bg-[radial-gradient(circle_at_18%_42%,rgba(0,212,255,0.08),transparent_20%),radial-gradient(circle_at_78%_44%,rgba(125,216,232,0.06),transparent_22%),linear-gradient(180deg,rgba(7,9,14,0.95),rgba(3,5,9,0.99))]" />
-      ) : null}
+      {renderMode === "fallback" ? <FallbackGradient /> : null}
     </div>
+  );
+}
+
+/**
+ * Static radial gradient used as a fallback when WebGL is unavailable,
+ * the 3D scene hasn't loaded yet, or it has thrown and the error
+ * boundary caught it. Exported so dynamic-import loading and the
+ * error boundary can both reuse the same visual.
+ */
+export function FallbackGradient() {
+  return (
+    <div className="h-full w-full bg-[radial-gradient(circle_at_18%_42%,rgba(0,212,255,0.08),transparent_20%),radial-gradient(circle_at_78%_44%,rgba(125,216,232,0.06),transparent_22%),linear-gradient(180deg,rgba(7,9,14,0.95),rgba(3,5,9,0.99))]" />
   );
 }

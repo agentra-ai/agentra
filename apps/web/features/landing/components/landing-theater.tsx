@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
@@ -19,7 +20,19 @@ import {
   CodexLogo,
   headerButtonClassName,
 } from "./shared";
-import { LandingProofScene } from "./landing-proof-scene";
+import { FallbackGradient } from "./landing-proof-scene";
+import { SceneErrorBoundary } from "./scene-error-boundary";
+
+// Three.js is ~150kB gzipped and pulls a Worker bundle. Load it only on
+// the client, after hydration, and swap in the static gradient while it
+// streams in. The error boundary catches any render exception.
+const LandingProofScene = dynamic(
+  () => import("./landing-proof-scene").then((m) => m.LandingProofScene),
+  {
+    ssr: false,
+    loading: () => <FallbackGradient />,
+  },
+);
 
 const LOOP_INTERVAL_MS = 4800;
 const proofIcons = [Workflow, ShieldCheck, Sparkles];
@@ -283,7 +296,9 @@ export function LandingTheater() {
                   className="relative mt-4 h-[360px] overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(7,10,15,0.94),rgba(3,5,10,1))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:h-[420px]"
                   aria-label={t.theater.sceneAriaLabel}
                 >
-                  <LandingProofScene activeIndex={activeIndex} />
+                  <SceneErrorBoundary fallback={<FallbackGradient />}>
+                    <LandingProofScene activeIndex={activeIndex} />
+                  </SceneErrorBoundary>
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_26%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_18%,transparent_82%,rgba(255,255,255,0.02))]" />
                   <div className="absolute inset-[1px] rounded-[27px] border border-white/6" />
 
