@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 
 const STATION_POINTS = [
   new THREE.Vector3(-3.8, 0.56, 0),
@@ -382,6 +383,7 @@ export function LandingProofScene({
   const [renderMode, setRenderMode] = useState<"webgl" | "fallback">(
     "fallback",
   );
+  const reduced = usePrefersReducedMotion();
 
   useEffect(() => {
     activeIndexRef.current = activeIndex;
@@ -797,6 +799,15 @@ export function LandingProofScene({
     };
 
     animate();
+
+    // When the user requests reduced motion, render one static frame and
+    // stop. The robot stays at the current station without idle bobbing,
+    // eye pulse, or sweep beam. The step still updates on click — the
+    // theater's auto-advance is gated separately.
+    if (reduced) {
+      window.cancelAnimationFrame(frameId);
+      renderer.render(scene, camera);
+    }
 
     return () => {
       window.cancelAnimationFrame(frameId);

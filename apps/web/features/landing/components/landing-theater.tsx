@@ -13,6 +13,7 @@ import {
   Workflow,
 } from "lucide-react";
 import { useAuthStore } from "@/features/auth";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { cn } from "@/lib/utils";
 import { useLocale } from "../i18n";
 import {
@@ -66,6 +67,7 @@ export function LandingTheater() {
     locale === "zh"
       ? "text-[0.9em] leading-[1.02] tracking-[-0.06em] text-white/72"
       : "tracking-[-0.05em] text-white/70";
+  const reduced = usePrefersReducedMotion();
   const sceneProgress = `${((activeIndex + 1) / Math.max(steps.length, 1)) * 100}%`;
   const scenePacketTransform =
     activeIndex === 0
@@ -75,7 +77,7 @@ export function LandingTheater() {
         : "translate(-50%, -146%)";
 
   useEffect(() => {
-    if (steps.length === 0) {
+    if (steps.length === 0 || reduced) {
       return;
     }
 
@@ -84,7 +86,7 @@ export function LandingTheater() {
     }, LOOP_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
-  }, [steps.length]);
+  }, [steps.length, reduced]);
 
   if (!activeStep) {
     return null;
@@ -413,6 +415,7 @@ export function LandingTheater() {
 
                 <div
                   key={`${activeStep.id}-detail`}
+                  aria-live="polite"
                   className="mt-4 animate-in fade-in-0 slide-in-from-bottom-2 rounded-[24px] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-4 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.06)] duration-500 backdrop-blur-xl sm:px-5"
                 >
                   <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
