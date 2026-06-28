@@ -82,8 +82,39 @@ function createBadgeTexture(label: string) {
 }
 
 // ─── Pixel Robot ─────────────────────────────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const buildRobot = (scene: any): any => {
+/**
+ * Top-level parts of the pixel robot, returned from buildRobot so the
+ * animation loop can update transforms without re-querying the scene
+ * graph.
+ */
+export interface RobotParts {
+  body: any;
+  head: any;
+  eyeL: any;
+  eyeR: any;
+  antenna: any;
+  armL: any;
+  armR: any;
+  legL: any;
+  legR: any;
+  scanBeam: any;
+}
+
+/**
+ * Dispose a material and any textures it references. Skips the empty
+ * base Material case (no .map, no .dispose weirdness).
+ */
+function disposeMaterial(material: any): void {
+  const mat = material;
+  if (mat && mat.map) {
+    mat.map.dispose();
+  }
+  if (mat && typeof mat.dispose === "function") {
+    mat.dispose();
+  }
+}
+
+export const buildRobot = (scene: any): RobotParts => {
   const robotGroup = new THREE.Group();
 
   // Head — boxy pixel style
@@ -162,8 +193,35 @@ export const buildRobot = (scene: any): any => {
 };
 
 // ─── Station Props ────────────────────────────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const buildStationProps = (scene: any, stationPoints: any[]): any[] => {
+/**
+ * Per-station renderable handles. The animation loop reads these by
+ * name instead of indexing into group.children, which is brittle to
+ * reordering. mat0 is the always-present base material; mat1/mat2
+ * are optional accent materials used for pulse/rotation effects.
+ *
+ * Optional mesh refs are populated only for the stations that need
+ * them (e.g. scanLine for the intake panel, crossH/crossV for the
+ * router ring).
+ */
+export interface StationProps {
+  group: any;
+  mat0: any;
+  mat1?: any;
+  mat2?: any;
+  scanLine?: any;
+  routerCrossH?: any;
+  routerCrossV?: any;
+  terminalStripes?: any[];
+  terminalDots?: any[];
+  reviewCrossH?: any;
+  reviewCrossV?: any;
+  drawer?: any;
+}
+
+export const buildStationProps = (
+  scene: any,
+  stationPoints: any[],
+): StationProps[] => {
   const stationLabels = ["01", "02", "03", "04", "05"];
 
   return stationPoints.map((point, index) => {
@@ -171,11 +229,9 @@ export const buildStationProps = (scene: any, stationPoints: any[]): any[] => {
     group.position.copy(point);
     scene.add(group);
 
-    const props = {
+    const props: StationProps = {
       group,
       mat0: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18 }),
-      mat1: undefined as any,
-      mat2: undefined as any,
     };
 
     if (index === 0) {
@@ -197,6 +253,7 @@ export const buildStationProps = (scene: any, stationPoints: any[]): any[] => {
       const scanLine = new THREE.Mesh(scanGeo, scanMat);
       scanLine.position.y = -0.25;
       group.add(scanLine);
+      props.scanLine = scanLine;
 
       // Panel frame lines (horizontal)
       const frameMat = new THREE.MeshBasicMaterial({
@@ -228,7 +285,9 @@ export const buildStationProps = (scene: any, stationPoints: any[]): any[] => {
       const vGeo = new THREE.PlaneGeometry(0.04, 0.38);
       const crossH = new THREE.Mesh(hGeo, crossMat);
       const crossV = new THREE.Mesh(vGeo, crossMat.clone());
-      props.mat2 = crossV.material as any;
+      props.mat2 = crossV.material;
+      props.routerCrossH = crossH;
+      props.routerCrossV = crossV;
       group.add(crossH);
       group.add(crossV);
 
@@ -254,6 +313,7 @@ export const buildStationProps = (scene: any, stationPoints: any[]): any[] => {
         stripes.push(stripe);
         if (si === 1) props.mat1 = sMat;
       }
+      props.terminalStripes = stripes;
 
       // Pulse dots (blink)
       const dotGeo = new THREE.CircleGeometry(0.045, 12);
@@ -263,11 +323,14 @@ export const buildStationProps = (scene: any, stationPoints: any[]): any[] => {
         opacity: 0,
       });
       props.mat2 = dotMat;
+      const terminalDots: any[] = [];
       for (let di = 0; di < 2; di++) {
         const dot = new THREE.Mesh(dotGeo, dotMat.clone());
         dot.position.set(-0.3 + di * 0.6, 0, 0.02);
         group.add(dot);
+        terminalDots.push(dot);
       }
+      props.terminalDots = terminalDots;
     } else if (index === 3) {
       // ── 04 Review 扫描架 ────────────────────────────────────────────────
       // Magnifier circle
@@ -309,6 +372,8 @@ export const buildStationProps = (scene: any, stationPoints: any[]): any[] => {
       const cvGeo = new THREE.PlaneGeometry(0.015, 0.22);
       const ch = new THREE.Mesh(chGeo, crossMat);
       const cv = new THREE.Mesh(cvGeo, (crossMat.clone()));
+      props.reviewCrossH = ch;
+      props.reviewCrossV = cv;
       group.add(ch);
       group.add(cv);
     } else {
@@ -325,7 +390,10 @@ export const buildStationProps = (scene: any, stationPoints: any[]): any[] => {
         const drawer = new THREE.Mesh(dGeo, dMat);
         drawer.position.y = 0.14 - dr * 0.18;
         group.add(drawer);
-        if (dr === 0) props.mat1 = dMat;
+        if (dr === 0) {
+          props.mat1 = dMat;
+          props.drawer = drawer;
+        }
 
         // Drawer handle
         const hGeo = new THREE.PlaneGeometry(0.1, 0.02);
@@ -360,7 +428,7 @@ export const buildStationProps = (scene: any, stationPoints: any[]): any[] => {
       depthTest: false,
     });
     if (badgeTexture) {
-      const badge: any = new THREE.Sprite(badgeMaterial);
+      const badge = new THREE.Sprite(badgeMaterial);
       badge.scale.set(0.92, 0.46, 1);
       badge.position.set(0, 0.9, 0);
       group.add(badge);
@@ -666,12 +734,10 @@ export function LandingProofScene({
 
       // Eye glow pulse
       const eyeIntensity = 0.7 + Math.sin(elapsed * 3.5) * 0.3;
-      (robot.eyeL.material as any).color.setHex(
-        eyeIntensity > 0.85 ? 0x00d4ff : 0x009dcc,
-      );
-      (robot.eyeR.material as any).color.setHex(
-        eyeIntensity > 0.85 ? 0x00d4ff : 0x009dcc,
-      );
+      const eyeLMat = robot.eyeL.material;
+      const eyeRMat = robot.eyeR.material;
+      eyeLMat.color.setHex(eyeIntensity > 0.85 ? 0x00d4ff : 0x009dcc);
+      eyeRMat.color.setHex(eyeIntensity > 0.85 ? 0x00d4ff : 0x009dcc);
 
       // Antenna wobble
       robot.antenna.rotation.z = Math.sin(elapsed * 5.5) * 0.18;
@@ -691,53 +757,42 @@ export function LandingProofScene({
           stationRings[idx].nodeCoreMat.opacity = 0.5 + emphasis * 0.3;
         }
 
-        if (idx === 0 && prop.mat1) {
+        if (idx === 0 && prop.mat1 && prop.scanLine) {
           // 01 Scan line — oscillate y
           const scanY = -0.25 + Math.sin(elapsed * 3.2) * 0.28;
-          const child = prop.group.children[1] as any;
-          if (child) {
-            child.position.y = scanY;
-          }
+          prop.scanLine.position.y = scanY;
           prop.mat1.opacity = isActive ? 0.7 + Math.sin(elapsed * 3.2) * 0.2 : 0.3;
         }
 
-        if (idx === 1 && prop.mat1 && prop.mat2) {
+        if (idx === 1 && prop.mat1 && prop.mat2 && prop.routerCrossH && prop.routerCrossV) {
           // 02 Router cross — rotate
           const rot = elapsed * 2.8;
-          const crossH = prop.group.children[1] as any;
-          const crossV = prop.group.children[2] as any;
-          if (crossH) crossH.rotation.z = rot;
-          if (crossV) crossV.rotation.z = -rot * 0.7;
+          prop.routerCrossH.rotation.z = rot;
+          prop.routerCrossV.rotation.z = -rot * 0.7;
           prop.mat1.opacity = isActive ? 0.85 : 0.4;
           prop.mat2.opacity = isActive ? 0.7 : 0.3;
         }
 
-        if (idx === 2 && prop.mat1) {
+        if (idx === 2 && prop.mat1 && prop.terminalStripes && prop.terminalDots) {
           // 03 Terminal — stripe pulse
-          prop.group.children.forEach((child: any, ci: number) => {
-            if (ci < 3) {
-              (child as any).material = prop.group.children[1].material;
-            }
-          });
+          for (const stripe of prop.terminalStripes) {
+            stripe.material = prop.terminalStripes[1].material;
+          }
           prop.mat1.opacity = isActive
             ? 0.5 + Math.sin(elapsed * 6) * 0.35
             : 0.22;
           // Blink dots
-          prop.group.children.forEach((child: any, ci: number) => {
-            if (ci === 4 || ci === 5) {
-              (child as any).material.opacity =
-                isActive && Math.sin(elapsed * 8) > 0 ? 0.9 : 0;
-            }
-          });
+          for (const dot of prop.terminalDots) {
+            const mat = dot.material;
+            mat.opacity = isActive && Math.sin(elapsed * 8) > 0 ? 0.9 : 0;
+          }
         }
 
-        if (idx === 3 && prop.mat1 && prop.mat2) {
+        if (idx === 3 && prop.mat1 && prop.mat2 && prop.reviewCrossH && prop.reviewCrossV) {
           // 04 Review — scan cross oscillates x
           const crossX = Math.sin(elapsed * 2.5) * 0.1;
-          const ch = prop.group.children[3] as any;
-          const cv = prop.group.children[4] as any;
-          if (ch) ch.position.x = crossX;
-          if (cv) cv.position.y = crossX * 0.5;
+          prop.reviewCrossH.position.x = crossX;
+          prop.reviewCrossV.position.y = crossX * 0.5;
           prop.mat1.opacity = isActive ? 0.15 : 0.05;
           prop.mat2.opacity = isActive ? 0.75 : 0.35;
         }
@@ -817,26 +872,18 @@ export function LandingProofScene({
         mountNode.removeChild(renderer.domElement);
       }
 
-      scene.traverse(
-        (
-          object: {
-            geometry?: { dispose: () => void };
-            material?:
-              | { dispose: () => void }
-              | Array<{ dispose: () => void }>;
-          },
-        ) => {
-          if (object.geometry) {
-            object.geometry.dispose();
-          }
-          const material = object.material;
-          if (Array.isArray(material)) {
-            material.forEach((value) => value.dispose());
-          } else if (material) {
-            material.dispose();
-          }
-        },
-      );
+      scene.traverse((object: any) => {
+        const mesh = object;
+        if (mesh.geometry) {
+          mesh.geometry.dispose();
+        }
+        const material = mesh.material;
+        if (Array.isArray(material)) {
+          material.forEach((m) => disposeMaterial(m));
+        } else if (material) {
+          disposeMaterial(material);
+        }
+      });
 
       renderer.dispose();
     };
