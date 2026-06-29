@@ -7,13 +7,6 @@ export const localeLabels: Record<Locale, string> = {
   zh: "\u4e2d\u6587",
 };
 
-type FeatureSection = {
-  label: string;
-  title: string;
-  description: string;
-  cards: { title: string; description: string }[];
-};
-
 export type LandingDict = {
   header: { login: string; dashboard: string };
   theater: {
@@ -26,8 +19,6 @@ export type LandingDict = {
     worksWith: string;
     stepLabel: string;
     liveLabel: string;
-    cycleLabel: string;
-    cycleHint: string;
     sceneAriaLabel: string;
     proofChips: string[];
     panelTaskLabel: string;
@@ -35,7 +26,6 @@ export type LandingDict = {
     panelQueueLabel: string;
     panelQueueValue: string;
     panelRuntimeLabel: string;
-    panelFeedLabel: string;
     panelReviewLabel: string;
     panelArtifactLabel: string;
     panelOwnerLabel: string;
@@ -60,47 +50,11 @@ export type LandingDict = {
       nextAction: string;
     }[];
   };
-  hero: {
-    kicker: string;
-    headlineLine1: string;
-    headlineLine2: string;
-    subheading: string;
-    cta: string;
-    worksWith: string;
-    proofChips: string[];
-    imageAlt: string;
-  };
   valueProps: {
     label: string;
     headline: string;
     description: string;
     items: { title: string; description: string }[];
-  };
-  features: {
-    teammates: FeatureSection;
-    autonomous: FeatureSection;
-    skills: FeatureSection;
-    runtimes: FeatureSection;
-  };
-  howItWorks: {
-    label: string;
-    headlineMain: string;
-    headlineFaded: string;
-    steps: { title: string; description: string }[];
-    cta: string;
-  };
-  openSource: {
-    label: string;
-    headlineLine1: string;
-    headlineLine2: string;
-    description: string;
-    cta: string;
-    highlights: { title: string; description: string }[];
-  };
-  faq: {
-    label: string;
-    headline: string;
-    items: { question: string; answer: string }[];
   };
   footer: {
     tagline: string;
@@ -128,3 +82,4 @@ export type LandingDict = {
     }[];
   };
 };
+
