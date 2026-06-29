@@ -21,7 +21,7 @@ export default function LandingError({
   }, [error]);
 
   return (
-    <section className="min-h-screen bg-[#04070d] px-6 py-20 text-white">
+    <section className="min-h-screen bg-landing-bg px-6 py-20 text-white">
       <div className="mx-auto max-w-2xl space-y-4">
         <h1 className="text-3xl font-semibold sm:text-4xl">
           Make coding agents the team they should be.

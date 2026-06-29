@@ -7,7 +7,7 @@ export function LandingValueProps() {
   const { t } = useLocale();
 
   return (
-    <section className="relative border-t border-white/8 bg-[#020408] text-white">
+    <section className="relative border-t border-white/8 bg-landing-bg-deep text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_24%)]" />
 
       <div className="relative mx-auto max-w-[1320px] px-4 py-16 sm:px-6 lg:px-8 lg:py-20">

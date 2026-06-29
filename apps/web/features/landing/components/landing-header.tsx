@@ -29,14 +29,14 @@ export function LandingHeader({
           <AgentraIcon
             className={cn(
               "size-5",
-              variant === "dark" ? "text-white" : "text-[#0a0d12]",
+              variant === "dark" ? "text-white" : "text-landing-fg",
             )}
             noSpin
           />
           <span
             className={cn(
               "text-[18px] font-semibold tracking-[0.04em] lowercase sm:text-[20px]",
-              variant === "dark" ? "text-white/92" : "text-[#0a0d12]",
+              variant === "dark" ? "text-white/92" : "text-landing-fg",
             )}
           >
             agentra

@@ -34,10 +34,10 @@ export function headerButtonClassName(
     "inline-flex items-center justify-center gap-2 rounded-[11px] px-4 py-2.5 text-[13px] font-semibold transition-colors",
     variant === "dark"
       ? tone === "solid"
-        ? "bg-white text-[#0a0d12] hover:bg-white/92"
+        ? "bg-white text-landing-fg hover:bg-white/92"
         : "border border-white/18 bg-black/16 text-white backdrop-blur-sm hover:bg-black/24"
       : tone === "solid"
-        ? "bg-[#0a0d12] text-white hover:bg-[#0a0d12]/88"
-        : "border border-[#0a0d12]/12 bg-white text-[#0a0d12] hover:bg-[#0a0d12]/5",
+        ? "bg-landing-surface text-white hover:bg-landing-surface/88"
+        : "border border-[#0a0d12]/12 bg-white text-landing-fg hover:bg-landing-surface/5",
   );
 }

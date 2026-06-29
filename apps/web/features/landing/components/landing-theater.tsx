@@ -113,7 +113,7 @@ export function LandingTheater() {
   return (
     <main
       id="product"
-      className="relative overflow-hidden bg-[#04070d] text-white"
+      className="relative overflow-hidden bg-landing-bg text-white"
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.06),_transparent_30%),radial-gradient(circle_at_82%_18%,_rgba(17,24,39,0.62),_transparent_28%),radial-gradient(circle_at_76%_72%,_rgba(255,255,255,0.03),_transparent_18%),linear-gradient(180deg,_#05080d_0%,_#03060b_56%,_#020307_100%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.032)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.032)_1px,transparent_1px)] [background-size:72px_72px] opacity-16" />

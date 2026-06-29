@@ -19,7 +19,7 @@ export function LandingFooter() {
   const user = useAuthStore((state) => state.user);
 
   return (
-    <footer className="border-t border-white/8 bg-[#05070b] text-white">
+    <footer className="border-t border-white/8 bg-landing-bg-deep text-white">
       <div className="mx-auto max-w-[1320px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
           <div className="max-w-[32rem]">

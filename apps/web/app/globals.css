@@ -54,6 +54,19 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
+
+    /* Landing page — custom dark theme. The landing intentionally uses
+       a darker palette than shadcn's .dark theme so the 3D scene reads
+       clearly. These are exposed as Tailwind tokens so landing code
+       can write `bg-landing-bg`, `text-landing-fg-muted`, etc. */
+    --color-landing-bg: var(--landing-bg);
+    --color-landing-bg-deep: var(--landing-bg-deep);
+    --color-landing-surface: var(--landing-surface);
+    --color-landing-fg: var(--landing-fg);
+    --color-landing-fg-muted: var(--landing-fg-muted);
+    --color-landing-fg-subtle: var(--landing-fg-subtle);
+    --color-landing-border: var(--landing-border);
+    --color-landing-accent: var(--landing-accent);
 }
 
 :root {
@@ -103,6 +116,17 @@
     --scrollbar-thumb: oklch(0 0 0 / 10%);
     --scrollbar-thumb-hover: oklch(0 0 0 / 18%);
     --scrollbar-track: transparent;
+
+    /* Landing-page palette — applied regardless of light/dark mode
+       because the landing intentionally uses a single dark scheme. */
+    --landing-bg: oklch(0.07 0.005 250);
+    --landing-bg-deep: oklch(0.05 0.005 250);
+    --landing-surface: oklch(0.09 0.005 250);
+    --landing-fg: oklch(0.98 0 0);
+    --landing-fg-muted: oklch(0.62 0.005 250);
+    --landing-fg-subtle: oklch(0.42 0.005 250);
+    --landing-border: oklch(0.98 0 0 / 8%);
+    --landing-accent: oklch(0.72 0.12 200);
 }
 
 .dark {
