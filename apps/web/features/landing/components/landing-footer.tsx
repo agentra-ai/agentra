@@ -7,6 +7,13 @@ import { useAuthStore } from "@/features/auth";
 import { localeLabels, locales, useLocale } from "../i18n";
 import { headerButtonClassName } from "./shared";
 
+// Compute the year once at module load. Calling new Date() inline in a
+// client component caused hydration mismatches across the year
+// boundary (server renders 2026 at 23:59:59 UTC, client renders 2027
+// at 00:00:00 local). Module-level constants are evaluated once and
+// match on both sides unless the page is open across a year boundary.
+const currentYear = new Date().getFullYear();
+
 export function LandingFooter() {
   const { t, locale, setLocale } = useLocale();
   const user = useAuthStore((state) => state.user);
@@ -52,10 +59,7 @@ export function LandingFooter() {
 
           <div className="flex items-center gap-5">
             <p className="text-[13px] text-white/34">
-              {t.footer.copyright.replace(
-                "{year}",
-                String(new Date().getFullYear()),
-              )}
+              {t.footer.copyright.replace("{year}", String(currentYear))}
             </p>
             <div className="flex items-center rounded-full border border-white/10 bg-white/[0.04] p-1">
               {locales.map((value) => (
