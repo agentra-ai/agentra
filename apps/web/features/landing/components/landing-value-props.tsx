@@ -1,10 +1,17 @@
-"use client";
-
 import { cn } from "@/lib/utils";
-import { useLocale } from "../i18n";
+import { getTranslations } from "next-intl/server";
 
-export function LandingValueProps() {
-  const { t } = useLocale();
+export async function LandingValueProps() {
+  const t = await getTranslations("landing.valueProps");
+  const label = t("label");
+  const headline = t("headline");
+  const description = t("description");
+  const items = (await Promise.all(
+    [0, 1, 2].map((i) => ({
+      title: t(`items.${i}.title`),
+      description: t(`items.${i}.description`),
+    })),
+  ));
 
   return (
     <section className="relative border-t border-white/8 bg-landing-bg-deep text-white">
@@ -14,24 +21,24 @@ export function LandingValueProps() {
         <div className="grid gap-12 lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] lg:items-start">
           <div className="max-w-[34rem]">
             <div className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/42">
-              {t.valueProps.label}
+              {label}
             </div>
             <h2 className="mt-4 max-w-[11ch] text-[2.1rem] font-semibold leading-[0.95] tracking-[-0.06em] text-white sm:text-[2.7rem]">
-              {t.valueProps.headline}
+              {headline}
             </h2>
             <p className="mt-6 max-w-[34rem] text-[15px] leading-[1.9] text-white/58 sm:text-[16px]">
-              {t.valueProps.description}
+              {description}
             </p>
           </div>
 
           <div className="rounded-[28px] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] shadow-[0_0_0_1px_rgba(255,255,255,0.06)] backdrop-blur-xl">
             <div className="grid md:grid-cols-3">
-              {t.valueProps.items.map((item, index) => (
+              {items.map((item, index) => (
                 <article
                   key={item.title}
                   className={cn(
                     "px-5 py-6 md:px-6 md:py-8",
-                    index < t.valueProps.items.length - 1
+                    index < items.length - 1
                       ? "border-b border-white/8 md:border-b-0 md:border-r"
                       : "",
                   )}

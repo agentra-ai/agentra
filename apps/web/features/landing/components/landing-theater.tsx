@@ -3,6 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ArrowRight,
   Bot,
@@ -15,7 +16,6 @@ import {
 import { useAuthStore } from "@/features/auth";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { cn } from "@/lib/utils";
-import { useLocale } from "../i18n";
 import {
   ClaudeCodeLogo,
   CodexLogo,
@@ -46,10 +46,27 @@ const sceneNodePositions = [
 ];
 
 export function LandingTheater() {
-  const { t, locale } = useLocale();
+  const t = useTranslations("landing.theater");
+  const tHeader = useTranslations("landing.header");
+  const locale = useLocale();
   const user = useAuthStore((state) => state.user);
   const [activeIndex, setActiveIndex] = useState(0);
-  const steps = t.theater.steps;
+  const steps = t.raw("steps") as Array<{
+    id: string;
+    label: string;
+    title: string;
+    description: string;
+    statusLabel: string;
+    statusValue: string;
+    resultLabel: string;
+    resultValue: string;
+    meta: string;
+    signal: string;
+    owner: string;
+    artifact: string;
+    review: string;
+    nextAction: string;
+  }>;
   const activeStep = steps[activeIndex] ?? steps[0];
   const fallbackSceneNodePosition = sceneNodePositions[0] ?? {
     left: "8%",
@@ -94,17 +111,17 @@ export function LandingTheater() {
 
   const systemFacts = [
     {
-      label: t.theater.panelOwnerLabel,
+      label: t("panelOwnerLabel"),
       value: activeStep.owner,
       icon: Bot,
     },
     {
-      label: t.theater.panelReviewLabel,
+      label: t("panelReviewLabel"),
       value: activeStep.review,
       icon: CheckCircle2,
     },
     {
-      label: t.theater.panelArtifactLabel,
+      label: t("panelArtifactLabel"),
       value: activeStep.artifact,
       icon: GitBranch,
     },
@@ -125,7 +142,7 @@ export function LandingTheater() {
             <div className="inline-flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.2em] text-white/58">
               <span className="inline-flex h-px w-10 bg-[linear-gradient(90deg,rgba(255,255,255,0.42),rgba(255,255,255,0))]" />
               <Workflow className="size-3.5 text-white/62" />
-              <span>{t.theater.kicker}</span>
+              <span>{t("kicker")}</span>
             </div>
 
             <h1
@@ -134,7 +151,7 @@ export function LandingTheater() {
                 headlineWidthClass,
               )}
             >
-              <span className="block">{t.theater.headlineLine1}</span>
+              <span className="block">{t("headlineLine1")}</span>
               <span
                 className={cn(
                   "mt-2 block",
@@ -142,12 +159,12 @@ export function LandingTheater() {
                   headlineSecondaryClass,
                 )}
               >
-                {t.theater.headlineLine2}
+                {t("headlineLine2")}
               </span>
             </h1>
 
             <p className="mt-6 max-w-[35rem] text-[15px] leading-[1.95] text-white/62 sm:text-[16px]">
-              {t.theater.description}
+              {t("description")}
             </p>
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
@@ -155,7 +172,7 @@ export function LandingTheater() {
                 href={user ? "/issues" : "/login"}
                 className={headerButtonClassName("solid", "dark")}
               >
-                {user ? t.header.dashboard : t.theater.primaryCta}
+                {user ? tHeader("dashboard") : t("primaryCta")}
                 <ArrowRight className="size-4" />
               </Link>
               <Link
@@ -164,7 +181,7 @@ export function LandingTheater() {
                 rel="noreferrer"
                 className={headerButtonClassName("ghost", "dark")}
               >
-                {t.theater.secondaryCta}
+                {t("secondaryCta")}
               </Link>
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/50 backdrop-blur-md">
                 <span className="inline-flex size-1.5 rounded-full bg-white/68" />
@@ -173,12 +190,12 @@ export function LandingTheater() {
             </div>
 
             <div className="mt-8 flex items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-white/34">
-              <span>{t.theater.stepLabel}</span>
+              <span>{t("stepLabel")}</span>
               <span className="h-px flex-1 bg-white/8" />
             </div>
 
             <div className="mt-8 max-w-[34rem] divide-y divide-white/8 border-y border-white/8">
-              {t.theater.proofChips.map((chip, index) => {
+              {(t.raw("proofChips") as string[]).map((chip, index) => {
                 const Icon = proofIcons[index] ?? Sparkles;
 
                 return (
@@ -197,7 +214,7 @@ export function LandingTheater() {
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-3 text-[13px] text-white/48">
-              <span>{t.theater.worksWith}</span>
+              <span>{t("worksWith")}</span>
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-white/70">
                 <ClaudeCodeLogo className="size-4 text-white/72" />
                 <span>Claude Code</span>
@@ -227,7 +244,7 @@ export function LandingTheater() {
                         <span className="size-2 rounded-full bg-white/14" />
                         <span className="size-2 rounded-full bg-white/42" />
                       </div>
-                      <span>{t.theater.liveLabel}</span>
+                      <span>{t("liveLabel")}</span>
                     </div>
                     <div className="inline-flex items-center gap-2 text-white/52">
                       <span className="tabular-nums">
@@ -241,20 +258,20 @@ export function LandingTheater() {
 
                   <div>
                     <div className="text-[10px] uppercase tracking-[0.16em] text-white/34">
-                      {t.theater.panelTaskLabel}
+                      {t("panelTaskLabel")}
                     </div>
                     <div className="mt-2 max-w-[38rem] text-[15px] font-medium leading-[1.65] tracking-[-0.02em] text-white/90 sm:text-[16px]">
-                      {t.theater.panelTaskValue}
+                      {t("panelTaskValue")}
                     </div>
 
                     <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] uppercase tracking-[0.12em] text-white/38">
                       <div className="inline-flex items-center gap-2">
-                        <span>{t.theater.panelQueueLabel}</span>
-                        <span className="text-white/74">{t.theater.panelQueueValue}</span>
+                        <span>{t("panelQueueLabel")}</span>
+                        <span className="text-white/74">{t("panelQueueValue")}</span>
                       </div>
 
                       <div className="inline-flex items-center gap-2">
-                        <span>{t.theater.panelRuntimeLabel}</span>
+                        <span>{t("panelRuntimeLabel")}</span>
                         <span className="inline-flex items-center gap-1.5 text-white/74">
                           <CodexLogo className="size-3.5 text-white/72" />
                           <span>codex</span>
@@ -296,7 +313,7 @@ export function LandingTheater() {
 
                 <div
                   className="relative mt-4 h-[360px] overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(7,10,15,0.94),rgba(3,5,10,1))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:h-[420px]"
-                  aria-label={t.theater.sceneAriaLabel}
+                  aria-label={t("sceneAriaLabel")}
                 >
                   <SceneErrorBoundary fallback={<FallbackGradient />}>
                     <LandingProofScene activeIndex={activeIndex} />
@@ -379,7 +396,7 @@ export function LandingTheater() {
                     <div className="relative flex h-10 items-center gap-2 rounded-full border border-white/16 bg-white/88 px-3.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900 shadow-[0_10px_28px_rgba(0,0,0,0.22)]">
                       <div className="absolute inset-x-2 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.7),transparent)]" />
                       <span className="inline-flex size-2 rounded-full bg-slate-900/78" />
-                      <span>{t.theater.taskPacketLabel}</span>
+                      <span>{t("taskPacketLabel")}</span>
                     </div>
                   </div>
 
@@ -421,7 +438,7 @@ export function LandingTheater() {
                   <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
                     <div>
                       <div className="text-[11px] uppercase tracking-[0.12em] text-white/36">
-                        {t.theater.activeFocusLabel}
+                        {t("activeFocusLabel")}
                       </div>
                       <div className="mt-3 text-[22px] font-semibold tracking-[-0.045em] text-white/94">
                         {activeStep.title}
@@ -432,7 +449,7 @@ export function LandingTheater() {
 
                       <div className="mt-5 border-t border-white/8 pt-4">
                         <div className="text-[11px] uppercase tracking-[0.12em] text-white/34">
-                          {t.theater.stageNoteLabel}
+                          {t("stageNoteLabel")}
                         </div>
                         <div className="mt-2 text-[13px] leading-[1.72] text-white/56">
                           {activeStep.meta}
@@ -473,7 +490,7 @@ export function LandingTheater() {
 
                       <div>
                         <div className="text-[11px] uppercase tracking-[0.12em] text-emerald-100/68">
-                          {t.theater.panelNextLabel}
+                          {t("panelNextLabel")}
                         </div>
                         <div className="mt-2 text-[14px] leading-[1.72] text-emerald-50">
                           {activeStep.nextAction}

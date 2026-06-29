@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { AgentraIcon } from "@/components/agentra-icon";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/features/auth";
-import { useLocale } from "../i18n";
 import { headerButtonClassName } from "./shared";
 
 export function LandingHeader({
@@ -12,7 +12,7 @@ export function LandingHeader({
 }: {
   variant?: "dark" | "light";
 }) {
-  const { t } = useLocale();
+  const t = useTranslations("landing.header");
   const user = useAuthStore((s) => s.user);
 
   return (
@@ -48,7 +48,7 @@ export function LandingHeader({
             href={user ? "/issues" : "/login"}
             className={headerButtonClassName("solid", variant)}
           >
-            {user ? t.header.dashboard : t.header.login}
+            {user ? t("dashboard") : t("login")}
           </Link>
         </div>
       </div>

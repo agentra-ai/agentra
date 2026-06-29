@@ -511,5 +511,188 @@
       "stageOverridePlaceholder": "使用默认 ({agent})",
       "stageOverridePlaceholderNoAgent": "使用默认"
     }
+  },
+  "landing": {
+    "header": {
+      "login": "登录",
+      "dashboard": "进入工作台"
+    },
+    "theater": {
+      "kicker": "AI 工作控制台",
+      "headlineLine1": "让 coding agents",
+      "headlineLine2": "像队友一样工作。",
+      "description": "Agentra 让任务只需分配一次：交接、执行、review 和 skill 沉淀都留在同一个工作面。它把单次 agent run 变成团队可管理的执行流程。",
+      "primaryCta": "进入工作台",
+      "secondaryCta": "查看 GitHub",
+      "worksWith": "运行于",
+      "stepLabel": "共享流程",
+      "liveLabel": "产品证据",
+      "sceneAriaLabel": "Agentra 产品证据面板，展示 AI 任务在共享工作流中的动态迁移",
+      "proofChips": [
+        "任务不再落在私有 prompt 里",
+        "review 就发生在 run 的上下文里",
+        "成功 run 会沉淀为团队可复用 skill"
+      ],
+      "panelTaskLabel": "当前任务",
+      "panelTaskValue": "修复 workspace invite OAuth 回归，同时不破坏 SSO 流程。",
+      "panelQueueLabel": "任务入口",
+      "panelQueueValue": "Issue #1842 · shared workspace queue",
+      "panelRuntimeLabel": "Runtime",
+      "panelReviewLabel": "人工检查点",
+      "panelArtifactLabel": "团队会留下什么",
+      "panelOwnerLabel": "当前交接",
+      "panelNextLabel": "下一个结果",
+      "taskPacketLabel": "任务包",
+      "activeFocusLabel": "当前焦点",
+      "stageNoteLabel": "阶段说明",
+      "steps": [
+        {
+          "id": "capture",
+          "label": "任务",
+          "title": "任务先进入团队共享上下文",
+          "description": "工作从真实 issue 和验收条件开始，而不是从一段临时 prompt 开始。",
+          "statusLabel": "状态",
+          "statusValue": "任务包已锁定",
+          "resultLabel": "输入",
+          "resultValue": "任务简报、仓库、验收条件",
+          "meta": "这里存的是真实工作，不是临时拼出来的 prompt。",
+          "signal": "输入完整",
+          "owner": "PM + Eng lead",
+          "artifact": "任务简报已归档，repo 上下文已挂载",
+          "review": "人只需定义一次目标和风险边界，不用每次重讲背景。",
+          "nextAction": "带着完整 task packet 开始 agent 交接"
+        },
+        {
+          "id": "assign",
+          "label": "路由",
+          "title": "任务被路由到合适的 agent",
+          "description": "Agentra 会为这个工作匹配合适的 provider、机器和 workspace 身份。",
+          "statusLabel": "状态",
+          "statusValue": "已匹配 Codex runtime",
+          "resultLabel": "输入",
+          "resultValue": "Agent、provider、权限上下文",
+          "meta": "团队可以看到是谁接手了任务，为什么是这个 runtime。",
+          "signal": "runtime 就绪",
+          "owner": "Runtime router",
+          "artifact": "已分配 Codex · macOS daemon，带 workspace 权限",
+          "review": "交接过程是可见的，所以它看起来是运营流程，而不是黑箱魔法。",
+          "nextAction": "用正确的机器和权限开始 run"
+        },
+        {
+          "id": "execute",
+          "label": "运行",
+          "title": "运行过程对团队持续可见",
+          "description": "团队不用追终端 tab，也能看到进度、blocker 和输出。",
+          "statusLabel": "状态",
+          "statusValue": "正在流式执行",
+          "resultLabel": "输出",
+          "resultValue": "日志、tool calls、blocker 信号",
+          "meta": "执行留在共享线索里，不会消失在某个私有 session 里。",
+          "signal": "logs live",
+          "owner": "Codex agent",
+          "artifact": "测试、修改和失败点已同步回任务流",
+          "review": "评审人不必等 run 结束才能看，因为这条轨迹自带可检查的证据。",
+          "nextAction": "结果直接掉入 review，不丢上下文"
+        },
+        {
+          "id": "review",
+          "label": "评审",
+          "title": "人在同一条线索内完成 review",
+          "description": "diff、总结和 follow-up 都直接回到原任务上，不需要另开系统。",
+          "statusLabel": "状态",
+          "statusValue": "待人工评审",
+          "resultLabel": "输出",
+          "resultValue": "代码 diff、总结、后续任务",
+          "meta": "review 不是另一套系统，它就是这条流程的一部分。",
+          "signal": "review pending",
+          "owner": "Reviewer",
+          "artifact": "变更摘要、风险说明和 follow-up 已生成",
+          "review": "reviewer 看到 task、run 和 outcome 同屏，所以决策更快，风险更可控。",
+          "nextAction": "这套已过审的做法可以被保存复用"
+        },
+        {
+          "id": "compound",
+          "label": "复用",
+          "title": "这次胜利方式可以被复用",
+          "description": "一次成功 run 可以存为 reusable skill，让下一次任务直接从更高基线开始。",
+          "statusLabel": "状态",
+          "statusValue": "已沉淀为 skill",
+          "resultLabel": "输出",
+          "resultValue": "workflow、team memory、runtime 偏好",
+          "meta": "团队留下的是方法，不只是某次 run 的答案。",
+          "signal": "基线折高",
+          "owner": "Shared team memory",
+          "artifact": "已验证的 workflow 被保存为 reusable skill",
+          "review": "团队不用再重搭一套 prompt choreography，直接复用已证明有效的做法。",
+          "nextAction": "下一个任务直接继承这个更高基线"
+        }
+      ]
+    },
+    "valueProps": {
+      "label": "为什么需要 Agentra",
+      "headline": "Agent CLI 和真实团队执行之间，缺的就是这一层。",
+      "description": "编码 Agent 会执行，但团队还需要协同、可见性、可复用能力和 runtime 控制。Agentra 就是这层管理系统。",
+      "items": [
+        {
+          "title": "协同",
+          "description": "把 prompt 变成可跟踪的工作。每个任务都有 owner、生命周期，以及人和 Agent 之间清晰的交接。"
+        },
+        {
+          "title": "可见性",
+          "description": "不用切换五个工具，也能知道谁在工作、改了什么、卡在哪里，以及哪些 runtime 正常。"
+        },
+        {
+          "title": "复利",
+          "description": "把好的工作流封装成技能，让每一次成功的执行都在增强整个团队，而不只是一次 Agent session。"
+        }
+      ]
+    },
+    "footer": {
+      "tagline": "面向编码 Agent 团队的开源控制层。",
+      "cta": "进入工作台",
+      "links": {
+        "about": "关于",
+        "changelog": "更新日志",
+        "github": "GitHub"
+      },
+      "copyright": "© {year} Agentra. 保留所有权利。"
+    },
+    "about": {
+      "title": "关于 Agentra",
+      "paragraphs": [
+        "Agentra 是一个面向使用编码 Agent 的软件团队的开源任务管理平台。",
+        "它为 Agent 提供真正的运作界面：分配 Issue、观察进度、管理 runtime，并把可复用的工作流沉淀为技能。",
+        "你可以自托管，审查整个栈，并按照自己的基础设施和 Agent 方式进行定制。"
+      ],
+      "cta": "在 GitHub 上查看"
+    },
+    "changelog": {
+      "title": "更新日志",
+      "subtitle": "Agentra 的最新更新和改进。",
+      "entries": [
+        {
+          "version": "0.0.2",
+          "date": "2026-04-07",
+          "title": "本地默认配置与 Docker 修复",
+          "changes": [
+            "CLI 登录、API 和 daemon 的默认地址已切换为本地 Agentra 服务和 OrbStack 域名",
+            "不再优先使用过时的远程配置，本地默认值会优先生效",
+            "移除了 install 和 update 流程中已损坏的 Homebrew tap 引用",
+            "收紧 Docker 与 compose 默认值，让本地自托管栈更容易启动",
+            "公开文档和跳转路径已按照当前本地优先方式简化"
+          ]
+        },
+        {
+          "version": "0.0.1",
+          "date": "2026-04-04",
+          "title": "Agentra 首个公开落地页版本",
+          "changes": [
+            "发布 Agentra 新品牌和新产品叙事的首版首页",
+            "重做 landing hero 和各支撑板块，从 repo 导向转为产品导向",
+            "为公开站点新增了落地页视觉资产和背景素材"
+          ]
+        }
+      ]
+    }
   }
 }

@@ -15,6 +15,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default function ChangelogPage() {
+export default async function ChangelogPage() {
   return <ChangelogPageClient />;
 }

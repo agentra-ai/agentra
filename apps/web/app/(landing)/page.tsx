@@ -18,6 +18,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default function LandingPage() {
+export default async function LandingPage() {
   return <AgentraLanding />;
 }
