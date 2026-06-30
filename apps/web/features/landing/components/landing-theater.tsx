@@ -21,14 +21,14 @@ import {
   CodexLogo,
   headerButtonClassName,
 } from "./shared";
-import { FallbackGradient } from "./landing-proof-scene";
+import { FallbackGradient } from "./landing-theater-scene";
 import { SceneErrorBoundary } from "./scene-error-boundary";
 
 // Three.js is ~150kB gzipped and pulls a Worker bundle. Load it only on
 // the client, after hydration, and swap in the static gradient while it
 // streams in. The error boundary catches any render exception.
 const LandingProofScene = dynamic(
-  () => import("./landing-proof-scene").then((m) => m.LandingProofScene),
+  () => import("./landing-theater-scene").then((m) => m.LandingProofScene),
   {
     ssr: false,
     loading: () => <FallbackGradient />,
