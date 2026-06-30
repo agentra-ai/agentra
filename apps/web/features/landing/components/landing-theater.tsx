@@ -45,43 +45,45 @@ const sceneNodePositions = [
   { left: "90%", top: "25%" },
 ];
 
+type TheaterStep = {
+  id: string;
+  label: string;
+  title: string;
+  description: string;
+  statusLabel: string;
+  statusValue: string;
+  resultLabel: string;
+  resultValue: string;
+  meta: string;
+  signal: string;
+  owner: string;
+  artifact: string;
+  review: string;
+  nextAction: string;
+};
+
 export function LandingTheater() {
   const t = useTranslations("landing.theater");
   const tHeader = useTranslations("landing.header");
   const locale = useLocale();
   const user = useAuthStore((state) => state.user);
   const [activeIndex, setActiveIndex] = useState(0);
-  const steps = t.raw("steps") as Array<{
-    id: string;
-    label: string;
-    title: string;
-    description: string;
-    statusLabel: string;
-    statusValue: string;
-    resultLabel: string;
-    resultValue: string;
-    meta: string;
-    signal: string;
-    owner: string;
-    artifact: string;
-    review: string;
-    nextAction: string;
-  }>;
+  const steps = t.raw("steps") as TheaterStep[];
   const activeStep = steps[activeIndex] ?? steps[0];
   const fallbackSceneNodePosition = sceneNodePositions[0] ?? {
     left: "8%",
     top: "18%",
   };
   const headlineWidthClass =
-    locale === "zh"
+    locale === "zh-CN"
       ? "max-w-[13.2ch] sm:max-w-[13.8ch] lg:max-w-[14.4ch]"
       : "max-w-[11ch]";
   const headlineSecondaryFontClass =
-    locale === "zh"
+    locale === "zh-CN"
       ? "font-[family-name:var(--font-serif-zh)]"
       : "font-[family-name:var(--font-serif)]";
   const headlineSecondaryClass =
-    locale === "zh"
+    locale === "zh-CN"
       ? "text-[0.9em] leading-[1.02] tracking-[-0.06em] text-white/72"
       : "tracking-[-0.05em] text-white/70";
   const reduced = usePrefersReducedMotion();
@@ -217,11 +219,11 @@ export function LandingTheater() {
               <span>{t("worksWith")}</span>
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-white/70">
                 <ClaudeCodeLogo className="size-4 text-white/72" />
-                <span>Claude Code</span>
+                <span className="text-[12px] font-medium">Claude Code</span>
               </div>
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-white/70">
                 <CodexLogo className="size-4 text-white/72" />
-                <span>Codex</span>
+                <span className="text-[12px] font-medium">Codex</span>
               </div>
             </div>
           </div>
