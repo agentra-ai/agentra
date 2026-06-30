@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
+import { buildRobotMeshes } from "./geometry";
 
 const STATION_POINTS = [
   new THREE.Vector3(-3.8, 0.56, 0),
@@ -81,25 +82,6 @@ function createBadgeTexture(label: string) {
   return texture;
 }
 
-// ─── Pixel Robot ─────────────────────────────────────────────────────────────
-/**
- * Top-level parts of the pixel robot, returned from buildRobot so the
- * animation loop can update transforms without re-querying the scene
- * graph.
- */
-export interface RobotParts {
-  body: any;
-  head: any;
-  eyeL: any;
-  eyeR: any;
-  antenna: any;
-  armL: any;
-  armR: any;
-  legL: any;
-  legR: any;
-  scanBeam: any;
-}
-
 /**
  * Dispose a material and any textures it references. Skips the empty
  * base Material case (no .map, no .dispose weirdness).
@@ -113,84 +95,6 @@ function disposeMaterial(material: any): void {
     mat.dispose();
   }
 }
-
-export const buildRobot = (scene: any): RobotParts => {
-  const robotGroup = new THREE.Group();
-
-  // Head — boxy pixel style
-  const headGeo = new THREE.BoxGeometry(0.32, 0.28, 0.18);
-  const headMat = new THREE.MeshBasicMaterial({ color: 0xe8edf5 });
-  const head = new THREE.Mesh(headGeo, headMat);
-  head.position.y = 0.22;
-  robotGroup.add(head);
-
-  // Eyes — two small dark boxes with slight glow
-  const eyeGeo = new THREE.BoxGeometry(0.07, 0.06, 0.04);
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x00d4ff });
-  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-  eyeL.position.set(-0.09, 0.24, 0.1);
-  robotGroup.add(eyeL);
-  const eyeR = new THREE.Mesh(eyeGeo, eyeMat.clone());
-  eyeR.position.set(0.09, 0.24, 0.1);
-  robotGroup.add(eyeR);
-
-  // Body
-  const bodyGeo = new THREE.BoxGeometry(0.28, 0.32, 0.16);
-  const bodyMat = new THREE.MeshBasicMaterial({ color: 0xc8d4e8 });
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
-  body.position.y = -0.06;
-  robotGroup.add(body);
-
-  // Arms — small horizontal bars
-  const armGeo = new THREE.BoxGeometry(0.08, 0.22, 0.1);
-  const armMat = new THREE.MeshBasicMaterial({ color: 0xb8c8de });
-  const armL = new THREE.Mesh(armGeo, armMat);
-  armL.position.set(-0.22, -0.04, 0);
-  robotGroup.add(armL);
-  const armR = new THREE.Mesh(armGeo, armMat.clone());
-  armR.position.set(0.22, -0.04, 0);
-  robotGroup.add(armR);
-
-  // Legs
-  const legGeo = new THREE.BoxGeometry(0.08, 0.18, 0.1);
-  const legMat = new THREE.MeshBasicMaterial({ color: 0xa8b8cc });
-  const legL = new THREE.Mesh(legGeo, legMat);
-  legL.position.set(-0.1, -0.28, 0);
-  robotGroup.add(legL);
-  const legR = new THREE.Mesh(legGeo, legMat.clone());
-  legR.position.set(0.1, -0.28, 0);
-  robotGroup.add(legR);
-
-  // Antenna
-  const antennaGeo = new THREE.BoxGeometry(0.03, 0.14, 0.03);
-  const antennaMat = new THREE.MeshBasicMaterial({ color: 0x00d4ff });
-  const antenna = new THREE.Mesh(antennaGeo, antennaMat);
-  antenna.position.y = 0.41;
-  robotGroup.add(antenna);
-
-  // Antenna tip glow dot
-  const tipGeo = new THREE.CircleGeometry(0.04, 8);
-  const tipMat = new THREE.MeshBasicMaterial({ color: 0x00d4ff });
-  const tip = new THREE.Mesh(tipGeo, tipMat);
-  tip.position.y = 0.5;
-  robotGroup.add(tip);
-
-  // Scan beam — vertical cyan line (hidden by default)
-  const beamGeo = new THREE.PlaneGeometry(0.015, 0.7);
-  const beamMat = new THREE.MeshBasicMaterial({
-    color: 0x00d4ff,
-    transparent: true,
-    opacity: 0,
-  });
-  const scanBeam = new THREE.Mesh(beamGeo, beamMat);
-  scanBeam.position.set(0, -0.1, 0.05);
-  robotGroup.add(scanBeam);
-
-  robotGroup.position.z = 0.2;
-  scene.add(robotGroup);
-
-  return { body, head, eyeL, eyeR, antenna, armL, armR, legL, legR, scanBeam };
-};
 
 // ─── Station Props ────────────────────────────────────────────────────────────
 /**
@@ -652,7 +556,12 @@ export function LandingProofScene({
     scene.add(sweepBeam);
 
     // ── Robot ───────────────────────────────────────────────────────────────
-    const robot = buildRobot(scene);
+    const robot = buildRobotMeshes();
+    const robotGroup = new THREE.Group();
+    robotGroup.add(robot.head);
+    robotGroup.add(robot.body);
+    robotGroup.position.z = 0.2;
+    scene.add(robotGroup);
 
     // ── Station props ──────────────────────────────────────────────────────
     const stationProps = buildStationProps(scene, STATION_POINTS);
@@ -728,20 +637,6 @@ export function LandingProofScene({
       robot.body.parent!.position.set(robotPoint.x, robotPoint.y, 0.22);
       robot.body.parent!.rotation.z = Math.atan2(robotTangent.y, robotTangent.x);
 
-      // Robot idle bob
-      const bob = Math.sin(elapsed * 4.2) * 0.04;
-      robot.body.parent!.position.y += bob;
-
-      // Eye glow pulse
-      const eyeIntensity = 0.7 + Math.sin(elapsed * 3.5) * 0.3;
-      const eyeLMat = robot.eyeL.material;
-      const eyeRMat = robot.eyeR.material;
-      eyeLMat.color.setHex(eyeIntensity > 0.85 ? 0x00d4ff : 0x009dcc);
-      eyeRMat.color.setHex(eyeIntensity > 0.85 ? 0x00d4ff : 0x009dcc);
-
-      // Antenna wobble
-      robot.antenna.rotation.z = Math.sin(elapsed * 5.5) * 0.18;
-
       // ── Per-station animations ─────────────────────────────────────────
       const currentStation = activeIndexRef.current;
 
@@ -812,15 +707,6 @@ export function LandingProofScene({
         }
       });
 
-      // Robot station-specific action
-      const robotY = robot.body.parent!.position.y;
-
-      // Scan beam only on station 0
-      robot.scanBeam.material.opacity =
-        currentStation === 0
-          ? 0.15 + Math.abs(Math.sin(elapsed * 3.2)) * 0.5
-          : 0;
-
       // ── Trail dots ────────────────────────────────────────────────────────
       trailDots.forEach(({ dot, material }, index) => {
         const offset = Math.max(progressRef.current - index * 0.045, 0);
@@ -856,8 +742,8 @@ export function LandingProofScene({
     animate();
 
     // When the user requests reduced motion, render one static frame and
-    // stop. The robot stays at the current station without idle bobbing,
-    // eye pulse, or sweep beam. The step still updates on click — the
+    // stop. The robot stays at the current station without any of the
+    // per-part animations. The step still updates on click — the
     // theater's auto-advance is gated separately.
     if (reduced) {
       window.cancelAnimationFrame(frameId);
