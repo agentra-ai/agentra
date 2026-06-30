@@ -385,6 +385,14 @@ func (c *Client) writePump() {
 }
 
 // HandleGatewayWebSocket upgrades an HTTP connection to WebSocket for Cloud Runtime Gateway connections.
+//
+// Gateways are internal services that connect from inside the docker
+// network and authenticate with an AGENTRA_AUTH_TOKEN query param. They
+// do not send an Origin header (server-to-server calls don't carry
+// one), and the WebSocket origin allow-list on the rest of the
+// application is a browser-CSRF defense, not relevant here. So we use
+// a dedicated upgrader whose CheckOrigin always allows — the token
+// check is the auth gate.
 func HandleGatewayWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	gatewayID := r.URL.Query().Get("gateway_id")
 	if gatewayID == "" {
@@ -399,7 +407,10 @@ func HandleGatewayWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		// In production, validate against a shared secret or JWT
 	}
 
-	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	gatewayUpgrader := websocket.Upgrader{
+		CheckOrigin: func(_ *http.Request) bool { return true },
+	}
+	conn, err := gatewayUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Error("gateway websocket upgrade failed", "error", err, "gateway_id", gatewayID)
 		return
