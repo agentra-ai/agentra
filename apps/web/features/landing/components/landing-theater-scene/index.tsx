@@ -150,6 +150,8 @@ export function LandingProofScene({
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     mountNode.appendChild(renderer.domElement);
     setRenderMode("webgl");
 
@@ -157,49 +159,82 @@ export function LandingProofScene({
     camera.position.set(0, 0, 8);
     camera.lookAt(0, 0, 0);
 
-    // ── Lights ──────────────────────────────────────────────────────────────
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.92);
-    const keyLight = new THREE.PointLight(0xffffff, 1.35, 12, 2);
-    keyLight.position.set(-2.6, 0.7, 3);
-    const rimLight = new THREE.PointLight(0xd1d5db, 0.75, 12, 2);
-    rimLight.position.set(3, -0.4, 3);
-    scene.add(ambientLight, keyLight, rimLight);
+    // ── IBL environment (procedural) ─────────────────────────────────────
+    // Room-like soft lighting without any external HDR asset. Build a
+    // simple scene with a warm-to-cool gradient sky + emissive soft
+    // boxes above; PMREMGenerator bakes it into a prefiltered
+    // environment map. The result is realistic indirect lighting on
+    // MeshStandardMaterial — the single biggest visual upgrade.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    pmrem.compileEquirectangularShader();
+    const envScene = new THREE.Scene();
+    // gradient background via vertex colors on a large box
+    const skyGeo = new THREE.BoxGeometry(20, 20, 20);
+    const skyMats = [
+      // +X right: warm
+      new THREE.MeshBasicMaterial({ color: 0xf3d9c0, side: THREE.BackSide }),
+      // -X left: cool
+      new THREE.MeshBasicMaterial({ color: 0x3a5566, side: THREE.BackSide }),
+      // +Y top: warm highlight
+      new THREE.MeshBasicMaterial({ color: 0xfff4e8, side: THREE.BackSide }),
+      // -Y bottom: cool shadow
+      new THREE.MeshBasicMaterial({ color: 0x1a2b33, side: THREE.BackSide }),
+      // +Z front: mid
+      new THREE.MeshBasicMaterial({ color: 0xa8b8c0, side: THREE.BackSide }),
+      // -Z back: mid
+      new THREE.MeshBasicMaterial({ color: 0x8899a4, side: THREE.BackSide }),
+    ];
+    envScene.add(new THREE.Mesh(skyGeo, skyMats));
+    // 3 soft area-like emissive panels to create gentle highlights
+    const panelDefs: Array<{ pos: [number, number, number]; color: number; intensity: number; size: [number, number] }> = [
+      { pos: [-4, 5, -2], color: 0xfff0e0, intensity: 1.5, size: [6, 6] },
+      { pos: [4, 3, -3], color: 0xc8dce8, intensity: 1.0, size: [8, 8] },
+      { pos: [0, -4, -4], color: 0x2a3a44, intensity: 0.6, size: [12, 12] },
+    ];
+    for (const p of panelDefs) {
+      const panel = new THREE.Mesh(
+        new THREE.PlaneGeometry(p.size[0], p.size[1]),
+        new THREE.MeshBasicMaterial({ color: p.color, side: THREE.DoubleSide }),
+      );
+      panel.position.set(...p.pos);
+      panel.lookAt(0, 0, 0);
+      envScene.add(panel);
+    }
+    const envMap = pmrem.fromScene(envScene, 0.04).texture;
+    scene.environment = envMap;
+    skyGeo.dispose();
+    pmrem.dispose();
 
-    // ── Background plane ────────────────────────────────────────────────────
-    const backgroundPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(11, 5.8),
-      new THREE.MeshBasicMaterial({ color: 0x07090d }),
+    // ── Key directional light + soft shadow ──────────────────────────────
+    const keyLight = new THREE.DirectionalLight(0xfff4e8, 2.2);
+    keyLight.position.set(-3.5, 4.5, 5);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.camera.near = 0.5;
+    keyLight.shadow.camera.far = 20;
+    keyLight.shadow.camera.left = -6;
+    keyLight.shadow.camera.right = 6;
+    keyLight.shadow.camera.top = 3;
+    keyLight.shadow.camera.bottom = -2;
+    keyLight.shadow.bias = -0.0005;
+    keyLight.shadow.radius = 4;
+    scene.add(keyLight);
+
+    // ── Soft fill light ──────────────────────────────────────────────────
+    const fillLight = new THREE.DirectionalLight(0xc8dce8, 0.7);
+    fillLight.position.set(4, 1, 3);
+    scene.add(fillLight);
+
+    // ── Ground plane (contact shadow) ────────────────────────────────────
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(20, 10),
+      new THREE.ShadowMaterial({ opacity: 0.28 }),
     );
-    backgroundPlane.position.z = -2;
-    scene.add(backgroundPlane);
-
-    // ── Grid ───────────────────────────────────────────────────────────────
-    const gridGroup = new THREE.Group();
-    for (let index = 0; index < 9; index += 1) {
-      const vertical = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.012, 4.2),
-        new THREE.MeshBasicMaterial({
-          color: 0x5d6775,
-          transparent: true,
-          opacity: 0.12,
-        }),
-      );
-      vertical.position.set(-4 + index, 0, -1);
-      gridGroup.add(vertical);
-    }
-    for (let index = 0; index < 5; index += 1) {
-      const horizontal = new THREE.Mesh(
-        new THREE.PlaneGeometry(8.6, 0.012),
-        new THREE.MeshBasicMaterial({
-          color: 0x5d6775,
-          transparent: true,
-          opacity: 0.1,
-        }),
-      );
-      horizontal.position.set(0, -1.4 + index * 0.7, -1);
-      gridGroup.add(horizontal);
-    }
-    scene.add(gridGroup);
+    ground.position.y = -1.2;
+    ground.position.z = -0.5;
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
 
     // ── Lane tubes ──────────────────────────────────────────────────────────
     const laneShadow = new THREE.Mesh(
@@ -351,6 +386,9 @@ export function LandingProofScene({
     const shouldRender = visible && intersection >= 0.05;
     const shouldRenderFull = visible && intersection >= 0.5;
     let frameCount = 0;
+    // easeInOutQuad — smoother than linear lerp
+    const easeInOut = (t: number) =>
+      t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
     const animate = () => {
       if (!shouldRender) {
         return;
@@ -358,18 +396,24 @@ export function LandingProofScene({
       if (shouldRenderFull || frameCount++ % 2 === 0) {
         const elapsed = clock.getElapsedTime();
         const targetT = activeIndexRef.current / 4;
-
-        progressRef.current = THREE.MathUtils.lerp(
-          progressRef.current,
-          targetT,
-          targetT < progressRef.current ? 0.14 : 0.055,
-        );
+        const delta = targetT - progressRef.current;
+        // Scale the step by delta size so small nudges settle fast and
+        // large jumps take the full frame budget.
+        const step = Math.abs(delta) * 0.06;
+        progressRef.current += Math.sign(delta) * Math.max(step, 0.004);
+        if (Math.abs(targetT - progressRef.current) < 0.001) {
+          progressRef.current = targetT;
+        }
 
         // Robot position along curve
         const robotPoint = FLOW_CURVE.getPointAt(progressRef.current);
         const robotTangent = FLOW_CURVE.getTangentAt(progressRef.current);
         robot.body.parent!.position.set(robotPoint.x, robotPoint.y, 0.22);
         robot.body.parent!.rotation.z = Math.atan2(robotTangent.y, robotTangent.x);
+
+        // Gentle idle bob (sinusoidal, very subtle)
+        const bob = Math.sin(elapsed * 4.2) * 0.02;
+        robot.head.position.y = 0.8 + bob;
 
         renderer.render(scene, camera);
       }

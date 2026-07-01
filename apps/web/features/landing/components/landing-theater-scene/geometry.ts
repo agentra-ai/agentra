@@ -12,25 +12,29 @@ export function buildRobotMeshes(): {
   meshes: any[];
 } {
   // Head: rounded cube, ~6cm wide, pure white
-  const headGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6, 4, 4, 4);
+  const headGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6, 6, 6, 6);
   const headMat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
-    roughness: 0.4,
-    metalness: 0,
+    roughness: 0.35,
+    metalness: 0.05,
   });
   const head = new THREE.Mesh(headGeo, headMat);
   head.position.y = 0.8;
+  head.castShadow = true;
+  head.receiveShadow = true;
   head.userData.role = "robot-head";
 
-  // Body: rounded cylinder, soft apricot
-  const bodyGeo = new THREE.CylinderGeometry(0.35, 0.45, 0.5, 24, 1);
+  // Body: rounded cylinder, soft apricot — slightly taller for proportion
+  const bodyGeo = new THREE.CylinderGeometry(0.35, 0.45, 0.55, 32, 1);
   const bodyMat = new THREE.MeshStandardMaterial({
     color: 0xf3c5a0,
-    roughness: 0.4,
-    metalness: 0,
+    roughness: 0.35,
+    metalness: 0.05,
   });
   const body = new THREE.Mesh(bodyGeo, bodyMat);
   body.position.y = 0.25;
+  body.castShadow = true;
+  body.receiveShadow = true;
   body.userData.role = "robot-body";
 
   return { head, body, meshes: [head, body] };
@@ -56,28 +60,29 @@ export function buildWaypoint(
   const targetScale = isActive ? 1.12 : 0.92;
   group.scale.setScalar(targetScale);
 
-  // Base material: white, low roughness
+  // Base materials: soft, slightly metallic for a premium feel under IBL
   const matWhite = new THREE.MeshStandardMaterial({
     color: 0xffffff,
-    roughness: 0.4,
-    metalness: 0,
+    roughness: 0.35,
+    metalness: 0.05,
   });
   const matTeal = new THREE.MeshStandardMaterial({
     color: 0x3c7a89,
-    roughness: 0.4,
-    metalness: 0,
+    roughness: 0.35,
+    metalness: 0.05,
   });
   const matCoral = new THREE.MeshStandardMaterial({
     color: 0xe89c7d,
-    roughness: 0.4,
-    metalness: 0,
+    roughness: 0.35,
+    metalness: 0.05,
   });
 
+  let meshes: any[] = [];
   switch (index % 5) {
     case 0: {
       // Step 1: rounded cube
       const geo = new THREE.BoxGeometry(0.5, 0.5, 0.5, 2, 2, 2);
-      group.add(new THREE.Mesh(geo, matWhite));
+      meshes = [new THREE.Mesh(geo, matWhite)];
       break;
     }
     case 1: {
@@ -91,17 +96,17 @@ export function buildWaypoint(
         matTeal,
       );
       cyl.position.y = 0.3;
-      group.add(oct);
-      group.add(cyl);
+      meshes = [oct, cyl];
       break;
     }
     case 2: {
       // Step 3: cylinder tower
-      const tower = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.2, 0.25, 0.8, 16, 1),
-        matWhite,
-      );
-      group.add(tower);
+      meshes = [
+        new THREE.Mesh(
+          new THREE.CylinderGeometry(0.2, 0.25, 0.8, 16, 1),
+          matWhite,
+        ),
+      ];
       break;
     }
     case 3: {
@@ -112,7 +117,7 @@ export function buildWaypoint(
       );
       cone.position.y = -0.05;
       cone.scale.y = -1; // inverted
-      group.add(cone);
+      meshes = [cone];
       break;
     }
     case 4: {
@@ -126,10 +131,14 @@ export function buildWaypoint(
         matTeal,
       );
       ring.rotation.x = Math.PI / 2;
-      group.add(sphere);
-      group.add(ring);
+      meshes = [sphere, ring];
       break;
     }
+  }
+  for (const mesh of meshes) {
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
   }
   return group;
 }
