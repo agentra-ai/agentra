@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   ArrowRight,
@@ -13,37 +12,17 @@ import {
   Sparkles,
   Workflow,
 } from "lucide-react";
+import gsap from "gsap";
 import { useAuthStore } from "@/features/auth";
-import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { cn } from "@/lib/utils";
 import {
   ClaudeCodeLogo,
   CodexLogo,
   headerButtonClassName,
 } from "./shared";
-import { FallbackGradient } from "./landing-theater-scene";
-import { SceneErrorBoundary } from "./scene-error-boundary";
 
-// Three.js is ~150kB gzipped and pulls a Worker bundle. Load it only on
-// the client, after hydration, and swap in the static gradient while it
-// streams in. The error boundary catches any render exception.
-const LandingProofScene = dynamic(
-  () => import("./landing-theater-scene").then((m) => m.LandingProofScene),
-  {
-    ssr: false,
-    loading: () => <FallbackGradient />,
-  },
-);
-
-const LOOP_INTERVAL_MS = 4800;
+const LOOP_INTERVAL_MS = 5500;
 const proofIcons = [Workflow, ShieldCheck, Sparkles];
-const sceneNodePositions = [
-  { left: "9%", top: "20%" },
-  { left: "29%", top: "63%" },
-  { left: "49%", top: "40%" },
-  { left: "70%", top: "60%" },
-  { left: "90%", top: "25%" },
-];
 
 type TheaterStep = {
   id: string;
@@ -62,6 +41,124 @@ type TheaterStep = {
   nextAction: string;
 };
 
+/**
+ * Central SVG hero — a stylized "current task" card with five step
+ * indicators beneath. The active step pulses via GSAP; completed
+ * steps render a checkmark; pending steps are dots.
+ */
+function StepHero({
+  activeIndex,
+  steps,
+}: {
+  activeIndex: number;
+  steps: TheaterStep[];
+}) {
+  const pulseRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = pulseRef.current;
+    if (!node) {
+      return;
+    }
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        node,
+        { scale: 0.6, autoAlpha: 0 },
+        { scale: 1, autoAlpha: 1, duration: 0.5, ease: "power2.out" },
+      );
+    }, node);
+    return () => ctx.revert();
+  }, [activeIndex]);
+
+  return (
+    <div className="flex flex-col items-center gap-8">
+      <div
+        ref={pulseRef}
+        className="relative w-[260px] sm:w-[280px]"
+      >
+        <div
+          className="absolute -inset-6 rounded-[28px] bg-gradient-to-b from-white/[0.07] to-transparent blur-2xl"
+          aria-hidden="true"
+        />
+        <div
+          className="relative rounded-[18px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-5 shadow-[0_18px_48px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-xl"
+        >
+          <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-white/36">
+            <span>Current task</span>
+            <span className="inline-flex items-center gap-1.5 text-white/52">
+              <span
+                className="size-1.5 rounded-full bg-emerald-400"
+                style={{ boxShadow: "0 0 0 4px rgba(52,211,153,0.18)" }}
+              />
+              <span>{steps[activeIndex]?.label}</span>
+            </span>
+          </div>
+
+          <div className="mt-3 flex items-center gap-2.5">
+            <Bot className="size-6 text-white/72" />
+            <div className="flex-1">
+              <div className="h-2.5 w-full rounded-full bg-white/12" />
+              <div className="mt-2 h-2.5 w-3/5 rounded-full bg-white/8" />
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-8 rounded-lg bg-white/[0.04] border border-white/[0.06]"
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2.5" role="tablist" aria-label="Workflow steps">
+        {steps.map((step, index) => {
+          const state =
+            index < activeIndex
+              ? "completed"
+              : index === activeIndex
+                ? "active"
+                : "pending";
+          return (
+            <div
+              key={step.id}
+              className="flex flex-col items-center gap-1.5"
+            >
+              <div
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-full border text-[11px] font-semibold tabular-nums transition-all",
+                  state === "completed" &&
+                    "border-emerald-400/30 bg-emerald-400/15 text-emerald-300",
+                  state === "active" &&
+                    "border-white/30 bg-white/15 text-white shadow-[0_0_18px_rgba(255,255,255,0.25)]",
+                  state === "pending" &&
+                    "border-white/10 bg-white/[0.03] text-white/35",
+                )}
+              >
+                {state === "completed" ? (
+                  <CheckCircle2 className="size-4" />
+                ) : (
+                  String(index + 1).padStart(2, "0")
+                )}
+              </div>
+              <span
+                className={cn(
+                  "text-[10px] uppercase tracking-[0.14em]",
+                  state === "active" ? "text-white/70" : "text-white/30",
+                )}
+              >
+                {step.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function LandingTheater() {
   const t = useTranslations("landing.theater");
   const tHeader = useTranslations("landing.header");
@@ -70,10 +167,7 @@ export function LandingTheater() {
   const [activeIndex, setActiveIndex] = useState(0);
   const steps = t.raw("steps") as TheaterStep[];
   const activeStep = steps[activeIndex] ?? steps[0];
-  const fallbackSceneNodePosition = sceneNodePositions[0] ?? {
-    left: "8%",
-    top: "18%",
-  };
+  const heroRef = useRef<HTMLDivElement | null>(null);
   const headlineWidthClass =
     locale === "zh-CN"
       ? "max-w-[13.2ch] sm:max-w-[13.8ch] lg:max-w-[14.4ch]"
@@ -86,26 +180,34 @@ export function LandingTheater() {
     locale === "zh-CN"
       ? "text-[0.9em] leading-[1.02] tracking-[-0.06em] text-white/72"
       : "tracking-[-0.05em] text-white/70";
-  const reduced = usePrefersReducedMotion();
-  const sceneProgress = `${((activeIndex + 1) / Math.max(steps.length, 1)) * 100}%`;
-  const scenePacketTransform =
-    activeIndex === 0
-      ? "translate(-18%, -176%)"
-      : activeIndex === steps.length - 1
-        ? "translate(-82%, -146%)"
-        : "translate(-50%, -146%)";
 
   useEffect(() => {
-    if (steps.length === 0 || reduced) {
+    if (steps.length === 0) {
       return;
     }
-
     const intervalId = window.setInterval(() => {
       setActiveIndex((current) => (current + 1) % steps.length);
     }, LOOP_INTERVAL_MS);
-
     return () => window.clearInterval(intervalId);
-  }, [steps.length, reduced]);
+  }, [steps.length]);
+
+  // Gentle "breathing" animation on the hero wrapper (scale 1 → 1.02 → 1)
+  useEffect(() => {
+    const node = heroRef.current;
+    if (!node) {
+      return;
+    }
+    const ctx = gsap.context(() => {
+      gsap.to(node, {
+        scale: 1.02,
+        duration: 2,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: -1,
+      });
+    }, node);
+    return () => ctx.revert();
+  }, []);
 
   if (!activeStep) {
     return null;
@@ -134,12 +236,12 @@ export function LandingTheater() {
       id="product"
       className="relative overflow-hidden bg-landing-bg text-white"
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.06),_transparent_30%),radial-gradient(circle_at_82%_18%,_rgba(17,24,39,0.62),_transparent_28%),radial-gradient(circle_at_76%_72%,_rgba(255,255,255,0.03),_transparent_18%),linear-gradient(180deg,_#05080d_0%,_#03060b_56%,_#020307_100%)]" />
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.032)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.032)_1px,transparent_1px)] [background-size:72px_72px] opacity-16" />
-      <div className="absolute inset-x-0 top-0 h-px bg-white/12" />
+      {/* CSS gradient background — warm peach top → cool teal bottom */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_18%_12%,_rgba(255,213,178,0.22),_transparent_42%),radial-gradient(ellipse_at_82%_88%,_rgba(125,216,232,0.14),_transparent_42%),linear-gradient(160deg,_#1a1410_0%,_#0f1518_42%,_#080b0f_100%)]" />
 
       <section className="relative mx-auto max-w-[1360px] px-4 pb-14 pt-16 sm:px-6 sm:pb-16 sm:pt-20 lg:px-8 lg:pb-[4.5rem]">
-        <div className="grid gap-12 lg:grid-cols-[minmax(0,500px)_1fr] lg:items-start">
+        <div className="grid gap-14 lg:grid-cols-[minmax(0,500px)_1fr] lg:items-start">
+          {/* ── Left column ─────────────────────────────────────────────── */}
           <div className="relative z-10">
             <div className="inline-flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.2em] text-white/58">
               <span className="inline-flex h-px w-10 bg-[linear-gradient(90deg,rgba(255,255,255,0.42),rgba(255,255,255,0))]" />
@@ -228,9 +330,10 @@ export function LandingTheater() {
             </div>
           </div>
 
+          {/* ── Right column — hero + detail panel ─────────────────────── */}
           <div className="relative">
-            <div className="absolute -left-12 top-12 h-32 w-32 rounded-full bg-white/4 blur-3xl" />
-            <div className="absolute -right-10 bottom-10 h-28 w-28 rounded-full bg-white/4 blur-3xl" />
+            <div className="absolute -left-12 top-12 h-32 w-32 rounded-full bg-orange-300/10 blur-3xl" />
+            <div className="absolute -right-10 bottom-10 h-28 w-28 rounded-full bg-sky-300/10 blur-3xl" />
 
             <div className="relative overflow-hidden rounded-[30px] bg-[linear-gradient(180deg,rgba(11,14,20,0.96),rgba(4,6,12,0.99))] shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_18px_48px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-2xl">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.05),_transparent_24%),radial-gradient(circle_at_78%_22%,_rgba(255,255,255,0.035),_transparent_20%)]" />
@@ -289,153 +392,20 @@ export function LandingTheater() {
                 </div>
               </div>
 
-              <div className="relative px-5 py-4 sm:px-6 sm:py-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                  <p
-                    key={`${activeStep.id}-feed`}
-                    className="animate-in fade-in-0 slide-in-from-bottom-1 max-w-[36rem] text-[12px] leading-[1.7] text-white/52 duration-500"
-                  >
-                    {activeStep.statusValue}
-                  </p>
-                  <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-white/42">
-                    <span className="tabular-nums text-white/64">
-                      {String(activeIndex + 1).padStart(2, "0")}
-                    </span>
-                    <span className="h-1 w-1 rounded-full bg-white/44" />
-                    <span>{activeStep.label}</span>
-                  </div>
-                </div>
-
-                <div className="mt-3 h-px w-full overflow-hidden rounded-full bg-white/8">
-                  <div
-                    className="h-full rounded-full bg-[linear-gradient(90deg,rgba(255,255,255,0.18),rgba(255,255,255,0.94),rgba(255,255,255,0.22))] transition-all duration-700 ease-out"
-                    style={{ width: sceneProgress }}
-                  />
-                </div>
-
+              <div className="relative px-5 py-5 sm:px-6 sm:py-6">
+                {/* ── SVG-hero replaces the three.js scene ──────────────── */}
                 <div
-                  className="relative mt-4 h-[360px] overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(7,10,15,0.94),rgba(3,5,10,1))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:h-[420px]"
-                  aria-label={t("sceneAriaLabel")}
+                  ref={heroRef}
+                  className="relative flex items-center justify-center overflow-hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(7,10,15,0.5),rgba(3,5,10,0.7))] px-6 py-12 sm:py-14"
                 >
-                  <SceneErrorBoundary fallback={<FallbackGradient />}>
-                    <LandingProofScene activeIndex={activeIndex} />
-                  </SceneErrorBoundary>
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_26%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_18%,transparent_82%,rgba(255,255,255,0.02))]" />
-                  <div className="absolute inset-[1px] rounded-[27px] border border-white/6" />
-
-                  <div
-                    className="pointer-events-none absolute z-[1] h-[170px] w-[170px] rounded-full bg-white/8 blur-[92px] transition-all duration-700 ease-out"
-                    style={{
-                      left:
-                        sceneNodePositions[activeIndex]?.left ??
-                        fallbackSceneNodePosition.left,
-                      top:
-                        sceneNodePositions[activeIndex]?.top ??
-                        fallbackSceneNodePosition.top,
-                      transform: "translate(-50%, -50%)",
-                    }}
-                  />
-                  <div
-                    className="pointer-events-none absolute z-[1] h-[130px] w-[130px] rounded-full bg-white/5 blur-[76px] transition-all duration-700 ease-out"
-                    style={{
-                      left:
-                        sceneNodePositions[Math.min(activeIndex + 1, steps.length - 1)]
-                          ?.left ?? fallbackSceneNodePosition.left,
-                      top:
-                        sceneNodePositions[Math.min(activeIndex + 1, steps.length - 1)]
-                          ?.top ?? fallbackSceneNodePosition.top,
-                      transform: "translate(-50%, -50%)",
-                    }}
-                  />
-
-                  <svg
-                    className="pointer-events-none absolute inset-0 z-[2] h-full w-full"
-                    viewBox="0 0 100 100"
-                    preserveAspectRatio="none"
-                    aria-hidden="true"
-                  >
-                    <defs>
-                      <linearGradient
-                        id="landing-flow-path"
-                        x1="0%"
-                        y1="0%"
-                        x2="100%"
-                        y2="0%"
-                      >
-                        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.12" />
-                        <stop offset="55%" stopColor="#ffffff" stopOpacity="0.92" />
-                        <stop offset="100%" stopColor="#ffffff" stopOpacity="0.18" />
-                      </linearGradient>
-                    </defs>
-                    <path
-                      d="M 8 18 C 15 18, 19 32, 28 64 S 39 44, 49 38 S 61 44, 71 61 S 84 30, 90 24"
-                      fill="none"
-                      stroke="rgba(7,10,15,0.96)"
-                      strokeWidth="7"
-                      strokeLinecap="round"
-                    />
-                    <path
-                      d="M 8 18 C 15 18, 19 32, 28 64 S 39 44, 49 38 S 61 44, 71 61 S 84 30, 90 24"
-                      fill="none"
-                      stroke="url(#landing-flow-path)"
-                      strokeWidth="2.6"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-
-                  <div
-                    className="pointer-events-none absolute z-[22] transition-all duration-700 ease-out"
-                    style={{
-                      left:
-                        sceneNodePositions[activeIndex]?.left ??
-                        fallbackSceneNodePosition.left,
-                      top:
-                        sceneNodePositions[activeIndex]?.top ??
-                        fallbackSceneNodePosition.top,
-                      transform: scenePacketTransform,
-                    }}
-                  >
-                    <div className="relative flex h-10 items-center gap-2 rounded-full border border-white/16 bg-white/88 px-3.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900 shadow-[0_10px_28px_rgba(0,0,0,0.22)]">
-                      <div className="absolute inset-x-2 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.7),transparent)]" />
-                      <span className="inline-flex size-2 rounded-full bg-slate-900/78" />
-                      <span>{t("taskPacketLabel")}</span>
-                    </div>
-                  </div>
-
-                  {steps.map((step, index) => {
-                    const nodePosition =
-                      sceneNodePositions[index] ?? fallbackSceneNodePosition;
-
-                    return (
-                      <button
-                        key={step.id}
-                        type="button"
-                        onClick={() => setActiveIndex(index)}
-                        className={cn(
-                          "absolute z-10 flex min-w-[112px] -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border px-3.5 py-2.5 text-left text-[11px] uppercase tracking-[0.12em] backdrop-blur-xl transition-all",
-                          activeIndex === index
-                            ? "border-white/16 bg-[linear-gradient(180deg,rgba(37,43,54,0.94),rgba(18,23,31,0.9))] text-white shadow-[0_10px_24px_rgba(0,0,0,0.2)]"
-                            : "border-white/8 bg-[linear-gradient(180deg,rgba(13,18,26,0.78),rgba(8,11,18,0.68))] text-white/50 hover:border-white/14 hover:text-white/72",
-                        )}
-                        style={{
-                          left: nodePosition.left,
-                          top: nodePosition.top,
-                        }}
-                        aria-pressed={activeIndex === index}
-                      >
-                        <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-current/20 bg-black/12 px-1 text-[10px] font-semibold tabular-nums">
-                          {String(index + 1).padStart(2, "0")}
-                        </span>
-                        <span>{step.label}</span>
-                      </button>
-                    );
-                  })}
+                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.04),transparent_55%)]" />
+                  <StepHero activeIndex={activeIndex} steps={steps} />
                 </div>
 
                 <div
                   key={`${activeStep.id}-detail`}
                   aria-live="polite"
-                  className="mt-4 animate-in fade-in-0 slide-in-from-bottom-2 rounded-[24px] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-4 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.06)] duration-500 backdrop-blur-xl sm:px-5"
+                  className="mt-6 animate-in fade-in-0 slide-in-from-bottom-2 rounded-[24px] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-4 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.06)] duration-500 backdrop-blur-xl sm:px-5"
                 >
                   <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
                     <div>
