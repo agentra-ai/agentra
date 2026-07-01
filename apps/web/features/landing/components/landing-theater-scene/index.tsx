@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
-import { buildRobotMeshes } from "./geometry";
+import { buildRobotMeshes, buildWaypoint, buildPath } from "./geometry";
 
 const STATION_POINTS = [
   new THREE.Vector3(-3.8, 0.56, 0),
@@ -20,11 +20,6 @@ const FLOW_CURVE = new THREE.CatmullRomCurve3(
   false,
   "catmullrom",
   0.14,
-);
-
-// t-value for each station along the curve (uniform spacing)
-const STATION_T = STATION_POINTS.map(
-  (_, i, arr) => i / Math.max(arr.length - 1, 1),
 );
 
 function drawRoundedRect(
@@ -96,251 +91,6 @@ function disposeMaterial(material: any): void {
   }
 }
 
-// ─── Station Props ────────────────────────────────────────────────────────────
-/**
- * Per-station renderable handles. The animation loop reads these by
- * name instead of indexing into group.children, which is brittle to
- * reordering. mat0 is the always-present base material; mat1/mat2
- * are optional accent materials used for pulse/rotation effects.
- *
- * Optional mesh refs are populated only for the stations that need
- * them (e.g. scanLine for the intake panel, crossH/crossV for the
- * router ring).
- */
-export interface StationProps {
-  group: any;
-  mat0: any;
-  mat1?: any;
-  mat2?: any;
-  scanLine?: any;
-  routerCrossH?: any;
-  routerCrossV?: any;
-  terminalStripes?: any[];
-  terminalDots?: any[];
-  reviewCrossH?: any;
-  reviewCrossV?: any;
-  drawer?: any;
-}
-
-export const buildStationProps = (
-  scene: any,
-  stationPoints: any[],
-): StationProps[] => {
-  const stationLabels = ["01", "02", "03", "04", "05"];
-
-  return stationPoints.map((point, index) => {
-    const group = new THREE.Group();
-    group.position.copy(point);
-    scene.add(group);
-
-    const props: StationProps = {
-      group,
-      mat0: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18 }),
-    };
-
-    if (index === 0) {
-      // ── 01 接单面板 ─────────────────────────────────────────────────────
-      // Vertical panel
-      const panelGeo = new THREE.PlaneGeometry(0.22, 0.65);
-      const panel = new THREE.Mesh(panelGeo, props.mat0);
-      panel.position.y = 0.05;
-      group.add(panel);
-
-      // Scan line (moves up/down)
-      const scanGeo = new THREE.PlaneGeometry(0.18, 0.025);
-      const scanMat = new THREE.MeshBasicMaterial({
-        color: 0x00d4ff,
-        transparent: true,
-        opacity: 0.9,
-      });
-      props.mat1 = scanMat;
-      const scanLine = new THREE.Mesh(scanGeo, scanMat);
-      scanLine.position.y = -0.25;
-      group.add(scanLine);
-      props.scanLine = scanLine;
-
-      // Panel frame lines (horizontal)
-      const frameMat = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.22,
-      });
-      for (let fi = 0; fi < 4; fi++) {
-        const lineGeo = new THREE.PlaneGeometry(0.22, 0.012);
-        const line = new THREE.Mesh(lineGeo, frameMat.clone());
-        line.position.y = -0.15 + fi * 0.15;
-        group.add(line);
-      }
-    } else if (index === 1) {
-      // ── 02 路由台 ───────────────────────────────────────────────────────
-      // Outer ring
-      const ringGeo = new THREE.RingGeometry(0.22, 0.32, 32);
-      const ring = new THREE.Mesh(ringGeo, props.mat0);
-      group.add(ring);
-
-      // Inner rotating cross
-      const crossMat = new THREE.MeshBasicMaterial({
-        color: 0x00d4ff,
-        transparent: true,
-        opacity: 0.85,
-      });
-      props.mat1 = crossMat;
-      const hGeo = new THREE.PlaneGeometry(0.38, 0.04);
-      const vGeo = new THREE.PlaneGeometry(0.04, 0.38);
-      const crossH = new THREE.Mesh(hGeo, crossMat);
-      const crossV = new THREE.Mesh(vGeo, crossMat.clone());
-      props.mat2 = crossV.material;
-      props.routerCrossH = crossH;
-      props.routerCrossV = crossV;
-      group.add(crossH);
-      group.add(crossV);
-
-      // Center dot
-      const dotGeo = new THREE.CircleGeometry(0.05, 16);
-      const dotMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const dot = new THREE.Mesh(dotGeo, dotMat);
-      group.add(dot);
-    } else if (index === 2) {
-      // ── 03 执行终端 ─────────────────────────────────────────────────────
-      // 3 horizontal stripes
-      const stripes: any[] = [];
-      for (let si = 0; si < 3; si++) {
-        const sGeo = new THREE.PlaneGeometry(0.55, 0.06);
-        const sMat = new THREE.MeshBasicMaterial({
-          color: si === 1 ? 0x00d4ff : 0xffffff,
-          transparent: true,
-          opacity: 0.28,
-        });
-        const stripe = new THREE.Mesh(sGeo, sMat);
-        stripe.position.y = 0.18 - si * 0.18;
-        group.add(stripe);
-        stripes.push(stripe);
-        if (si === 1) props.mat1 = sMat;
-      }
-      props.terminalStripes = stripes;
-
-      // Pulse dots (blink)
-      const dotGeo = new THREE.CircleGeometry(0.045, 12);
-      const dotMat = new THREE.MeshBasicMaterial({
-        color: 0x00d4ff,
-        transparent: true,
-        opacity: 0,
-      });
-      props.mat2 = dotMat;
-      const terminalDots: any[] = [];
-      for (let di = 0; di < 2; di++) {
-        const dot = new THREE.Mesh(dotGeo, dotMat.clone());
-        dot.position.set(-0.3 + di * 0.6, 0, 0.02);
-        group.add(dot);
-        terminalDots.push(dot);
-      }
-      props.terminalDots = terminalDots;
-    } else if (index === 3) {
-      // ── 04 Review 扫描架 ────────────────────────────────────────────────
-      // Magnifier circle
-      const ringGeo = new THREE.RingGeometry(0.18, 0.28, 32);
-      const ring = new THREE.Mesh(ringGeo, props.mat0);
-      group.add(ring);
-
-      // Glass fill
-      const glassMat = new THREE.MeshBasicMaterial({
-        color: 0x00d4ff,
-        transparent: true,
-        opacity: 0.06,
-      });
-      props.mat1 = glassMat;
-      const glassGeo = new THREE.CircleGeometry(0.18, 32);
-      const glass = new THREE.Mesh(glassGeo, glassMat);
-      group.add(glass);
-
-      // Handle
-      const handleGeo = new THREE.PlaneGeometry(0.05, 0.2);
-      const handleMat = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.4,
-      });
-      const handle = new THREE.Mesh(handleGeo, handleMat);
-      handle.rotation.z = Math.PI / 4;
-      handle.position.set(0.18, -0.18, 0);
-      group.add(handle);
-
-      // Scan crosshair inside
-      const crossMat = new THREE.MeshBasicMaterial({
-        color: 0x00d4ff,
-        transparent: true,
-        opacity: 0.7,
-      });
-      props.mat2 = crossMat;
-      const chGeo = new THREE.PlaneGeometry(0.22, 0.015);
-      const cvGeo = new THREE.PlaneGeometry(0.015, 0.22);
-      const ch = new THREE.Mesh(chGeo, crossMat);
-      const cv = new THREE.Mesh(cvGeo, (crossMat.clone()));
-      props.reviewCrossH = ch;
-      props.reviewCrossV = cv;
-      group.add(ch);
-      group.add(cv);
-    } else {
-      // ── 05 Skill 归档柜 ────────────────────────────────────────────────
-      // 3 stacked drawers
-      const drawerColors = [0xffffff, 0xffffff, 0xffffff];
-      for (let dr = 0; dr < 3; dr++) {
-        const dGeo = new THREE.PlaneGeometry(0.48, 0.14);
-        const dMat = new THREE.MeshBasicMaterial({
-          color: drawerColors[dr],
-          transparent: true,
-          opacity: 0.2 - dr * 0.04,
-        });
-        const drawer = new THREE.Mesh(dGeo, dMat);
-        drawer.position.y = 0.14 - dr * 0.18;
-        group.add(drawer);
-        if (dr === 0) {
-          props.mat1 = dMat;
-          props.drawer = drawer;
-        }
-
-        // Drawer handle
-        const hGeo = new THREE.PlaneGeometry(0.1, 0.02);
-        const hMat = new THREE.MeshBasicMaterial({
-          color: 0x00d4ff,
-          transparent: true,
-          opacity: 0.6,
-        });
-        const hBar = new THREE.Mesh(hGeo, hMat);
-        hBar.position.y = 0.14 - dr * 0.18;
-        group.add(hBar);
-        if (dr === 0) props.mat2 = hMat;
-      }
-
-      // Label tag on top
-      const tagGeo = new THREE.PlaneGeometry(0.2, 0.06);
-      const tagMat = new THREE.MeshBasicMaterial({
-        color: 0x00d4ff,
-        transparent: true,
-        opacity: 0.7,
-      });
-      const tag = new THREE.Mesh(tagGeo, tagMat);
-      tag.position.y = 0.3;
-      group.add(tag);
-    }
-
-    // ── Badge sprite (keep from original) ──────────────────────────────────
-    const badgeTexture = createBadgeTexture(stationLabels[index] ?? "00");
-    const badgeMaterial = new THREE.SpriteMaterial({
-      map: badgeTexture ?? undefined,
-      transparent: true,
-      depthTest: false,
-    });
-    if (badgeTexture) {
-      const badge = new THREE.Sprite(badgeMaterial);
-      badge.scale.set(0.92, 0.46, 1);
-      badge.position.set(0, 0.9, 0);
-      group.add(badge);
-    }
-
-    return props;
-  });
-};
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -563,42 +313,15 @@ export function LandingProofScene({
     robotGroup.position.z = 0.2;
     scene.add(robotGroup);
 
-    // ── Station props ──────────────────────────────────────────────────────
-    const stationProps = buildStationProps(scene, STATION_POINTS);
+    // ── Waypoints + path (Monument Valley) ──────────────────────
+    const waypointGroup = new THREE.Group();
+    for (let i = 0; i < 5; i++) {
+      waypointGroup.add(buildWaypoint(i, 5, i === 0));
+    }
+    scene.add(waypointGroup);
 
-    // ── Station pulse rings (simplified from original) ────────────────────
-    const stationRings = STATION_POINTS.map((point) => {
-      const group = new THREE.Group();
-      group.position.copy(point);
-      scene.add(group);
-
-      const pulseMat = new THREE.MeshBasicMaterial({
-        color: 0x00d4ff,
-        transparent: true,
-        opacity: 0.1,
-      });
-      const pulse = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.78, 48), pulseMat);
-      group.add(pulse);
-
-      const coreRingMat = new THREE.MeshBasicMaterial({
-        color: 0x00d4ff,
-        transparent: true,
-        opacity: 0.28,
-      });
-      const coreRing = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.3, 40), coreRingMat);
-      group.add(coreRing);
-
-      const nodeCoreMat = new THREE.MeshBasicMaterial({
-        color: 0x00d4ff,
-        transparent: true,
-        opacity: 0.75,
-      });
-      const nodeCore = new THREE.Mesh(new THREE.CircleGeometry(0.1, 36), nodeCoreMat);
-      nodeCore.position.z = 0.02;
-      group.add(nodeCore);
-
-      return { group, pulseMat, coreRingMat, nodeCoreMat };
-    });
+    const pathObject = buildPath();
+    scene.add(pathObject);
 
     // ── Resize ─────────────────────────────────────────────────────────────
     const resize = () => {
@@ -623,7 +346,7 @@ export function LandingProofScene({
 
     const animate = () => {
       const elapsed = clock.getElapsedTime();
-      const targetT = STATION_T[activeIndexRef.current] ?? 0;
+      const targetT = activeIndexRef.current / 4;
 
       progressRef.current = THREE.MathUtils.lerp(
         progressRef.current,
@@ -636,104 +359,6 @@ export function LandingProofScene({
       const robotTangent = FLOW_CURVE.getTangentAt(progressRef.current);
       robot.body.parent!.position.set(robotPoint.x, robotPoint.y, 0.22);
       robot.body.parent!.rotation.z = Math.atan2(robotTangent.y, robotTangent.x);
-
-      // ── Per-station animations ─────────────────────────────────────────
-      const currentStation = activeIndexRef.current;
-
-      stationProps.forEach((prop, idx) => {
-        const isActive = idx === currentStation;
-        const emphasis = isActive ? 1 : 0.22;
-
-        // Ring emphasis
-        if (stationRings[idx]) {
-          stationRings[idx].group.scale.setScalar(isActive ? 1.1 : 1);
-          stationRings[idx].pulseMat.opacity = 0.03 + emphasis * 0.1;
-          stationRings[idx].coreRingMat.opacity = 0.12 + emphasis * 0.18;
-          stationRings[idx].nodeCoreMat.opacity = 0.5 + emphasis * 0.3;
-        }
-
-        if (idx === 0 && prop.mat1 && prop.scanLine) {
-          // 01 Scan line — oscillate y
-          const scanY = -0.25 + Math.sin(elapsed * 3.2) * 0.28;
-          prop.scanLine.position.y = scanY;
-          prop.mat1.opacity = isActive ? 0.7 + Math.sin(elapsed * 3.2) * 0.2 : 0.3;
-        }
-
-        if (idx === 1 && prop.mat1 && prop.mat2 && prop.routerCrossH && prop.routerCrossV) {
-          // 02 Router cross — rotate
-          const rot = elapsed * 2.8;
-          prop.routerCrossH.rotation.z = rot;
-          prop.routerCrossV.rotation.z = -rot * 0.7;
-          prop.mat1.opacity = isActive ? 0.85 : 0.4;
-          prop.mat2.opacity = isActive ? 0.7 : 0.3;
-        }
-
-        if (idx === 2 && prop.mat1 && prop.terminalStripes && prop.terminalDots) {
-          // 03 Terminal — stripe pulse
-          for (const stripe of prop.terminalStripes) {
-            stripe.material = prop.terminalStripes[1].material;
-          }
-          prop.mat1.opacity = isActive
-            ? 0.5 + Math.sin(elapsed * 6) * 0.35
-            : 0.22;
-          // Blink dots
-          for (const dot of prop.terminalDots) {
-            const mat = dot.material;
-            mat.opacity = isActive && Math.sin(elapsed * 8) > 0 ? 0.9 : 0;
-          }
-        }
-
-        if (idx === 3 && prop.mat1 && prop.mat2 && prop.reviewCrossH && prop.reviewCrossV) {
-          // 04 Review — scan cross oscillates x
-          const crossX = Math.sin(elapsed * 2.5) * 0.1;
-          prop.reviewCrossH.position.x = crossX;
-          prop.reviewCrossV.position.y = crossX * 0.5;
-          prop.mat1.opacity = isActive ? 0.15 : 0.05;
-          prop.mat2.opacity = isActive ? 0.75 : 0.35;
-        }
-
-        if (idx === 4 && prop.mat2) {
-          // 05 Skill — top drawer handle pulses
-          prop.mat2.opacity = isActive
-            ? 0.5 + Math.sin(elapsed * 2.2) * 0.35
-            : 0.45;
-          // Slight vertical bounce on active
-          if (isActive) {
-            const bounce = Math.sin(elapsed * 3.8) * 0.02;
-            prop.group.children.forEach((child: { position: { y: number } }) => {
-              child.position.y += bounce;
-            });
-          }
-        }
-      });
-
-      // ── Trail dots ────────────────────────────────────────────────────────
-      trailDots.forEach(({ dot, material }, index) => {
-        const offset = Math.max(progressRef.current - index * 0.045, 0);
-        const point = FLOW_CURVE.getPointAt(offset);
-        dot.position.set(point.x, point.y, 0.08);
-        const visibility = THREE.MathUtils.clamp(
-          (progressRef.current - index * 0.04) * 7,
-          0,
-          1,
-        );
-        material.opacity = (0.2 - index * 0.015) * visibility;
-      });
-
-      // ── Arrow markers ─────────────────────────────────────────────────────
-      arrowMarkers.forEach((arrow, index) => {
-        const progress = 0.16 + index * 0.2;
-        const point = FLOW_CURVE.getPointAt(progress);
-        const tangent = FLOW_CURVE.getTangentAt(progress);
-        arrow.position.set(point.x, point.y, 0.04);
-        arrow.rotation.z = Math.atan2(tangent.y, tangent.x) - Math.PI / 2;
-      });
-
-      // ── Lane glow pulse ───────────────────────────────────────────────────
-      laneGlowMaterial.opacity = 0.08 + Math.sin(elapsed * 1.8) * 0.015;
-      laneCoreMaterial.opacity = 0.68 + Math.sin(elapsed * 2.1) * 0.02;
-      laneSheenMaterial.opacity = 0.06 + Math.sin(elapsed * 2.8) * 0.015;
-      sweepBeam.position.x = -3.8 + ((elapsed * 0.9) % 8);
 
       renderer.render(scene, camera);
       frameId = window.requestAnimationFrame(animate);
