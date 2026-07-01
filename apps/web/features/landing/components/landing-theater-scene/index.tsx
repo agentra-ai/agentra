@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { buildRobotMeshes, buildWaypoint, buildPath } from "./geometry";
+import { Background } from "./Background";
 
 const STATION_POINTS = [
   new THREE.Vector3(-3.8, 0.56, 0),
@@ -402,6 +403,7 @@ export function LandingProofScene({
 
   return (
     <div className="absolute inset-0">
+      <Background />
       <div
         ref={mountRef}
         className={renderMode === "webgl" ? "h-full w-full" : "hidden"}
