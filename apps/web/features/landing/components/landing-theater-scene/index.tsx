@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { buildRobotMeshes, buildWaypoint, buildPath } from "./geometry";
 import { Background } from "./Background";
+import { useDocumentVisibility, useIntersectionVisibility } from "./hooks";
 
 const STATION_POINTS = [
   new THREE.Vector3(-3.8, 0.56, 0),
@@ -103,6 +104,8 @@ export function LandingProofScene({
   const mountRef = useRef<HTMLDivElement | null>(null);
   const activeIndexRef = useRef(activeIndex);
   const progressRef = useRef(0);
+  const visible = useDocumentVisibility();
+  const intersection = useIntersectionVisibility(mountRef);
   const [renderMode, setRenderMode] = useState<"webgl" | "fallback">(
     "fallback",
   );
@@ -345,23 +348,31 @@ export function LandingProofScene({
     const clock = new THREE.Clock();
     let frameId = 0;
 
+    const shouldRender = visible && intersection >= 0.05;
+    const shouldRenderFull = visible && intersection >= 0.5;
+    let frameCount = 0;
     const animate = () => {
-      const elapsed = clock.getElapsedTime();
-      const targetT = activeIndexRef.current / 4;
+      if (!shouldRender) {
+        return;
+      }
+      if (shouldRenderFull || frameCount++ % 2 === 0) {
+        const elapsed = clock.getElapsedTime();
+        const targetT = activeIndexRef.current / 4;
 
-      progressRef.current = THREE.MathUtils.lerp(
-        progressRef.current,
-        targetT,
-        targetT < progressRef.current ? 0.14 : 0.055,
-      );
+        progressRef.current = THREE.MathUtils.lerp(
+          progressRef.current,
+          targetT,
+          targetT < progressRef.current ? 0.14 : 0.055,
+        );
 
-      // Robot position along curve
-      const robotPoint = FLOW_CURVE.getPointAt(progressRef.current);
-      const robotTangent = FLOW_CURVE.getTangentAt(progressRef.current);
-      robot.body.parent!.position.set(robotPoint.x, robotPoint.y, 0.22);
-      robot.body.parent!.rotation.z = Math.atan2(robotTangent.y, robotTangent.x);
+        // Robot position along curve
+        const robotPoint = FLOW_CURVE.getPointAt(progressRef.current);
+        const robotTangent = FLOW_CURVE.getTangentAt(progressRef.current);
+        robot.body.parent!.position.set(robotPoint.x, robotPoint.y, 0.22);
+        robot.body.parent!.rotation.z = Math.atan2(robotTangent.y, robotTangent.x);
 
-      renderer.render(scene, camera);
+        renderer.render(scene, camera);
+      }
       frameId = window.requestAnimationFrame(animate);
     };
 
