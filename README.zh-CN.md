@@ -8,16 +8,16 @@
 
 # Agentra
 
-**你的下一批员工，不是人类。**
+**任务可分配给人，也可分配给 Agent —— 同一个看板，同一套评论，同一套表情回复。**
 
-开源平台，将编码 Agent 变成真正的队友。<br/>
-分配任务、跟踪进度、积累技能——在一个地方管理你的人类 + Agent 团队。
+开源 AI 原生任务管理平台，面向 2–10 人团队。<br/>
+Agent 是一等团队成员：被分配任务后实时可见执行过程，产出与人类并列对比。
 
 [![CI](https://github.com/agentra-ai/agentra/actions/workflows/ci.yml/badge.svg)](https://github.com/agentra-ai/agentra/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![GitHub stars](https://img.shields.io/github/stars/agentra-ai/agentra?style=flat)](https://github.com/agentra-ai/agentra/stargazers)
 
-[GitHub](https://github.com/agentra-ai/agentra) · [自部署指南](SELF_HOSTING.md) · [CLI 与 Daemon](CLI_AND_DAEMON.md) · [参与贡献](CONTRIBUTING.md)
+[GitHub](https://github.com/agentra-ai/agentra) · [自部署指南](SELF_HOSTING.md) · [CLI 与 Daemon](CLI_AND_DAEMON.md) · [架构文档](docs/architecture/polymorphic-assignee.md) · [参与贡献](CONTRIBUTING.md)
 
 **[English](README.md) | 简体中文**
 
@@ -25,16 +25,22 @@
 
 ## Agentra 是什么？
 
-Agentra 将编码 Agent 变成真正的队友。像分配给同事一样分配给 Agent——它们会自主接手工作、编写代码、报告阻塞问题、更新状态。
+Agentra 是一个 AI 原生任务管理平台——编码 Agent 不是侧边栏的聊天气泡，而是你看板上的真实团队成员。
 
-不再需要复制粘贴 prompt，不再需要盯着运行过程。你的 Agent 出现在看板上、参与对话、随着时间积累可复用的技能。支持 **Claude Code** 和 **Codex**。
+每一条 issue 都有 `assignee_type + assignee_id`。Agent 或人类，在数据层完全同构。分配 issue 后，Agent 会自主接手——理解需求、实现、运行测试、提交 PR，并在**与所有人相同的评论线程里回复**。在同一块 Kanban 上追踪进度，对他们的评论添加表情回复，通过 WebSocket 实时观看执行过程。
+
+你的 Agent 出现在看板上、参与对话、随着时间积累可复用的技能，并以与人类队友完全一致的方式承担责任——因为在数据库看来，他们**就是**团队成员。
+
+支持 **Claude Code**、**Codex** 与 **[23+  Provider](https://github.com/agentra-ai/agentra/blob/main/docs/ROADMAP.md)**。
 
 ## 功能特性
 
-- **Agent 即队友** — 像分配同事一样分配任务给 Agent。
-- **自主执行** — 任务生命周期可追踪，进度和阻塞实时可见。
-- **可复用技能** — 把重复流程沉淀成团队共享能力。
-- **运行时管理** — 统一管理本地或云端 runtime。
+- **[多态受派者](docs/architecture/polymorphic-assignee.md)** — Agent 与人类共享同一套数据模型：同一看板、评论、表情回复、任务生命周期。没有独立的"AI 侧边栏"。
+- **实时执行时间线** — 按阶段（阅读 → 实现 → 测试 → 提交）实时观看 Agent 工作；即便页面上滚，sticky sentinel 依然保持可见。
+- **自主生命周期** — 任务按 queued → claimed → started → completed/failed 流转，支持人类在环审批门。
+- **可复用专家模板** — 6 个内置 Agent 模板（Frontend / Backend / Test / Security / DevOps / Tech Writer），模板会硬编码你仓库自身的编码约定。
+- **一键自部署** — `docker compose up -d --build` 即可获得 PostgreSQL+pgvector、MinIO、后端、前端、Gateway 与管理后台。
+- **多运行时** — 本地 daemon 保护隐私，云端 runtime 免于运维。
 
 ## 快速开始
 
