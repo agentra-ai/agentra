@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,17 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/agentra-ai/agentra/server/internal/auth"
 )
+
+// ensureTestSecret makes sure auth.JWTSecret() won't panic during tests.
+// In CI the environment is clean and JWT_SECRET is not set, so tests that
+// need to sign a JWT call this first to inject a deterministic dev secret.
+func ensureTestSecret(t *testing.T) {
+	t.Helper()
+	if os.Getenv("JWT_SECRET") == "" {
+		os.Setenv("JWT_SECRET", "test-secret-that-is-at-least-32-bytes-for-dev-only")
+	}
+	auth.ResetSecretForTesting()
+}
 
 const testWorkspaceID = "test-workspace"
 const testUserID = "test-user"
@@ -25,6 +37,7 @@ func (m *mockMembershipChecker) IsMember(_ context.Context, _, _ string) bool {
 
 func makeTestToken(t *testing.T) string {
 	t.Helper()
+	ensureTestSecret(t)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": testUserID,
 	})
