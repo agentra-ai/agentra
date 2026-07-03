@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -334,10 +335,62 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 	// Reconcile agent status
 	s.ReconcileAgentStatus(ctx, task.AgentID)
 
+	// Append-only telemetry record (Issue #11). Fire-and-forget: never block
+	// the completion path on a metrics write failure.
+	s.recordTaskMetric(ctx, task, "completed", 0, 0, 0, 0, "")
+
 	// Broadcast
 	s.broadcastTaskEvent(ctx, protocol.EventTaskCompleted, task)
 
 	return &task, nil
+}
+
+// recordTaskMetric writes one row to agent_task_metrics in a detached
+// 2s-timeout context. Best-effort: log a warning on failure.
+func (s *TaskService) recordTaskMetric(ctx context.Context, task db.AgentTaskQueue, status string, durationMs, tokenIn, tokenOut int64, costUsd float64, errCategory string) {
+ ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+ defer cancel()
+
+ issuePriority := "medium"
+ if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil && issue.Priority != "" {
+  issuePriority = issue.Priority
+ }
+
+ var pgCost pgtype.Numeric
+ if costUsd != 0 {
+  _ = pgCost.Scan(fmt.Sprintf("%.6f", costUsd))
+  pgCost.Valid = true
+ }
+
+ errMsg := pgtype.Text{String: errCategory, Valid: errCategory != ""}
+
+ // WorkspaceID is not on AgentTaskQueue; look up via issue.
+ var workspaceID pgtype.UUID
+ if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil {
+  workspaceID = issue.WorkspaceID
+ } else {
+  slog.Warn("record metric: lookup workspace failed", "task_id", util.UUIDToString(task.ID), "error", err)
+  return
+ }
+
+ if _, err := s.Queries.InsertAgentTaskMetric(ctx, db.InsertAgentTaskMetricParams{
+  WorkspaceID:   workspaceID,
+  TaskID:        task.ID,
+  IssueID:       task.IssueID,
+  Provider:      "", // resolved by join with runtime at query time
+  Model:         "",
+  RuntimeMode:   task.RuntimeType,
+  TaskType:      task.TaskType,
+  IssuePriority: issuePriority,
+  Status:        status,
+  ErrorCategory: errMsg,
+  DurationMs:    durationMs,
+  TokenInput:    int32(tokenIn),
+  TokenOutput:   int32(tokenOut),
+  CostUsd:       pgCost,
+ }); err != nil {
+  slog.Warn("record metric failed", "task_id", util.UUIDToString(task.ID), "error", err)
+ }
 }
 
 // RetryTask resets a failed task back to queued for automatic retry.

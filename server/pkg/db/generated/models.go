@@ -90,6 +90,25 @@ type AgentSkill struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type AgentTaskMetric struct {
+	ID            pgtype.UUID        `json:"id"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	TaskID        pgtype.UUID        `json:"task_id"`
+	IssueID       pgtype.UUID        `json:"issue_id"`
+	Provider      string             `json:"provider"`
+	Model         string             `json:"model"`
+	RuntimeMode   string             `json:"runtime_mode"`
+	TaskType      string             `json:"task_type"`
+	IssuePriority string             `json:"issue_priority"`
+	Status        string             `json:"status"`
+	ErrorCategory pgtype.Text        `json:"error_category"`
+	DurationMs    int64              `json:"duration_ms"`
+	TokenInput    int32              `json:"token_input"`
+	TokenOutput   int32              `json:"token_output"`
+	CostUsd       pgtype.Numeric     `json:"cost_usd"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
 type AgentTaskQueue struct {
 	ID               pgtype.UUID        `json:"id"`
 	AgentID          pgtype.UUID        `json:"agent_id"`
