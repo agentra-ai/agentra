@@ -40,6 +40,14 @@ const (
 )
 
 func TestMain(m *testing.M) {
+	// Ensure a deterministic dev JWT secret in clean CI environments that
+	// don't set JWT_SECRET. auth.JWTSecret() panics without one; this lets
+	// the suite run in GitHub Actions / fresh checkouts without an env file.
+	if os.Getenv("JWT_SECRET") == "" {
+		os.Setenv("JWT_SECRET", "test-secret-that-is-at-least-32-bytes-for-dev-only")
+	}
+	auth.ResetSecretForTesting()
+
 	ctx := context.Background()
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
