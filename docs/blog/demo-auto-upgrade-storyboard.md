@@ -4,23 +4,25 @@
 
 ## Pre-conditions
 
-- Agentra server running at `http://localhost:8080` (or staging)
-- One daemon running on local machine (slightly outdated version, e.g. v0.2.1)
-- Agent assigned to a real task visible in the web app (so task-continuity is demonstrable)
+- Agentra server running at `http://localhost:8080` (or staging), **v0.3.0** deployed
+- One daemon running on local machine at a **previous release** (must be an embedded-version binary from GoReleaser, not `go run` which reports `dev`)
+- Agent assigned to a real task visible in the web app (so task-continuity via AgentLiveCard is demonstrable)
 - `agentra` CLI installed locally for text narration
+- Github Release **v0.3.0** published with `agentra_darwin_arm64.tar.gz` + other assets (release.yml builds these)
+- **Trigger mechanism**: Frontend Settings → Runtimes → [runtime] → "Trigger update" button (member role+). This calls `PUT /api/runtimes/{runtimeId}/update` with `{"target_version": "0.3.0"}` and writes into the server's in-memory UpdateStore.
 
 ## Shot List
 
 | Time | Visual | Narration (EN) | Narration (ZH) |
 |------|--------|----------------|----------------|
-| 0:00–0:08 | Terminal: `agentra daemon status` showing v0.2.1 | "This daemon is running version 0.2.1. Let's watch it update itself — no SSH, no manual download." | "Daemon 正运行 v0.2.1。接下来看它自动升级——无需 SSH、无需手动下载。" |
-| 0:08–0:15 | Server-side mark new release v0.2.2 as PendingUpdate (admin API or GitHub Release publish) | "I'll publish v0.2.2 as a pending update from the server." | "服务端推送 v0.2.2 为 PendingUpdate。" |
-| 0:15–0:25 | Terminal: daemon logs show heartbeat received update request, downloading new binary | "On the next heartbeat, the daemon sees the instruction and pulls the new binary." | "下一次心跳，Daemon 感知到并开始下载新二进制。" |
-| 0:25–0:35 | Terminal: status flips to v0.2.2, old process exits, new process starts | "Old process exits. New one picks up — 3 seconds of downtime." | "旧进程退出，新进程接管——总计 3 秒中断。" |
-| 0:35–0:50 | Web app: AgentLiveCard still streaming for the in-flight task | "The task I assigned earlier? Still running. No interruption." | "之前分配的任务？仍在运行，未被中断。" |
-| 0:50–1:10 | Terminal: `agentra daemon status --output json` showing new version, uptime, active tasks | "Status confirms the new version, continuous uptime accounting." | "状态确认新版本，运行时间智能累计。" |
-| 1:10–1:25 | Speed-montage: brew install path variant (optional second take) | "Brew users follow the same flow — symlink preserved." | "Brew 用户流程一致——符号链接被保留。" |
-| 1:25–1:30 | Fade to GitHub Releases page showing v0.2.2 asset list | "That's the whole loop. Release on GitHub; the daemon does the rest." | "完整闭环：GitHub 发布，Daemon 自行完成剩余工作。" |
+| 0:00–0:08 | Terminal: `agentra daemon status --output json` → shows previous version | "This daemon is running an older release. I'll push a new release from the server — no SSH, no manual download, no touching the machine." | "Daemon 运行旧版本。我从服务器远程发一个 release —— 无 SSH、无手动下载、不碰机器。" |
+| 0:08–0:15 | Web app: Settings → Runtimes → click "Trigger update" → modal "Target: v0.3.0" → confirm | "I click 'Trigger update' in the web UI. The server stages a pending update." | "我在 Web 端点击 Trigger update。服务端标记 PendingUpdate。" |
+| 0:15–0:25 | Terminal: daemon logs (`agentra daemon logs -f`) show heartbeat received `pending_update`, `UpdateViaDownload` kicking in | "On the next heartbeat, the daemon sees the update request and downloads the new binary from GitHub Releases." | "下一次心跳，Daemon 看到更新请求，从 GitHub Releases 下载新二进制。" |
+| 0:25–0:35 | Terminal: process switches — old PID exits (graceful `cancelFunc()`), new PID replaces it via `triggerRestart()` | "Old process exits gracefully. New one picks up — ~3 seconds of downtime." | "旧进程优雅退出，新进程接管 —— 共计约 3 秒中断。" |
+| 0:35–0:50 | Web app: AgentLiveCard continues streaming tool_use events — **no task loss** (daemon rehydrates from DB `WHERE status='started'`) | "Notice the task I assigned earlier? Still streaming. The new daemon picked up where the old one left off." | "注意我之前分配的任务？仍在流式传输。新 daemon 从旧 daemon 的地方接手。" |
+| 0:50–1:10 | Terminal: `agentra daemon status --output json` now shows v0.3.0, uptime accounting continuous, active tasks count unchanged | "Status confirms v0.3.0, continuous uptime, all tasks still active." | "状态确认 v0.3.0，运行时间连续累计，所有任务仍在活跃。" |
+| 1:10–1:20 | Speed-montage: brew variant (optional) | "`brew upgrade agentra` works the same way — symlink preserved." | "`brew upgrade agentra` 同样流程 —— 符号链接被保留。" |
+| 1:20–1:30 | Fade to GitHub Releases v0.3.0 asset list + README embed | "The whole loop: release on GitHub, daemon does the rest. This is zero-ops agent runtime management." | "完整闭环：GitHub 发布，Daemon 完成剩余工作。这就是零运维 agent 运行时管理。" |
 
 ## Technical Notes
 

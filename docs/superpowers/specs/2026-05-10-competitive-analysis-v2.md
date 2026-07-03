@@ -364,5 +364,5 @@ POST /api/workspaces/:id/execute
 - [overstory](https://github.com/jayminwest/overstory) (1,284★) — Coding agent orchestration
 - [kiwiq](https://github.com/rcortx/kiwiq) (1,043★) — Enterprise agent platform
 - [agent-tasks](https://github.com/nash-software/mcp-agent-tasks) — MCP task management
-- [Agentra ROADMAP.md](../ROADMAP.md)
+- [Agentra ROADMAP.md](../../ROADMAP.md)
 - [上一版竞品分析](2026-05-10-competitive-analysis-full-design.md)

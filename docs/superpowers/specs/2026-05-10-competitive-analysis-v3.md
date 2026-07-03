@@ -510,4 +510,4 @@ Agentra is uniquely positioned as the only platform combining real-time task man
 - [hindsight](https://github.com/vectorize-io/hindsight) (12,763★) — SOTA agent memory
 - [Overseer](https://github.com/dmmulroy/overseer) (223★) — VCS-native task management
 - [Tasuku](https://github.com/iheanyi/tasuku) (63★) — Git-friendly MCP tasks
-- [Agentra ROADMAP.md](../ROADMAP.md)
+- [Agentra ROADMAP.md](../../ROADMAP.md)

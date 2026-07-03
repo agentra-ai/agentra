@@ -655,4 +655,4 @@ go build -o agentra-mcp ./cmd/mcp
 
 - [MCP 2.0 协议规范](https://modelcontextprotocol.io)
 - [Overseer MCP Server](https://github.com/dmmulroy/overseer)
-- [Agentra Skills System](../agent-workflow-analysis.md)
+- [Agentra Skills System](../../agent-workflow-analysis.md)

@@ -429,8 +429,8 @@ swarmclaw 有 Electron Desktop app，降低使用门槛。
 
 ## 九、参考资料
 
-- [Agentra ROADMAP.md](../ROADMAP.md)
-- [Agent Workflow Analysis](../agent-workflow-analysis.md)
+- [Agentra ROADMAP.md](../../ROADMAP.md)
+- [Agent Workflow Analysis](../../agent-workflow-analysis.md)
 - [swarmclaw - GitHub](https://github.com/swarmclawai/swarmclaw) (472 stars)
 - [hindsight - GitHub](https://github.com/vectorize-io/hindsight) (12,763 stars)
 - [Overseer - GitHub](https://github.com/dmmulroy/overseer) (223 stars)

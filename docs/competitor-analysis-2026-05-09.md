@@ -391,8 +391,8 @@ Agentra 有 WebSocket，但可以学习 Beekeeper 的实时交互模式。
 ## 十、参考资料
 
 - [Agentra ROADMAP.md](ROADMAP.md)
-- [Agent Memory Design](../specs/2026-05-09-agent-memory-design.md)
-- [Agent Handoff Design](../specs/2026-05-09-agent-handoff-design.md)
+- [Agent Memory Design](superpowers/specs/2026-05-09-agent-memory-design.md)
+- [Agent Handoff Design](superpowers/specs/2026-05-09-agent-handoff-design.md)
 - [swarmclaw - GitHub](https://github.com/swarmclawai/swarmclaw)
 - [hindsight - GitHub](https://github.com/vectorize-io/hindsight)
 - [Overseer - GitHub](https://github.com/dmmulroy/overseer)

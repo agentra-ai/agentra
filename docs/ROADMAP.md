@@ -52,7 +52,7 @@
 
 **New strategic insight**: Agentra is the only platform at the intersection of "task management UI" and "agent runtime". Frameworks (CrewAI, AutoGen) lack UIs; task managers (Tasuku, agent-tasks) lack agent runtimes. But the window is closing — open-multi-agent is one persistence layer away from becoming a direct competitor.
 
-See [competitive-analysis-v3](docs/superpowers/specs/2026-05-10-competitive-analysis-v3.md) for full 40+ project, 5-dimension comparison.
+See [competitive-analysis-v3](superpowers/specs/2026-05-10-competitive-analysis-v3.md) for full 40+ project, 5-dimension comparison.
 
 ---
 
@@ -103,10 +103,10 @@ Today, Agentra v0.2 ships a working end-to-end loop: create an issue, assign it 
 | Agent-to-Agent Handoff | Task Graph with DAG execution + handoff protocol | P0 | ✅ Done |
 | Multi-Provider Support | 7 providers (3 CLI + 4 API) via Backend Facade | P0 | ✅ Done |
 | Execution Traces | execution_traces table + TaskService integration | P1 | ✅ Done |
-| Goal → DAG Auto-decomposition | LLM auto-decompose issue into task graph (open-multi-agent has this) | P0 | ✅ Done ([spec](docs/superpowers/specs/2026-05-10-goal-to-dag-auto-decomposition-design.md)) |
-| One-Command Install | `npx create-agentra` / `brew install agentra` / embedded SQLite mode | P0 | 📐 Designed ([spec](docs/superpowers/specs/2026-05-10-one-command-install-design.md)) |
+| Goal → DAG Auto-decomposition | LLM auto-decompose issue into task graph (open-multi-agent has this) | P0 | ✅ Done ([spec](superpowers/specs/2026-05-10-goal-to-dag-auto-decomposition-design.md)) |
+| One-Command Install | `npx create-agentra` / `brew install agentra` / embedded SQLite mode | P0 | 📐 Designed ([spec](superpowers/specs/2026-05-10-one-command-install-design.md)) |
 | GitHub Integration | GitHub OAuth App + webhooks + PR/commit linking | P1 | 🚧 In Progress |
-| Git-Native Hooks | Auto-link commits via prepare-commit-msg + post-merge hooks (agent-tasks has this) | P1 | ✅ Done ([spec](docs/superpowers/specs/2026-05-10-git-native-hooks-design.md)) |
+| Git-Native Hooks | Auto-link commits via prepare-commit-msg + post-merge hooks (agent-tasks has this) | P1 | ✅ Done ([spec](superpowers/specs/2026-05-10-git-native-hooks-design.md)) |
 | Provider Breadth (7→15) | Add DeepSeek, Groq, Together, Mistral, xAI, Gemini API, more | P1 | ✅ Done |
 | Real-Time DAG Visualization | Interactive ReactFlow DAG view on issue detail page | P2 | ✅ Done |
 | Pre-Defined Specialist Agents | 6 templates (Frontend, Backend, Test, Security, DevOps, Tech Writer) | P2 | ✅ Done |
@@ -115,7 +115,7 @@ Today, Agentra v0.2 ships a working end-to-end loop: create an issue, assign it 
 | Mobile App | React Native iOS/Android for monitoring and approvals | P2 | Not Started |
 | Enterprise Compliance | EU AI Act, SOC2, GDPR readiness | P2 | Not Started |
 
-> **Competitive Analysis v3 (2026-05-10)**: 40+ projects scanned across 6 categories. `open-multi-agent` (6k★) has Goal→DAG auto-decomposition. `agent-tasks` has one-command install + git hooks. `wshobson/agents` (35k★) + `oh-my-claudecode` (33k★) show Claude Code ecosystem explosion. `CrewAI`/`AutoGen`/`MetaGPT` (51k–67k★) dominate Python framework mindshare but lack task UIs. See [competitive-analysis-v3](docs/superpowers/specs/2026-05-10-competitive-analysis-v3.md).
+> **Competitive Analysis v3 (2026-05-10)**: 40+ projects scanned across 6 categories. `open-multi-agent` (6k★) has Goal→DAG auto-decomposition. `agent-tasks` has one-command install + git hooks. `wshobson/agents` (35k★) + `oh-my-claudecode` (33k★) show Claude Code ecosystem explosion. `CrewAI`/`AutoGen`/`MetaGPT` (51k–67k★) dominate Python framework mindshare but lack task UIs. See [competitive-analysis-v3](superpowers/specs/2026-05-10-competitive-analysis-v3.md).
 
 ---
 
@@ -251,7 +251,7 @@ Expand beyond Claude/Codex/OpenCode to match swarmclaw's 23+ providers.
 | Agent Memory Store | pgvector-backed per-agent memory with UI viewer. | P0 | Platform | ✅ Done (Phase 2.5) |
 | RAG Context Injection | Automatic memory retrieval surfaced to agents at task start. | P0 | Platform | ✅ Done (Phase 2.5) |
 | Agentra MCP Server | Expose issues, skills, memory as MCP tools to agents. | P0 | Platform | ✅ Done |
-| External MCP Registry | GitHub, Slack, web search tools via standard MCP protocol. | P1 | Platform | 📐 Designed ([spec](docs/superpowers/specs/2026-05-10-external-mcp-registry-design.md)) |
+| External MCP Registry | GitHub, Slack, web search tools via standard MCP protocol. | P1 | Platform | 📐 Designed ([spec](superpowers/specs/2026-05-10-external-mcp-registry-design.md)) |
 | Sub-Task Trees | Decompose issues into ordered / parallel child tasks. | P0 | Product | ✅ Done (Phase 2.5) |
 | Multi-Agent Planner | Planner agent role that decomposes and delegates work. | P0 | Platform | ✅ Done (Phase 2.5) |
 | Agent-to-Agent Handoff | Context + artifacts passed between agents during delegation. | P0 | Platform | ✅ Done (Phase 2.5) |
@@ -259,9 +259,9 @@ Expand beyond Claude/Codex/OpenCode to match swarmclaw's 23+ providers.
 | Execution Traces | Structured logging: steps, tools, tokens, cost per task. | P1 | Platform | ✅ Done (Phase 2.5) |
 | Multi-Provider Support | 7 providers (3 CLI + 4 API) via Backend Facade. | P0 | Platform | ✅ Done (Phase 2.5) |
 | Analytics Dashboard | Agent perf, cycle time, cost, velocity charts. | P1 | Product | Pending |
-| Goal → DAG Auto-Decomposition | LLM auto-decomposes issue into task graph (learn from open-multi-agent). | P0 | Platform | ✅ Done ([spec](docs/superpowers/specs/2026-05-10-goal-to-dag-auto-decomposition-design.md)) |
-| One-Command Install | `npx create-agentra` / `brew install agentra` zero-config setup. | P0 | DX | 📐 Designed ([spec](docs/superpowers/specs/2026-05-10-one-command-install-design.md)) |
-| Git-Native Hooks | Auto-link commits to tasks; `post-merge` auto-completes tasks. | P1 | Platform | ✅ Done ([spec](docs/superpowers/specs/2026-05-10-git-native-hooks-design.md)) |
+| Goal → DAG Auto-Decomposition | LLM auto-decomposes issue into task graph (learn from open-multi-agent). | P0 | Platform | ✅ Done ([spec](superpowers/specs/2026-05-10-goal-to-dag-auto-decomposition-design.md)) |
+| One-Command Install | `npx create-agentra` / `brew install agentra` zero-config setup. | P0 | DX | 📐 Designed ([spec](superpowers/specs/2026-05-10-one-command-install-design.md)) |
+| Git-Native Hooks | Auto-link commits to tasks; `post-merge` auto-completes tasks. | P1 | Platform | ✅ Done ([spec](superpowers/specs/2026-05-10-git-native-hooks-design.md)) |
 
 ---
 
@@ -461,7 +461,7 @@ Continuous investments in platform reliability, performance, and maintainability
 
 `open-multi-agent` (6k stars, MIT) has **Goal → DAG auto-decomposition** — give it a goal string, the Coordinator agent decomposes into a task DAG automatically. Agentra's Task Graph requires manual node/edge creation. This is the #1 competitive gap to close.
 
-See [competitive-analysis-v2.md](docs/superpowers/specs/2026-05-10-competitive-analysis-v2.md) for full analysis.
+See [competitive-analysis-v2.md](superpowers/specs/2026-05-10-competitive-analysis-v2.md) for full analysis.
 
 ### Differentiation (Updated v3)
 

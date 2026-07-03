@@ -53,6 +53,27 @@ extra:
       link: https://github.com/agentra-ai/agentra
   generator: false
 
+# Top-level nav is shared across all languages; the i18n plugin merges it
+# with each language's own nav below. Root-level docs (ROADMAP, architecture/,
+# spec/, superpowers/) are served identically in every language.
+nav:
+  - Home: index.md
+  - Quick Start: getting-started.md
+  - Self-Hosting:
+      - getting-started.md  # default cross-ref; actual file in each lang folder
+      - self-hosting.md
+      - Auto-Upgrade: self-hosting/auto-upgrade.md
+  - CLI Reference: cli.md
+  - Architecture:
+      - Polymorphic Assignee: architecture/polymorphic-assignee.md
+      - Agent Conventions: spec/agent-conventions.md
+      - Telemetry Metrics: spec/agent-task-metrics.md
+  - Blog:
+      - Why Polymorphic Assignee: blog/draft-why-polymorphic-assignee.md
+      - Auto-Upgrade Demo: blog/demo-auto-upgrade-storyboard.md
+  - Roadmap: ROADMAP.md
+  - Contributing: contributing.md
+
 plugins:
   - search:
       lang:
@@ -65,6 +86,12 @@ plugins:
           default: true
           name: English
           build: true
+          nav:
+            - Home: index.md
+            - Quick Start: getting-started.md
+            - Self-Hosting: self-hosting.md
+            - CLI Reference: cli.md
+            - Contributing: contributing.md
         - locale: zh
           name: 中文
           build: true
