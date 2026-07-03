@@ -72,6 +72,7 @@ func init() {
 	rootCmd.AddCommand(runtimeCmd)
 	rootCmd.AddCommand(gitCmd)
 	rootCmd.AddCommand(loopCmd)
+	rootCmd.AddCommand(conventionsCmd)
 }
 
 func main() {
