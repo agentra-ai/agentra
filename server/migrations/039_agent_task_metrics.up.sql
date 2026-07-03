@@ -6,7 +6,7 @@ CREATE TABLE agent_task_metrics (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id    UUID NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
     task_id         UUID NOT NULL REFERENCES agent_task_queue(id) ON DELETE CASCADE,
-    issue_id        UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+    issue_id        UUID NOT NULL REFERENCES issue(id) ON DELETE CASCADE,
 
     provider        TEXT NOT NULL,
     model           TEXT NOT NULL,
