@@ -1,10 +1,13 @@
 package execenv
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/agentra-ai/agentra/server/pkg/codex/dna"
 )
 
 // InjectRuntimeConfig writes the meta skill content into the runtime-specific
@@ -179,6 +182,33 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 	b.WriteString("Keep comments concise and natural — state the outcome, not the process.\n")
 	b.WriteString("Good: \"Fixed the login redirect. PR: https://...\"\n")
 	b.WriteString("Bad: \"1. Read the issue 2. Found the bug in auth.go 3. Created branch 4. ...\"\n")
+
+	// Repo-DNA injection (Issue #12). When the daemon knows the on-disk path
+	// to the workspace root, extract structured signals and append them so the
+	// agent inherits the repo's commit + layout + testing conventions.
+	if ctx.WorkspaceRoot != "" {
+		if d := dna.Extract(ctx.WorkspaceRoot); d != nil {
+			b.WriteString("\n---\n\n")
+			b.WriteString("## Repo-DNA (auto-extracted)\n\n")
+			b.WriteString("This repo was auto-scanned. Internalise these signals.\n\n")
+
+			// JSON blob — most providers parse it natively; human-readable too.
+			b.WriteString("```json\n")
+			if j, err := json.MarshalIndent(d, "", "  "); err == nil && len(j) > 2 {
+				b.Write(j)
+			}
+			b.WriteString("\n```\n\n")
+
+			// Human-readable highlight.
+			if len(d.Conventions) > 0 {
+				b.WriteString("### Conventions\n\n")
+				for _, c := range d.Conventions {
+					b.WriteString("- " + c + "\n")
+				}
+				b.WriteString("\n")
+			}
+		}
+	}
 
 	return b.String()
 }

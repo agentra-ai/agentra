@@ -35,6 +35,7 @@ type TaskContextForEnv struct {
 	AgentInstructions string // agent identity/persona instructions, injected into CLAUDE.md
 	AgentSkills       []SkillContextForEnv
 	Repos             []RepoContextForEnv // workspace repos available for checkout
+	WorkspaceRoot     string             // absolute path to the git workspace root on disk (empty = skip DNA extraction)
 }
 
 // SkillContextForEnv represents a skill to be written into the execution environment.
