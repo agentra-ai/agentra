@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { IssuePriority, UpdateIssueRequest } from "@/shared/types";
 import { PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
 import { PriorityIcon } from "../priority-icon";
@@ -17,6 +18,7 @@ export function PriorityPicker({
 }) {
   const [open, setOpen] = useState(false);
   const cfg = PRIORITY_CONFIG[priority];
+  const t = useTranslations("issues");
 
   return (
     <PropertyPicker
@@ -27,7 +29,7 @@ export function PriorityPicker({
         customTrigger ?? (
           <>
             <PriorityIcon priority={priority} className="shrink-0" />
-            <span className="truncate">{cfg.label}</span>
+            <span className="truncate">{t(`priority.${priority}`)}</span>
           </>
         )
       }
@@ -45,7 +47,7 @@ export function PriorityPicker({
           >
             <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${c.badgeBg} ${c.badgeText}`}>
               <PriorityIcon priority={p} className="h-3 w-3" inheritColor />
-              {c.label}
+              {t(`priority.${p}`)}
             </span>
           </PickerItem>
         );

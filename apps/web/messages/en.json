@@ -91,6 +91,164 @@
     "allIssues": "All Issues",
     "myIssues": "My Issues",
     "board": "Board",
+    "activity": {
+      "created": "created this issue",
+      "statusChanged": "changed status from {from} to {to}",
+      "priorityChanged": "changed priority from {from} to {to}",
+      "assignedTo": "assigned to {name}",
+      "selfAssigned": "self-assigned this issue",
+      "removedAssignee": "removed assignee",
+      "changedAssignee": "changed assignee",
+      "removedDueDate": "removed due date",
+      "dueDateSet": "set due date to {date}",
+      "renamed": "renamed this issue from \"{from}\" to \"{to}\"",
+      "descriptionUpdated": "updated the description",
+      "taskCompleted": "completed the task",
+      "taskFailed": "task failed"
+    },
+    "agent": {
+      "cloudBadge": "Cloud",
+      "executionHistory": "Execution history ({count})",
+      "isWorking": "{name} is working",
+      "latest": "Latest",
+      "noExecutionData": "No execution data recorded.",
+      "outputHeading": "Agent Output",
+      "lineCount": "({count} lines)",
+      "resultWithTool": "{tool} result: ",
+      "resultDefault": "result: ",
+      "scrollToCardTitle": "Scroll to live card",
+      "stage": {
+        "idle": "Idle",
+        "reading": "Reading",
+        "implementing": "Implementing",
+        "testing": "Testing",
+        "committing": "Committing",
+        "done": "Done"
+      },
+      "stop": "Stop",
+      "stopTitle": "Stop agent",
+      "toolCalls": "{count, plural, one {# tool call} other {# tool calls}}",
+      "truncated": "... (truncated)",
+      "unknown": "Agent",
+      "waitingForOutput": "Waiting for agent output..."
+    },
+    "assignee": {
+      "assignToPlaceholder": "Assign to...",
+      "membersSection": "Members",
+      "agentsSection": "Agents",
+      "unassigned": "Unassigned"
+    },
+    "batch": {
+      "deleteQuestion": "Delete {count} issue{count, plural, one {} other {s}}?",
+      "deleteDescription": "This action cannot be undone. This will permanently delete the selected issue{count, plural, one {} other {s}} and all associated data.",
+      "selectedLabel": "{count} selected"
+    },
+    "board": {
+      "addIssue": "Add issue",
+      "hiddenColumns": "Hidden columns",
+      "hideColumn": "Hide column",
+      "noIssues": "No issues",
+      "showColumn": "Show column"
+    },
+    "comments": {
+      "copy": "Copy",
+      "deleteTitle": "Delete comment",
+      "deleteDescription": "This comment will be permanently deleted. This cannot be undone.",
+      "deleteDescriptionHasReplies": "This comment and all its replies will be permanently deleted. This cannot be undone.",
+      "editPlaceholder": "Edit comment...",
+      "leaveCommentPlaceholder": "Leave a comment...",
+      "leaveReplyPlaceholder": "Leave a reply...",
+      "replyCount": "{count, plural, one {# reply} other {# replies}}"
+    },
+    "create": {
+      "assigneePlaceholder": "Assignee",
+      "collapse": "Collapse",
+      "expand": "Expand",
+      "creating": "Creating...",
+      "createButton": "Create Issue",
+      "descriptionPlaceholder": "Add description...",
+      "failedToCreate": "Failed to create issue",
+      "statusLabel": "Status",
+      "priorityLabel": "Priority",
+      "assigneeLabel": "Assignee",
+      "dueDateLabel": "Due date",
+      "templateSelected": "template",
+      "titlePlaceholder": "Issue title",
+      "issueCreated": "Issue created",
+      "viewIssue": "View issue",
+      "noResults": "No results"
+    },
+    "detail": {
+      "activity": "Activity",
+      "backToList": "Back to Issues",
+      "changeSubscribers": "Change subscribers...",
+      "copyLink": "Copy link",
+      "creator": "Creator",
+      "deleteIssue": "Delete issue",
+      "deleteTitle": "Delete issue",
+      "deleteDescription": "This will permanently delete this issue and all its comments. This action cannot be undone.",
+      "details": "Details",
+      "dueDate": "Due date",
+      "jumpToBottom": "Jump to bottom",
+      "nextIssue": "Next issue",
+      "notFound": "This issue does not exist or has been deleted in this workspace.",
+      "previousIssue": "Previous issue",
+      "priorityLabel": "Priority",
+      "properties": "Properties",
+      "statusLabel": "Status",
+      "subscribe": "Subscribe",
+      "taskGraph": "Task Graph",
+      "toggleSidebar": "Toggle sidebar",
+      "unsubscribe": "Unsubscribe"
+    },
+    "due": {
+      "label": "Due date",
+      "clear": "Clear date",
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "nextWeek": "Next week"
+    },
+    "editor": {
+      "titlePlaceholder": "Issue title",
+      "descriptionPlaceholder": "Add description..."
+    },
+    "filter": {
+      "all": {
+        "label": "All",
+        "description": "All issues in this workspace"
+      },
+      "members": {
+        "label": "Members",
+        "description": "Issues assigned to team members"
+      },
+      "agents": {
+        "label": "Agents",
+        "description": "Issues assigned to AI agents"
+      },
+      "placeholder": "Filter..."
+    },
+    "page": {
+      "workspaceFallback": "Workspace",
+      "hiddenColumns": "Hidden columns"
+    },
+    "templates": {
+      "feature": {
+        "label": "Feature",
+        "description": "New functionality request"
+      },
+      "bug": {
+        "label": "Bug",
+        "description": "Something isn't working as expected"
+      },
+      "refactor": {
+        "label": "Refactor",
+        "description": "Code structure improvement without behavior change"
+      },
+      "agentTask": {
+        "label": "Agent Task",
+        "description": "Task for an AI agent to execute"
+      }
+    },
     "toast": {
       "loadIssuesFailed": "Failed to load issues",
       "loadIssueFailed": "Failed to load issue",

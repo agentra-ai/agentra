@@ -122,7 +122,7 @@ export function IssuesPage() {
       <div className="flex h-12 shrink-0 items-center gap-1.5 border-b px-4">
         <WorkspaceAvatar name={workspace?.name ?? "W"} size="sm" />
         <span className="text-sm text-muted-foreground">
-          {workspace?.name ?? "Workspace"}
+          {workspace?.name ?? t("page.workspaceFallback")}
         </span>
         <ChevronRight className="h-3 w-3 text-muted-foreground" />
         <span className="text-sm font-medium">{t("title")}</span>

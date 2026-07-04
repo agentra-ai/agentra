@@ -91,6 +91,164 @@
     "allIssues": "所有问题",
     "myIssues": "我的问题",
     "board": "看板",
+    "activity": {
+      "created": "创建了此问题",
+      "statusChanged": "状态从 {from} 更改为 {to}",
+      "priorityChanged": "优先级从 {from} 更改为 {to}",
+      "assignedTo": "分配给 {name}",
+      "selfAssigned": "自我分配了此问题",
+      "removedAssignee": "已移除负责人",
+      "changedAssignee": "已更改负责人",
+      "removedDueDate": "已移除截止日期",
+      "dueDateSet": "设置截止日期为 {date}",
+      "renamed": "将此问题由 \"{from}\" 重命名为 \"{to}\"",
+      "descriptionUpdated": "更新了描述",
+      "taskCompleted": "完成了任务",
+      "taskFailed": "任务失败"
+    },
+    "agent": {
+      "cloudBadge": "云端",
+      "executionHistory": "执行历史 ({count})",
+      "isWorking": "{name} 正在工作",
+      "latest": "最新",
+      "noExecutionData": "没有执行数据记录。",
+      "outputHeading": "Agent 输出",
+      "lineCount": "({count} 行)",
+      "resultWithTool": "{tool} 结果: ",
+      "resultDefault": "结果: ",
+      "scrollToCardTitle": "滚动到实时卡片",
+      "stage": {
+        "idle": "空闲",
+        "reading": "阅读中",
+        "implementing": "实施中",
+        "testing": "测试中",
+        "committing": "提交中",
+        "done": "完成"
+      },
+      "stop": "停止",
+      "stopTitle": "停止代理",
+      "toolCalls": "{count, plural, other {# 次工具调用}}",
+      "truncated": "... (已截断)",
+      "unknown": "Agent",
+      "waitingForOutput": "等待 Agent 输出..."
+    },
+    "assignee": {
+      "assignToPlaceholder": "分配给…",
+      "membersSection": "成员",
+      "agentsSection": "代理",
+      "unassigned": "未分配"
+    },
+    "batch": {
+      "deleteQuestion": "删除 {count} 个问题？",
+      "deleteDescription": "此操作无法撤销。将永久删除选中的问题及其所有关联数据。",
+      "selectedLabel": "已选择 {count} 个"
+    },
+    "board": {
+      "addIssue": "添加问题",
+      "hiddenColumns": "已隐藏的列",
+      "hideColumn": "隐藏列",
+      "noIssues": "没有问题",
+      "showColumn": "显示列"
+    },
+    "comments": {
+      "copy": "复制",
+      "deleteTitle": "删除评论",
+      "deleteDescription": "此评论将被永久删除，无法撤销。",
+      "deleteDescriptionHasReplies": "此评论及其所有回复将被永久删除，无法撤销。",
+      "editPlaceholder": "编辑评论…",
+      "leaveCommentPlaceholder": "留下评论…",
+      "leaveReplyPlaceholder": "留下回复…",
+      "replyCount": "{count, plural, other {# 条回复}}"
+    },
+    "create": {
+      "assigneePlaceholder": "负责人",
+      "collapse": "收起",
+      "expand": "展开",
+      "creating": "创建中…",
+      "createButton": "创建问题",
+      "descriptionPlaceholder": "添加描述…",
+      "failedToCreate": "创建问题失败",
+      "statusLabel": "状态",
+      "priorityLabel": "优先级",
+      "assigneeLabel": "负责人",
+      "dueDateLabel": "截止日期",
+      "templateSelected": "模板",
+      "titlePlaceholder": "问题标题",
+      "issueCreated": "问题已创建",
+      "viewIssue": "查看问题",
+      "noResults": "没有结果"
+    },
+    "detail": {
+      "activity": "活动",
+      "backToList": "返回问题列表",
+      "changeSubscribers": "更改订阅者…",
+      "copyLink": "复制链接",
+      "creator": "创建者",
+      "deleteIssue": "删除问题",
+      "deleteTitle": "删除问题",
+      "deleteDescription": "将永久删除此问题及其所有评论，无法撤销。",
+      "details": "详情",
+      "dueDate": "截止日期",
+      "jumpToBottom": "跳转到底部",
+      "nextIssue": "下一个问题",
+      "notFound": "此问题不存在或已在工作空间中被删除。",
+      "previousIssue": "上一个问题",
+      "priorityLabel": "优先级",
+      "properties": "属性",
+      "statusLabel": "状态",
+      "subscribe": "订阅",
+      "taskGraph": "任务图",
+      "toggleSidebar": "切换侧边栏",
+      "unsubscribe": "取消订阅"
+    },
+    "due": {
+      "label": "截止日期",
+      "clear": "清除日期",
+      "today": "今天",
+      "tomorrow": "明天",
+      "nextWeek": "下周"
+    },
+    "editor": {
+      "titlePlaceholder": "问题标题",
+      "descriptionPlaceholder": "添加描述…"
+    },
+    "filter": {
+      "all": {
+        "label": "全部",
+        "description": "此工作空间中的所有问题"
+      },
+      "members": {
+        "label": "成员",
+        "description": "分配给团队成员的问题"
+      },
+      "agents": {
+        "label": "代理",
+        "description": "分配给 AI 代理的问题"
+      },
+      "placeholder": "筛选…"
+    },
+    "page": {
+      "workspaceFallback": "工作空间",
+      "hiddenColumns": "已隐藏的列"
+    },
+    "templates": {
+      "feature": {
+        "label": "功能",
+        "description": "新功能需求"
+      },
+      "bug": {
+        "label": "缺陷",
+        "description": "某些功能未按预期工作"
+      },
+      "refactor": {
+        "label": "重构",
+        "description": "不改变行为下改善代码结构"
+      },
+      "agentTask": {
+        "label": "Agent 任务",
+        "description": "由 AI 代理执行的任务"
+      }
+    },
     "toast": {
       "loadIssuesFailed": "加载问题列表失败",
       "loadIssueFailed": "加载问题失败",

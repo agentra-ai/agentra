@@ -35,12 +35,7 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
-import {
-  ALL_STATUSES,
-  STATUS_CONFIG,
-  PRIORITY_ORDER,
-  PRIORITY_CONFIG,
-} from "@/features/issues/config";
+import { ALL_STATUSES, PRIORITY_ORDER } from "@/features/issues/config";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
 import {
   SORT_OPTIONS,
@@ -115,6 +110,7 @@ function getScopes(t: ReturnType<typeof useTranslations>): { value: MyIssuesScop
 
 export function MyIssuesHeader({ allIssues }: { allIssues: Issue[] }) {
   const t = useTranslations("myIssues");
+  const tIssues = useTranslations("issues");
   const tUI = useTranslations("commonUI");
   const viewMode = useStore(myIssuesViewStore, (s) => s.viewMode);
   const statusFilters = useStore(myIssuesViewStore, (s) => s.statusFilters);
@@ -206,7 +202,7 @@ export function MyIssuesHeader({ allIssues }: { allIssues: Issue[] }) {
                     >
                       <HoverCheck checked={checked} />
                       <StatusIcon status={s} className="h-3.5 w-3.5" />
-                      {STATUS_CONFIG[s].label}
+                      {tIssues(`status.${s}`)}
                       {count > 0 && (
                         <span className="ml-auto text-xs text-muted-foreground">
                           {count} {count === 1 ? "issue" : "issues"}
@@ -242,7 +238,7 @@ export function MyIssuesHeader({ allIssues }: { allIssues: Issue[] }) {
                     >
                       <HoverCheck checked={checked} />
                       <PriorityIcon priority={p} />
-                      {PRIORITY_CONFIG[p].label}
+                      {tIssues(`priority.${p}`)}
                       {count > 0 && (
                         <span className="ml-auto text-xs text-muted-foreground">
                           {count} {count === 1 ? "issue" : "issues"}

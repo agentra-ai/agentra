@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { Check } from "lucide-react";
 import {
   Popover,
@@ -20,7 +21,7 @@ export function PropertyPicker({
   width = "w-48",
   align = "end",
   searchable = false,
-  searchPlaceholder = "Filter...",
+  searchPlaceholder,
   onSearchChange,
   children,
 }: {
@@ -35,7 +36,10 @@ export function PropertyPicker({
   onSearchChange?: (query: string) => void;
   children: React.ReactNode;
 }) {
+  const tCommon = useTranslations("common");
   const [query, setQuery] = useState("");
+
+  const effectivePlaceholder = searchPlaceholder ?? tCommon("search");
 
   const handleOpenChange = useCallback(
     (v: boolean) => {
@@ -66,8 +70,8 @@ export function PropertyPicker({
                 setQuery(e.target.value);
                 onSearchChange?.(e.target.value);
               }}
-              placeholder={searchPlaceholder}
-              aria-label="Filter options"
+              placeholder={effectivePlaceholder}
+              aria-label={effectivePlaceholder}
               className="w-full bg-transparent text-sm placeholder:text-muted-foreground outline-none"
             />
           </div>
@@ -134,9 +138,10 @@ export function PickerSection({
 // ---------------------------------------------------------------------------
 
 export function PickerEmpty() {
+  const tCommon = useTranslations("common");
   return (
     <div className="px-2 py-3 text-center text-sm text-muted-foreground">
-      No results
+      {tCommon("noResults")}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { ChevronRight, Plus } from "lucide-react";
 import { Accordion } from "@base-ui/react/accordion";
+import { useTranslations } from "next-intl";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import type { Issue, IssueStatus } from "@/shared/types";
@@ -29,6 +30,7 @@ export function ListView({
   const toggleListCollapsed = useViewStore(
     (s) => s.toggleListCollapsed
   );
+  const t = useTranslations("issues");
   const selectedIds = useIssueSelectionStore((s) => s.selectedIds);
   const select = useIssueSelectionStore((s) => s.select);
   const deselect = useIssueSelectionStore((s) => s.deselect);
@@ -98,7 +100,7 @@ export function ListView({
                   <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-aria-expanded/trigger:rotate-90" />
                   <span className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-semibold ${cfg.badgeBg} ${cfg.badgeText}`}>
                     <StatusIcon status={status} className="h-3 w-3" inheritColor />
-                    {cfg.label}
+                    {t(`status.${status}`)}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {statusIssues.length}
@@ -122,7 +124,7 @@ export function ListView({
                     >
                       <Plus className="size-3.5" />
                     </TooltipTrigger>
-                    <TooltipContent>Add issue</TooltipContent>
+                    <TooltipContent>{t("board.addIssue")}</TooltipContent>
                   </Tooltip>
                 </div>
               </Accordion.Header>
@@ -133,7 +135,7 @@ export function ListView({
                   ))
                 ) : (
                   <p className="py-6 text-center text-xs text-muted-foreground">
-                    No issues
+                    {t("board.noIssues")}
                   </p>
                 )}
               </Accordion.Panel>

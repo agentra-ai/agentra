@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useFormatter } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { CalendarDays } from "lucide-react";
 import type { UpdateIssueRequest } from "@/shared/types";
 import { Calendar } from "@/components/ui/calendar";
@@ -25,6 +25,7 @@ export function DueDatePicker({
   const date = dueDate ? new Date(dueDate) : undefined;
   const isOverdue = date ? date < new Date() : false;
   const f = useFormatter();
+  const t = useTranslations("issues");
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -37,7 +38,7 @@ export function DueDatePicker({
                 {f.dateTime(date, { month: "short", day: "numeric" })}
               </span>
             ) : (
-              <span className="text-muted-foreground">Due date</span>
+              <span className="text-muted-foreground">{t("due.label")}</span>
             )}
           </>
         )}
@@ -62,7 +63,7 @@ export function DueDatePicker({
               }}
               className="text-muted-foreground hover:text-foreground"
             >
-              Clear date
+              {t("due.clear")}
             </Button>
           </div>
         )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { IssueStatus, UpdateIssueRequest } from "@/shared/types";
 import { ALL_STATUSES, STATUS_CONFIG } from "@/features/issues/config";
 import { StatusIcon } from "../status-icon";
@@ -15,6 +16,7 @@ export function StatusPicker({
 }) {
   const [open, setOpen] = useState(false);
   const cfg = STATUS_CONFIG[status];
+  const t = useTranslations("issues");
 
   return (
     <PropertyPicker
@@ -24,7 +26,7 @@ export function StatusPicker({
       trigger={
         <>
           <StatusIcon status={status} className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{cfg.label}</span>
+          <span className="truncate">{t(`status.${status}`)}</span>
         </>
       }
     >
@@ -41,7 +43,7 @@ export function StatusPicker({
             }}
           >
             <StatusIcon status={s} className="h-3.5 w-3.5" />
-            <span>{c.label}</span>
+            <span>{t(`status.${s}`)}</span>
           </PickerItem>
         );
       })}

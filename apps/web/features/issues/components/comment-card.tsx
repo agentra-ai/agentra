@@ -75,11 +75,11 @@ function DeleteCommentDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete comment</AlertDialogTitle>
+          <AlertDialogTitle>{t("comments.deleteTitle")}</AlertDialogTitle>
           <AlertDialogDescription>
             {hasReplies
-              ? "This comment and all its replies will be permanently deleted. This cannot be undone."
-              : "This comment will be permanently deleted. This cannot be undone."}
+              ? t("comments.deleteDescriptionHasReplies")
+              : t("comments.deleteDescription")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -195,7 +195,7 @@ function CommentRow({
                 toast.success(tCommon("toast.copied"));
               }}>
                 <Copy className="h-3.5 w-3.5" />
-                Copy
+                {t("comments.copy")}
               </DropdownMenuItem>
               {isOwn && (
                 <>
@@ -231,7 +231,7 @@ function CommentRow({
             <ContentEditor
               ref={editEditorRef}
               defaultValue={entry.content ?? ""}
-              placeholder="Edit comment..."
+              placeholder={t("comments.editPlaceholder")}
               onSubmit={saveEdit}
               onUploadFile={(file) => uploadWithToast(file, { issueId })}
               debounceMs={100}
@@ -375,7 +375,7 @@ function CommentCard({
             )}
             {!open && replyCount > 0 && (
               <span className="shrink-0 text-xs text-muted-foreground">
-                {replyCount} {replyCount === 1 ? "reply" : "replies"}
+                {t("comments.replyCount", { count: replyCount })}
               </span>
             )}
 
@@ -399,7 +399,7 @@ function CommentCard({
                     toast.success(tCommon("toast.copied"));
                   }}>
                     <Copy className="h-3.5 w-3.5" />
-                    Copy
+                    {t("comments.copy")}
                   </DropdownMenuItem>
                   {isOwn && (
                     <>
@@ -441,7 +441,7 @@ function CommentCard({
                   <ContentEditor
                     ref={editEditorRef}
                     defaultValue={entry.content ?? ""}
-                    placeholder="Edit comment..."
+                    placeholder={t("comments.editPlaceholder")}
                     onSubmit={saveEdit}
                     debounceMs={100}
                   />
@@ -492,7 +492,7 @@ function CommentCard({
           <div className="border-t border-border/50 px-4 py-2.5">
             <ReplyInput
               issueId={issueId}
-              placeholder="Leave a reply..."
+              placeholder={t("comments.leaveReplyPlaceholder")}
               size="sm"
               avatarType="member"
               avatarId={currentUserId ?? ""}

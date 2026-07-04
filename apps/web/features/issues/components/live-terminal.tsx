@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronUp, Terminal } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { StageIndicator } from "./stage-indicator";
@@ -19,6 +20,7 @@ export function LiveTerminal({ taskId, defaultExpanded = true }: LiveTerminalPro
   const { logLines } = useStreamingLogs(taskId);
   const { stage, lastUpdate } = useAgentStage(taskId);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const t = useTranslations("issues");
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
@@ -36,10 +38,10 @@ export function LiveTerminal({ taskId, defaultExpanded = true }: LiveTerminalPro
       >
         <div className="flex items-center gap-2">
           <Terminal className="h-4 w-4" />
-          <span className="font-medium text-sm">Agent Output</span>
+          <span className="font-medium text-sm">{t("agent.outputHeading")}</span>
           {logLines.length > 0 && (
             <span className="text-xs text-muted-foreground">
-              ({logLines.length} lines)
+              {t("agent.lineCount", { count: logLines.length })}
             </span>
           )}
         </div>
@@ -56,7 +58,7 @@ export function LiveTerminal({ taskId, defaultExpanded = true }: LiveTerminalPro
         <ScrollArea className="h-[300px]" ref={scrollRef}>
           <div className="p-3 font-mono text-xs leading-relaxed">
             {logLines.length === 0 ? (
-              <div className="text-muted-foreground italic">Waiting for agent output...</div>
+              <div className="text-muted-foreground italic">{t("agent.waitingForOutput")}</div>
             ) : (
               logLines.map((line, i) => (
                 <div key={i} className="text-foreground whitespace-pre-wrap break-all">

@@ -106,8 +106,8 @@ interface AgentLiveCardProps {
 }
 
 export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentLiveCardProps) {
-  const t = useTranslations("issues");
   const tc = useTranslations("common");
+  const t = useTranslations("issues");
   const { getActorName } = useActorName();
   const [activeTask, setActiveTask] = useState<AgentTask | null>(null);
   const [items, setItems] = useState<TimelineItem[]>([]);
@@ -295,7 +295,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
   if (!activeTask) return null;
 
   const toolCount = items.filter((i) => i.type === "tool_use").length;
-  const name = (activeTask.agent_id ? getActorName("agent", activeTask.agent_id) : agentName) ?? "Agent";
+  const name = (activeTask.agent_id ? getActorName("agent", activeTask.agent_id) : agentName) ?? t("agent.unknown");
 
   return (
     <>
@@ -324,30 +324,30 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
           )}
           <div className="flex items-center gap-1.5 text-xs font-medium min-w-0">
             <Loader2 className={cn("h-3 w-3 animate-spin shrink-0", isStuck ? "text-brand" : "text-info")} />
-            <span className="truncate">{name} is working</span>
+            <span className="truncate">{t("agent.isWorking", { name })}</span>
             {activeTask.runtime_type === "cloud" && (
               <span className="flex items-center gap-0.5 text-xs px-1 py-0.5 rounded bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 shrink-0">
                 <Cloud className="h-3 w-3" />
-                <span>Cloud</span>
+                <span>{t("agent.cloudBadge")}</span>
               </span>
             )}
           </div>
           <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0">{elapsed}</span>
           {agentStage !== "idle" && agentStage !== "done" && (
             <span className="text-xs px-1.5 py-0.5 rounded bg-info/10 text-info shrink-0">
-              {agentStage}
+              {t(`agent.stage.${agentStage}`)}
             </span>
           )}
           {!isStuck && toolCount > 0 && (
             <span className="text-xs text-muted-foreground shrink-0">
-              {toolCount} tool {toolCount === 1 ? "call" : "calls"}
+              {t("agent.toolCalls", { count: toolCount })}
             </span>
           )}
           {isStuck ? (
             <button
               onClick={scrollToCard}
               className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              title="Scroll to live card"
+              title={t("agent.scrollToCardTitle")}
             >
               <ChevronUp className="h-3.5 w-3.5" />
             </button>
@@ -356,14 +356,14 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
               onClick={handleCancel}
               disabled={cancelling}
               className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 shrink-0"
-              title="Stop agent"
+              title={t("agent.stopTitle")}
             >
               {cancelling ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
                 <Square className="h-3 w-3" />
               )}
-              <span>Stop</span>
+              <span>{t("agent.stop")}</span>
             </button>
           )}
         </div>
@@ -396,7 +396,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
                   className="sticky bottom-0 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-full bg-background border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground shadow-sm"
                 >
                   <ArrowDown className="h-3 w-3" />
-                  Latest
+                  {t("agent.latest")}
                 </button>
               )}
             </div>
@@ -416,6 +416,7 @@ interface TaskRunHistoryProps {
 export function TaskRunHistory({ issueId }: TaskRunHistoryProps) {
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [open, setOpen] = useState(false);
+  const t = useTranslations("issues");
 
   useEffect(() => {
     api.listTasksByIssue(issueId).then(setTasks).catch(console.error);
@@ -458,7 +459,7 @@ export function TaskRunHistory({ issueId }: TaskRunHistoryProps) {
       <CollapsibleTrigger className="flex w-full items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1">
         <ChevronRight className={cn("h-3 w-3 transition-transform", open && "rotate-90")} />
         <Clock className="h-3 w-3" />
-        <span>Execution history ({completedTasks.length})</span>
+        <span>{t("agent.executionHistory", { count: completedTasks.length })}</span>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="mt-1 space-y-2">
@@ -473,6 +474,7 @@ export function TaskRunHistory({ issueId }: TaskRunHistoryProps) {
 
 function TaskRunEntry({ task }: { task: AgentTask }) {
   const tc = useTranslations("common");
+  const t = useTranslations("issues");
   const f = useFormatter();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<TimelineItem[] | null>(null);
@@ -508,8 +510,8 @@ function TaskRunEntry({ task }: { task: AgentTask }) {
           {f.dateTime(new Date(task.created_at), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
         </span>
         {duration && <span className="text-muted-foreground">{duration}</span>}
-        <span className={cn("ml-auto capitalize", task.status === "completed" ? "text-success" : "text-destructive")}>
-          {task.status}
+        <span className={cn("ml-auto", task.status === "completed" ? "text-success" : "text-destructive")}>
+          {t(`status.${task.status}`)}
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent>
@@ -520,7 +522,7 @@ function TaskRunEntry({ task }: { task: AgentTask }) {
               {tc("loading")}
             </div>
           ) : items.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-2">No execution data recorded.</p>
+            <p className="text-xs text-muted-foreground py-2">{t("agent.noExecutionData")}</p>
           ) : (
             items.map((item, idx) => (
               <TimelineRow key={`${item.seq}-${idx}`} item={item} />
@@ -582,10 +584,12 @@ function ToolCallRow({ item }: { item: TimelineItem }) {
 
 function ToolResultRow({ item }: { item: TimelineItem }) {
   const [open, setOpen] = useState(false);
+  const t = useTranslations("issues");
   const output = item.output ?? "";
   if (!output) return null;
 
   const preview = output.length > 120 ? output.slice(0, 120) + "..." : output;
+  const prefix = item.tool ? t("agent.resultWithTool", { tool: item.tool }) : t("agent.resultDefault");
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -594,12 +598,12 @@ function ToolResultRow({ item }: { item: TimelineItem }) {
           className={cn("h-3 w-3 shrink-0 text-muted-foreground transition-transform mt-0.5", open && "rotate-90")}
         />
         <span className="text-muted-foreground/70 truncate">
-          {item.tool ? `${item.tool} result: ` : "result: "}{preview}
+          {prefix}{preview}
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <pre className="ml-[18px] mt-0.5 max-h-40 overflow-auto rounded bg-muted/50 p-2 text-[11px] text-muted-foreground whitespace-pre-wrap break-all">
-          {output.length > 4000 ? output.slice(0, 4000) + "\n... (truncated)" : output}
+          {output.length > 4000 ? output.slice(0, 4000) + "\n" + t("agent.truncated") : output}
         </pre>
       </CollapsibleContent>
     </Collapsible>
