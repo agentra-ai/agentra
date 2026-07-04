@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import type { Comment, TimelineEntry } from "@/shared/types";
 import type {
   CommentCreatedPayload,
@@ -30,6 +31,7 @@ function commentToTimelineEntry(c: Comment): TimelineEntry {
 }
 
 export function useIssueTimeline(issueId: string, userId?: string) {
+  const t = useTranslations("issues");
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -43,10 +45,10 @@ export function useIssueTimeline(issueId: string, userId?: string) {
       .then((entries) => setTimeline(entries))
       .catch((e) => {
         console.error(e);
-        toast.error("Failed to load activity");
+        toast.error(t("toast.loadActivityFailed"));
       })
       .finally(() => setLoading(false));
-  }, [issueId]);
+  }, [issueId, t]);
 
   // Reconnect recovery
   useWSReconnect(
@@ -187,12 +189,12 @@ export function useIssueTimeline(issueId: string, userId?: string) {
           return [...prev, commentToTimelineEntry(comment)];
         });
       } catch {
-        toast.error("Failed to send comment");
+        toast.error(t("toast.sendCommentFailed"));
       } finally {
         setSubmitting(false);
       }
     },
-    [issueId, userId],
+    [issueId, userId, t],
   );
 
   const submitReply = useCallback(
@@ -205,10 +207,10 @@ export function useIssueTimeline(issueId: string, userId?: string) {
           return [...prev, commentToTimelineEntry(comment)];
         });
       } catch {
-        toast.error("Failed to send reply");
+        toast.error(t("toast.sendReplyFailed"));
       }
     },
-    [issueId, userId],
+    [issueId, userId, t],
   );
 
   const editComment = useCallback(
@@ -234,10 +236,10 @@ export function useIssueTimeline(issueId: string, userId?: string) {
             prev.map((e) => (e.id === commentId ? { ...e, content: prevContent! } : e)),
           );
         }
-        toast.error("Failed to update comment");
+        toast.error(t("toast.updateCommentFailed"));
       }
     },
-    [],
+    [t],
   );
 
   const deleteComment = useCallback(
@@ -264,10 +266,10 @@ export function useIssueTimeline(issueId: string, userId?: string) {
       } catch {
         // Rollback: re-add removed entries
         setTimeline((prev) => [...prev, ...removedEntries]);
-        toast.error("Failed to delete comment");
+        toast.error(t("toast.deleteCommentFailed"));
       }
     },
-    [],
+    [t],
   );
 
   const toggleReaction = useCallback(
@@ -293,7 +295,7 @@ export function useIssueTimeline(issueId: string, userId?: string) {
               return { ...e, reactions: [...(e.reactions ?? []), existing] };
             }),
           );
-          toast.error("Failed to remove reaction");
+          toast.error(t("toast.removeReactionFailed"));
         }
       } else {
         const tempReaction = {
@@ -328,11 +330,11 @@ export function useIssueTimeline(issueId: string, userId?: string) {
               return { ...e, reactions: (e.reactions ?? []).filter((r) => r.id !== tempReaction.id) };
             }),
           );
-          toast.error("Failed to add reaction");
+          toast.error(t("toast.addReactionFailed"));
         }
       }
     },
-    [userId, timeline],
+    [userId, timeline, t],
   );
 
   return {

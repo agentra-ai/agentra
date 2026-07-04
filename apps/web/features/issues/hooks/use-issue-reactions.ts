@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import type { IssueReaction } from "@/shared/types";
 import type {
   IssueReactionAddedPayload,
@@ -11,6 +12,7 @@ import { toast } from "sonner";
 import { useWSEvent, useWSReconnect } from "@/features/realtime";
 
 export function useIssueReactions(issueId: string, userId?: string) {
+  const t = useTranslations("issues");
   const [reactions, setReactions] = useState<IssueReaction[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -23,10 +25,10 @@ export function useIssueReactions(issueId: string, userId?: string) {
       .then((iss) => setReactions(iss.reactions ?? []))
       .catch((e) => {
         console.error(e);
-        toast.error("Failed to load reactions");
+        toast.error(t("toast.loadReactionsFailed"));
       })
       .finally(() => setLoading(false));
-  }, [issueId]);
+  }, [issueId, t]);
 
   // Reconnect recovery
   useWSReconnect(
@@ -84,7 +86,7 @@ export function useIssueReactions(issueId: string, userId?: string) {
           await api.removeIssueReaction(issueId, emoji);
         } catch {
           setReactions((prev) => [...prev, existing]);
-          toast.error("Failed to remove reaction");
+          toast.error(t("toast.removeReactionFailed"));
         }
       } else {
         const temp: IssueReaction = {
@@ -101,11 +103,11 @@ export function useIssueReactions(issueId: string, userId?: string) {
           setReactions((prev) => prev.map((r) => (r.id === temp.id ? reaction : r)));
         } catch {
           setReactions((prev) => prev.filter((r) => r.id !== temp.id));
-          toast.error("Failed to add reaction");
+          toast.error(t("toast.addReactionFailed"));
         }
       }
     },
-    [issueId, userId, reactions],
+    [issueId, userId, reactions, t],
   );
 
   return { reactions, loading, toggleReaction };

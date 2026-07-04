@@ -57,7 +57,7 @@ export const BoardCardContent = memo(function BoardCardContent({
       useIssueStore.getState().updateIssue(issue.id, updates);
       api.updateIssue(issue.id, updates).catch(() => {
         useIssueStore.getState().updateIssue(issue.id, prev);
-        toast.error("Failed to update issue");
+        toast.error(t("toast.updateIssueFailed"));
       });
     },
     [issue],

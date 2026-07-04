@@ -149,7 +149,7 @@ function CommentRow({
       await onEdit(entry.id, trimmed);
       setEditing(false);
     } catch {
-      toast.error("Failed to update comment");
+      toast.error(t("toast.updateCommentFailed"));
     }
   };
 
@@ -192,7 +192,7 @@ function CommentRow({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => {
                 copyMarkdown(entry.content ?? "");
-                toast.success("Copied");
+                toast.success(tCommon("toast.copied"));
               }}>
                 <Copy className="h-3.5 w-3.5" />
                 Copy
@@ -321,7 +321,7 @@ function CommentCard({
       await onEdit(entry.id, trimmed);
       setEditing(false);
     } catch {
-      toast.error("Failed to update comment");
+      toast.error(t("toast.updateCommentFailed"));
     }
   };
 
@@ -396,7 +396,7 @@ function CommentCard({
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => {
                     copyMarkdown(entry.content ?? "");
-                    toast.success("Copied");
+                    toast.success(tCommon("toast.copied"));
                   }}>
                     <Copy className="h-3.5 w-3.5" />
                     Copy

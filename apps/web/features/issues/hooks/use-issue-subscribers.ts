@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import type { IssueSubscriber } from "@/shared/types";
 import type {
   SubscriberAddedPayload,
@@ -11,6 +12,7 @@ import { toast } from "sonner";
 import { useWSEvent, useWSReconnect } from "@/features/realtime";
 
 export function useIssueSubscribers(issueId: string, userId?: string) {
+  const t = useTranslations("issues");
   const [subscribers, setSubscribers] = useState<IssueSubscriber[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -23,10 +25,10 @@ export function useIssueSubscribers(issueId: string, userId?: string) {
       .then((subs) => setSubscribers(subs))
       .catch((e) => {
         console.error(e);
-        toast.error("Failed to load subscribers");
+        toast.error(t("toast.loadSubscribersFailed"));
       })
       .finally(() => setLoading(false));
-  }, [issueId]);
+  }, [issueId, t]);
 
   // Reconnect recovery
   useWSReconnect(
@@ -95,7 +97,7 @@ export function useIssueSubscribers(issueId: string, userId?: string) {
           await api.unsubscribeFromIssue(issueId, subUserId, userType);
         } catch {
           if (removed) setSubscribers((prev) => [...prev, removed]);
-          toast.error("Failed to update subscriber");
+          toast.error(t("toast.updateSubscriberFailed"));
         }
       } else {
         // Optimistic add
@@ -116,11 +118,11 @@ export function useIssueSubscribers(issueId: string, userId?: string) {
           setSubscribers((prev) =>
             prev.filter((s) => !(s.user_id === subUserId && s.user_type === userType && s.reason === "manual")),
           );
-          toast.error("Failed to update subscriber");
+          toast.error(t("toast.updateSubscriberFailed"));
         }
       }
     },
-    [issueId, subscribers],
+    [issueId, subscribers, t],
   );
 
   const toggleSubscribe = useCallback(() => {

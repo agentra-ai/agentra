@@ -19,7 +19,10 @@
     "reset": "Reset",
     "searching": "Searching...",
     "saving": "Saving...",
-    "creating": "Creating..."
+    "creating": "Creating...",
+    "toast": {
+      "copied": "Copied"
+    }
   },
   "auth": {
     "login": "Login",
@@ -87,7 +90,25 @@
     "all": "All",
     "allIssues": "All Issues",
     "myIssues": "My Issues",
-    "board": "Board"
+    "board": "Board",
+    "toast": {
+      "loadIssuesFailed": "Failed to load issues",
+      "loadIssueFailed": "Failed to load issue",
+      "updateIssueFailed": "Failed to update issue",
+      "deleteIssueFailed": "Failed to delete issue",
+      "deleteSuccess": "Issue deleted",
+      "linkCopied": "Link copied",
+      "updateCommentFailed": "Failed to update comment",
+      "loadActivityFailed": "Failed to load activity",
+      "sendCommentFailed": "Failed to send comment",
+      "sendReplyFailed": "Failed to send reply",
+      "deleteCommentFailed": "Failed to delete comment",
+      "removeReactionFailed": "Failed to remove reaction",
+      "addReactionFailed": "Failed to add reaction",
+      "loadReactionsFailed": "Failed to load reactions",
+      "loadSubscribersFailed": "Failed to load subscribers",
+      "updateSubscriberFailed": "Failed to update subscriber"
+    }
   },
   "workspace": {
     "title": "Workspace",

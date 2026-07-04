@@ -19,7 +19,10 @@
     "reset": "重置",
     "searching": "搜索中...",
     "saving": "正在保存...",
-    "creating": "创建中..."
+    "creating": "创建中...",
+    "toast": {
+      "copied": "已复制"
+    }
   },
   "auth": {
     "login": "登录",
@@ -87,7 +90,25 @@
     "all": "全部",
     "allIssues": "所有问题",
     "myIssues": "我的问题",
-    "board": "看板"
+    "board": "看板",
+    "toast": {
+      "loadIssuesFailed": "加载问题列表失败",
+      "loadIssueFailed": "加载问题失败",
+      "updateIssueFailed": "更新问题失败",
+      "deleteIssueFailed": "删除问题失败",
+      "deleteSuccess": "问题已删除",
+      "linkCopied": "链接已复制",
+      "updateCommentFailed": "更新评论失败",
+      "loadActivityFailed": "加载活动失败",
+      "sendCommentFailed": "发送评论失败",
+      "sendReplyFailed": "发送回复失败",
+      "deleteCommentFailed": "删除评论失败",
+      "removeReactionFailed": "移除反应失败",
+      "addReactionFailed": "添加反应失败",
+      "loadReactionsFailed": "加载反应失败",
+      "loadSubscribersFailed": "加载订阅者失败",
+      "updateSubscriberFailed": "更新订阅者失败"
+    }
   },
   "workspace": {
     "title": "工作空间",

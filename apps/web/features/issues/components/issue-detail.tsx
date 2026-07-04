@@ -230,7 +230,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
       })
       .catch((e) => {
         console.error(e);
-        toast.error("Failed to load issue");
+        toast.error(t("toast.loadIssueFailed"));
       })
       .finally(() => setIssueLoading(false));
   }, [id, !!issue]);
@@ -293,7 +293,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
       useIssueStore.getState().updateIssue(id, updates);
       api.updateIssue(id, updates).catch(() => {
         useIssueStore.getState().updateIssue(id, prev);
-        toast.error("Failed to update issue");
+        toast.error(t("toast.updateIssueFailed"));
       });
     },
     [issue, id],
@@ -310,11 +310,11 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
     try {
       await api.deleteIssue(issue!.id);
       useIssueStore.getState().removeIssue(issue!.id);
-      toast.success("Issue deleted");
+      toast.success(t("toast.deleteSuccess"));
       if (onDelete) onDelete();
       else router.push("/issues");
     } catch {
-      toast.error("Failed to delete issue");
+      toast.error(t("toast.deleteIssueFailed"));
       setDeleting(false);
     }
   };
@@ -587,7 +587,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                 {/* Copy link */}
                 <DropdownMenuItem onClick={() => {
                   navigator.clipboard.writeText(window.location.href);
-                  toast.success("Link copied");
+                  toast.success(t("toast.linkCopied"));
                 }}>
                   <Link2 className="h-3.5 w-3.5" />
                   Copy link
