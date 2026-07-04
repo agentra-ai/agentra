@@ -1,4 +1,6 @@
-import { useTranslations } from "next-intl";
+"use client";
+
+import { useFormatter, useTranslations } from "next-intl";
 import type { AgentRuntime } from "@/shared/types";
 import { formatLastSeen } from "../utils";
 import { RuntimeModeIcon, StatusBadge, InfoField } from "./shared";
@@ -20,6 +22,7 @@ function getCliVersion(metadata: Record<string, unknown>): string | null {
 
 export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
   const t = useTranslations("runtimes");
+  const f = useFormatter();
   const cliVersion =
     runtime.runtime_mode === "local" ? getCliVersion(runtime.metadata) : null;
   const fetchRuntimes = useRuntimeStore((s) => s.fetchRuntimes);
@@ -118,11 +121,11 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
         <div className="grid grid-cols-2 gap-4 border-t pt-4">
           <InfoField
             label={t("detail.created")}
-            value={new Date(runtime.created_at).toLocaleString()}
+            value={f.dateTime(new Date(runtime.created_at), { dateStyle: "short" })}
           />
           <InfoField
             label={t("detail.updated")}
-            value={new Date(runtime.updated_at).toLocaleString()}
+            value={f.dateTime(new Date(runtime.updated_at), { dateStyle: "short" })}
           />
         </div>
       </div>

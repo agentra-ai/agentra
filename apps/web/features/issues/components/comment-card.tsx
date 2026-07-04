@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 import { ChevronRight, Copy, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -114,6 +114,7 @@ function CommentRow({
 }) {
   const t = useTranslations("issues");
   const tCommon = useTranslations("common");
+  const f = useFormatter();
   const { getActorName } = useActorName();
   const [editing, setEditing] = useState(false);
   const editEditorRef = useRef<ContentEditorRef>(null);
@@ -170,7 +171,7 @@ function CommentRow({
             }
           />
           <TooltipContent side="top">
-            {new Date(entry.created_at).toLocaleString()}
+            {f.dateTime(new Date(entry.created_at), { dateStyle: "short" })}
           </TooltipContent>
         </Tooltip>
 
@@ -284,6 +285,7 @@ function CommentCard({
 }: CommentCardProps) {
   const t = useTranslations("issues");
   const tCommon = useTranslations("common");
+  const f = useFormatter();
   const { getActorName } = useActorName();
   const { uploadWithToast } = useFileUpload();
   const [open, setOpen] = useState(true);
@@ -362,7 +364,7 @@ function CommentCard({
                 }
               />
               <TooltipContent side="top">
-                {new Date(entry.created_at).toLocaleString()}
+                {f.dateTime(new Date(entry.created_at), { dateStyle: "short" })}
               </TooltipContent>
             </Tooltip>
 

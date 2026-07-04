@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Bot, ChevronRight, ChevronUp, Loader2, ArrowDown, Brain, AlertCircle, Clock, CheckCircle2, XCircle, Square, Cloud } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { api } from "@/shared/api";
 import { useWSEvent } from "@/features/realtime";
 import type { TaskMessagePayload, TaskCompletedPayload, TaskFailedPayload, TaskCancelledPayload, AgentStagePayload, AgentStage } from "@/shared/types/events";
@@ -473,6 +473,7 @@ export function TaskRunHistory({ issueId }: TaskRunHistoryProps) {
 
 function TaskRunEntry({ task }: { task: AgentTask }) {
   const tc = useTranslations("common");
+  const f = useFormatter();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<TimelineItem[] | null>(null);
 
@@ -504,7 +505,7 @@ function TaskRunEntry({ task }: { task: AgentTask }) {
           <XCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
         )}
         <span className="text-muted-foreground">
-          {new Date(task.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+          {f.dateTime(new Date(task.created_at), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
         </span>
         {duration && <span className="text-muted-foreground">{duration}</span>}
         <span className={cn("ml-auto capitalize", task.status === "completed" ? "text-success" : "text-destructive")}>

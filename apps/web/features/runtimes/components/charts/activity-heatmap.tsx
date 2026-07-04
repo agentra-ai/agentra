@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useFormatter } from "next-intl";
 import { useTranslations } from "next-intl";
 import type { RuntimeUsage } from "@/shared/types";
 import { formatTokens } from "../../utils";
@@ -22,6 +23,7 @@ function getHeatmapColor(level: number): string {
 
 export function ActivityHeatmap({ usage }: { usage: RuntimeUsage[] }) {
   const t = useTranslations("runtimes");
+  const f = useFormatter();
   const DAY_LABELS = useMemo(
     () => ["", t("charts.mon"), "", t("charts.wed"), "", t("charts.fri"), ""],
     [t],
@@ -85,7 +87,7 @@ export function ActivityHeatmap({ usage }: { usage: RuntimeUsage[] }) {
       const month = new Date(c.date + "T00:00:00").getMonth();
       if (month !== lastMonth && c.dayOfWeek === 0) {
         months.push({
-          label: new Date(c.date + "T00:00:00").toLocaleString("en", {
+          label: f.dateTime(new Date(c.date + "T00:00:00"), {
             month: "short",
           }),
           week: c.week,

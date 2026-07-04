@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { useDateFormatter } from '@/shared/hooks/use-date-formatter'
 import { useMemoryStore } from '../hooks/useMemoryStore'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +34,7 @@ const TYPE_LABEL_KEYS: Record<string, 'learnings' | 'results' | 'context' | 'pat
 export function MemoryItem({ memory }: MemoryItemProps) {
   const t = useTranslations('memory')
   const tc = useTranslations('common')
+  const f = useDateFormatter()
   const { deleteMemory } = useMemoryStore()
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -43,7 +45,7 @@ export function MemoryItem({ memory }: MemoryItemProps) {
           {t(`tabs.${TYPE_LABEL_KEYS[memory.memory_type] ?? 'all'}`)}
         </Badge>
         <span className="text-xs text-muted-foreground">
-          {new Date(memory.created_at).toLocaleDateString()}
+          {f.dateTime(new Date(memory.created_at), { dateStyle: 'short' })}
         </span>
       </div>
       <p className="text-sm whitespace-pre-wrap">{memory.content}</p>

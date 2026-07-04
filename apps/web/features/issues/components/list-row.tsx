@@ -5,10 +5,13 @@ import Link from "next/link";
 import type { Issue } from "@/shared/types";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { useIssueSelectionStore } from "@/features/issues/stores/selection-store";
+import { useFormatter } from "next-intl";
 import { PriorityIcon } from "./priority-icon";
 
-function formatDate(date: string): string {
-  return new Date(date).toLocaleDateString("en-US", {
+type Formatter = ReturnType<typeof useFormatter>;
+
+function formatDate(date: string, f: Formatter): string {
+  return f.dateTime(new Date(date), {
     month: "short",
     day: "numeric",
   });
@@ -17,6 +20,7 @@ function formatDate(date: string): string {
 export const ListRow = memo(function ListRow({ issue }: { issue: Issue }) {
   const selected = useIssueSelectionStore((s) => s.selectedIds.has(issue.id));
   const toggle = useIssueSelectionStore((s) => s.toggle);
+  const f = useFormatter();
 
   return (
     <div
@@ -48,7 +52,7 @@ export const ListRow = memo(function ListRow({ issue }: { issue: Issue }) {
         <span className="min-w-0 flex-1 truncate">{issue.title}</span>
         {issue.due_date && (
           <span className="shrink-0 text-xs text-muted-foreground">
-            {formatDate(issue.due_date)}
+            {formatDate(issue.due_date, f)}
           </span>
         )}
         {issue.assignee_type && issue.assignee_id && (

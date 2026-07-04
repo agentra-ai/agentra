@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import type { Issue, UpdateIssueRequest } from "@/shared/types";
 import { CalendarDays } from "lucide-react";
 import { ActorAvatar } from "@/components/common/actor-avatar";
@@ -17,8 +17,10 @@ import { PRIORITY_CONFIG } from "@/features/issues/config";
 import type { CardProperties } from "@/features/issues/stores/view-store";
 import { useViewStore } from "@/features/issues/stores/view-store-context";
 
-function formatDate(date: string): string {
-  return new Date(date).toLocaleDateString("en-US", {
+type Formatter = ReturnType<typeof useFormatter>;
+
+function formatDate(date: string, f: Formatter): string {
+  return f.dateTime(new Date(date), {
     month: "short",
     day: "numeric",
   });
@@ -45,6 +47,7 @@ export const BoardCardContent = memo(function BoardCardContent({
   editable?: boolean;
 }) {
   const t = useTranslations("issues");
+  const f = useFormatter();
   const storeProperties = useViewStore((s) => s.cardProperties);
   const priorityCfg = PRIORITY_CONFIG[issue.priority];
 
@@ -145,7 +148,7 @@ export const BoardCardContent = memo(function BoardCardContent({
                         }`}
                       >
                         <CalendarDays className="size-3" />
-                        {formatDate(issue.due_date!)}
+                        {formatDate(issue.due_date!, f)}
                       </span>
                     }
                   />
@@ -159,7 +162,7 @@ export const BoardCardContent = memo(function BoardCardContent({
                   }`}
                 >
                   <CalendarDays className="size-3" />
-                  {formatDate(issue.due_date!)}
+                  {formatDate(issue.due_date!, f)}
                 </span>
               )}
             </div>

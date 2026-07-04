@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormatter } from "next-intl";
 import { CalendarDays } from "lucide-react";
 import type { UpdateIssueRequest } from "@/shared/types";
 import { Calendar } from "@/components/ui/calendar";
@@ -23,6 +24,7 @@ export function DueDatePicker({
   const [open, setOpen] = useState(false);
   const date = dueDate ? new Date(dueDate) : undefined;
   const isOverdue = date ? date < new Date() : false;
+  const f = useFormatter();
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -32,7 +34,7 @@ export function DueDatePicker({
             <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
             {date ? (
               <span className={isOverdue ? "text-destructive" : ""}>
-                {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                {f.dateTime(date, { month: "short", day: "numeric" })}
               </span>
             ) : (
               <span className="text-muted-foreground">Due date</span>

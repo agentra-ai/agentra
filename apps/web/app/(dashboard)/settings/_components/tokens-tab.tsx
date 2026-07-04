@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Key, Trash2, Copy, Check } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import type { PersonalAccessToken } from "@/shared/types";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ export function TokensTab() {
   const t = useTranslations("settings");
   const tTokens = useTranslations("tokens");
   const tCommon = useTranslations("common");
+  const f = useFormatter();
   const [tokens, setTokens] = useState<PersonalAccessToken[]>([]);
   const [tokenName, setTokenName] = useState("");
   const [tokenExpiry, setTokenExpiry] = useState("90");
@@ -158,8 +159,8 @@ export function TokensTab() {
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium truncate">{t.name}</div>
                     <div className="text-xs text-muted-foreground">
-                      {t.token_prefix}... · {tTokens("created")} {new Date(t.created_at).toLocaleDateString()} · {t.last_used_at ? `${tTokens("lastUsed")} ${new Date(t.last_used_at).toLocaleDateString()}` : tTokens("neverUsed")}
-                      {t.expires_at && ` · ${tTokens("expires")} ${new Date(t.expires_at).toLocaleDateString()}`}
+                      {t.token_prefix}... · {tTokens("created")} {f.dateTime(new Date(t.created_at), { dateStyle: "short" })} · {t.last_used_at ? `${tTokens("lastUsed")} ${f.dateTime(new Date(t.last_used_at), { dateStyle: "short" })}` : tTokens("neverUsed")}
+                      {t.expires_at && ` · ${tTokens("expires")} ${f.dateTime(new Date(t.expires_at), { dateStyle: "short" })}`}
                     </div>
                   </div>
                   <Tooltip>

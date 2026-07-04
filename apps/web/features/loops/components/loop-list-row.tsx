@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { ExternalLink } from "lucide-react";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { LoopStatusBadge } from "./loop-status-badge";
@@ -14,6 +14,7 @@ function truncateId(id: string, len = 8): string {
 
 export function LoopListRow({ loop }: { loop: Loop }) {
   const t = useTranslations("loops");
+  const f = useFormatter();
   return (
     <TableRow>
       <TableCell className="font-mono text-xs">
@@ -51,7 +52,7 @@ export function LoopListRow({ loop }: { loop: Loop }) {
         )}
       </TableCell>
       <TableCell className="text-muted-foreground text-xs">
-        {new Date(loop.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+        {f.dateTime(new Date(loop.created_at), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
       </TableCell>
     </TableRow>
   );

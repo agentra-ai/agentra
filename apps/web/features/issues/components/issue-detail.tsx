@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import Link from "next/link";
@@ -78,9 +78,11 @@ import { ReactionBar } from "@/components/common/reaction-bar";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
 import { timeAgo } from "@/shared/utils";
 
-function shortDate(date: string | null): string {
+type Formatter = ReturnType<typeof useFormatter>;
+
+function shortDate(date: string | null, f: Formatter): string {
   if (!date) return "—";
-  return new Date(date).toLocaleDateString("en-US", {
+  return f.dateTime(new Date(date), {
     month: "short",
     day: "numeric",
   });
@@ -96,7 +98,8 @@ function priorityLabel(priority: string): string {
 
 function formatActivity(
   entry: TimelineEntry,
-  resolveActorName?: (type: string, id: string) => string,
+  resolveActorName: (type: string, id: string) => string,
+  f: Formatter,
 ): string {
   const details = (entry.details ?? {}) as Record<string, string>;
   switch (entry.action) {
@@ -118,7 +121,7 @@ function formatActivity(
     }
     case "due_date_changed": {
       if (!details.to) return "removed due date";
-      const formatted = new Date(details.to).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const formatted = f.dateTime(new Date(details.to), { month: "short", day: "numeric" });
       return `set due date to ${formatted}`;
     }
     case "title_changed":
@@ -211,6 +214,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const t = useTranslations("issues");
   const tCommon = useTranslations("common");
   const tLoops = useTranslations("loops");
+  const f = useFormatter();
 
   // If issue isn't in the store yet, fetch and upsert it
   useEffect(() => {
@@ -929,7 +933,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                             </div>
                             <div className="flex min-w-0 flex-1 items-center gap-1">
                               <span className="shrink-0 font-medium">{getActorName(entry.actor_type, entry.actor_id)}</span>
-                              <span className="truncate">{formatActivity(entry, getActorName)}</span>
+                              <span className="truncate">{formatActivity(entry, getActorName, f)}</span>
                               <Tooltip>
                                 <TooltipTrigger
                                   render={
@@ -939,7 +943,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                                   }
                                 />
                                 <TooltipContent side="top">
-                                  {new Date(entry.created_at).toLocaleString()}
+                                  {f.dateTime(new Date(entry.created_at), { dateStyle: "short" })}
                                 </TooltipContent>
                               </Tooltip>
                             </div>
@@ -1080,10 +1084,10 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                 <span className="truncate">{getActorName(issue.creator_type, issue.creator_id)}</span>
               </PropRow>
               <PropRow label={t("createdAt")}>
-                <span className="text-muted-foreground">{shortDate(issue.created_at)}</span>
+                <span className="text-muted-foreground">{shortDate(issue.created_at, f)}</span>
               </PropRow>
               <PropRow label={t("updatedAt")}>
-                <span className="text-muted-foreground">{shortDate(issue.updated_at)}</span>
+                <span className="text-muted-foreground">{shortDate(issue.updated_at, f)}</span>
               </PropRow>
             </div>}
           </div>

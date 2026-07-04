@@ -3,7 +3,8 @@
 import { useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+
 import { Pause, Play, X, ExternalLink, GitBranch, AlertCircle, Loader2, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -17,9 +18,11 @@ interface LoopDetailPageProps {
   id: string;
 }
 
-function formatDateTime(iso?: string): string {
+type Formatter = ReturnType<typeof useFormatter>;
+
+function formatDateTime(iso: string | undefined, f: Formatter): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString(undefined, {
+  return f.dateTime(new Date(iso), {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -30,6 +33,7 @@ function formatDateTime(iso?: string): string {
 export function LoopDetailPage({ id }: LoopDetailPageProps) {
   const t = useTranslations("loops");
   const tCommon = useTranslations("common");
+  const f = useFormatter();
   const router = useRouter();
   const loop = useLoop(id);
   const { pause, resume, cancel } = useLoopTransition(id);
@@ -154,15 +158,15 @@ export function LoopDetailPage({ id }: LoopDetailPageProps) {
               </InfoRow>
             )}
             <InfoRow label={t("info.started")}>
-              <span className="text-xs text-muted-foreground">{formatDateTime(loop.started_at)}</span>
+              <span className="text-xs text-muted-foreground">{formatDateTime(loop.started_at, f)}</span>
             </InfoRow>
             {loop.completed_at && (
               <InfoRow label={t("info.completed")}>
-                <span className="text-xs text-muted-foreground">{formatDateTime(loop.completed_at)}</span>
+                <span className="text-xs text-muted-foreground">{formatDateTime(loop.completed_at, f)}</span>
               </InfoRow>
             )}
             <InfoRow label={t("info.created")}>
-              <span className="text-xs text-muted-foreground">{formatDateTime(loop.created_at)}</span>
+              <span className="text-xs text-muted-foreground">{formatDateTime(loop.created_at, f)}</span>
             </InfoRow>
           </div>
 

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { useDefaultLayout } from "react-resizable-panels";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { useInboxStore } from "@/features/inbox";
 import { IssueDetail, StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { STATUS_CONFIG, PRIORITY_CONFIG } from "@/features/issues/config";
@@ -68,9 +68,11 @@ function timeAgo(dateStr: string): string {
   return `${days}d`;
 }
 
-function shortDate(dateStr: string): string {
+type Formatter = ReturnType<typeof useFormatter>;
+
+function shortDate(dateStr: string, f: Formatter): string {
   if (!dateStr) return "";
-  return new Date(dateStr).toLocaleDateString("en-US", {
+  return f.dateTime(new Date(dateStr), {
     month: "short",
     day: "numeric",
   });
@@ -82,6 +84,7 @@ function shortDate(dateStr: string): string {
 
 function InboxDetailLabel({ item }: { item: InboxItem }) {
   const { getActorName } = useActorName();
+  const f = useFormatter();
   const details = item.details ?? {};
 
   switch (item.type) {
@@ -122,7 +125,7 @@ function InboxDetailLabel({ item }: { item: InboxItem }) {
       return <span>{typeLabels[item.type]}</span>;
     }
     case "due_date_changed": {
-      if (details.to) return <span>Set due date to {shortDate(details.to)}</span>;
+      if (details.to) return <span>Set due date to {shortDate(details.to, f)}</span>;
       return <span>Removed due date</span>;
     }
     case "new_comment": {

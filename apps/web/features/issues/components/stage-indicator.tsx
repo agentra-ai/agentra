@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormatter } from "next-intl";
 import { BookOpen, Code, FlaskConical, GitCommit, CheckCircle, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { AgentStage } from "@/shared/types/events";
@@ -22,6 +23,7 @@ const stageConfig: Record<AgentStage, { label: string; icon: typeof BookOpen; va
 export function StageIndicator({ stage, timestamp, className }: StageIndicatorProps) {
   const config = stageConfig[stage];
   const Icon = config.icon;
+  const f = useFormatter();
 
   return (
     <Badge variant={config.variant} className={className}>
@@ -29,7 +31,7 @@ export function StageIndicator({ stage, timestamp, className }: StageIndicatorPr
       <span>{config.label}</span>
       {timestamp && (
         <span className="text-muted-foreground ml-1">
-          {timestamp.toLocaleTimeString()}
+          {f.dateTime(timestamp, { hour: "2-digit", minute: "2-digit" })}
         </span>
       )}
     </Badge>

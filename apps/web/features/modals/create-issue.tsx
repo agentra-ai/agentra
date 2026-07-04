@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, Check, ChevronRight, Maximize2, Minimize2, UserMinus, X as XIcon } from "lucide-react";
@@ -71,6 +71,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
   const t = useTranslations("issues");
   const tCommon = useTranslations("common");
   const tModals = useTranslations("modals");
+  const f = useFormatter();
   const router = useRouter();
   const workspaceName = useWorkspaceStore((s) => s.workspace?.name);
   const members = useWorkspaceStore((s) => s.members);
@@ -427,7 +428,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                 <PillButton>
                   <CalendarDays className="size-3.5 text-muted-foreground" />
                   {dueDateObj ? (
-                    <span>{dueDateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                    <span>{f.dateTime(dueDateObj, { month: "short", day: "numeric" })}</span>
                   ) : (
                     <span className="text-muted-foreground">Due date</span>
                   )}
