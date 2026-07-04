@@ -401,7 +401,59 @@
     "toolDisconnected": "工具已断开",
     "addSkillError": "添加技能失败",
     "removeSkillError": "移除技能失败",
-    "cronNotSet": "未设置"
+    "cronNotSet": "未设置",
+    "toolNameExample": "如：Google Search、Slack、GitHub",
+    "instructionsPlaceholder": "定义这个 agent 的角色、专长和工作风格。\n\n示例:\nYou are a frontend engineer specializing in React and TypeScript.\n\n## 工作风格\n- 编写小而聚焦的 PR — 每个逻辑改动一个 commit\n- 优先使用组合而非继承\n- 为新组件补充单元测试\n\n## 约束\n- 未经明确批准，不得修改 shared/ 中的类型\n- 遵循 features/ 中现有的组件模式",
+    "cronExample": "0 9 * * 1-5",
+    "timezoneExample": "UTC",
+    "createFromTemplate": "从模板创建",
+    "specialists": {
+      "title": "从模板创建",
+      "subtitle": "选择专业模板，快速创建一个 AI 代理",
+      "templates": {
+        "frontendEngineer": {
+          "name": "前端工程师",
+          "description": "专注于 React、TypeScript 和 CSS，编写可测试的清晰组件。"
+        },
+        "backendEngineer": {
+          "name": "后端工程师",
+          "description": "Go 专家，熟悉 PostgreSQL、API 设计与系统可靠性。"
+        },
+        "testEngineer": {
+          "name": "测试工程师",
+          "description": "QA 导向，编写全面测试并挖掘边界用例。"
+        },
+        "securityEngineer": {
+          "name": "安全工程师",
+          "description": "OWASP 专家，定位并修复安全漏洞。"
+        },
+        "devopsEngineer": {
+          "name": "DevOps 工程师",
+          "description": "基础设施、CI/CD 与部署自动化专家。"
+        },
+        "technicalWriter": {
+          "name": "技术文档工程师",
+          "description": "编写清晰的文档、API 文档和用户指南。"
+        }
+      },
+      "customizeHint": "创建前可自定义代理名称",
+      "agentNameLabel": "代理名称",
+      "namePlaceholder": "输入代理名称",
+      "instructionsPreviewLabel": "指令预览",
+      "back": "返回",
+      "createButton": "创建代理",
+      "creating": "创建中...",
+      "success": "{name} 代理已创建",
+      "failed": "代理创建失败"
+    },
+    "time": {
+      "started": "开始于 {time}",
+      "dispatched": "派发于 {time}",
+      "completed": "完成于 {time}",
+      "failed": "失败于 {time}",
+      "queued": "排队于 {time}"
+    },
+    "tasksCount": "{count, plural, 1 {# 个任务} other {# 个任务}}"
   },
   "skills": {
     "title": "技能",

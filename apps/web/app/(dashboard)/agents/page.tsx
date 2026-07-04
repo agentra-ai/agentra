@@ -414,7 +414,7 @@ function InstructionsTab({
       <textarea
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder={`Define this agent's role, expertise, and working style.\n\nExample:\nYou are a frontend engineer specializing in React and TypeScript.\n\n## Working Style\n- Write small, focused PRs — one commit per logical change\n- Prefer composition over inheritance\n- Always add unit tests for new components\n\n## Constraints\n- Do not modify shared/ types without explicit approval\n- Follow the existing component patterns in features/`}
+        placeholder={t("instructionsPlaceholder")}
         className="w-full min-h-[300px] rounded-md border bg-transparent px-3 py-2 text-sm font-mono placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
       />
 
@@ -649,7 +649,7 @@ function AddToolDialog({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Google Search, Slack, GitHub"
+              placeholder={t("toolNameExample")}
               className="mt-1"
               onKeyDown={(e) => e.key === "Enter" && handleAdd()}
             />
@@ -998,7 +998,7 @@ function TriggersTab({
                         cron: e.target.value,
                       })
                     }
-                    placeholder="0 9 * * 1-5"
+                    placeholder={t("cronExample")}
                     className="mt-1 text-xs font-mono"
                   />
                 </div>
@@ -1015,7 +1015,7 @@ function TriggersTab({
                         timezone: e.target.value,
                       })
                     }
-                    placeholder="UTC"
+                    placeholder={t("timezoneExample")}
                     className="mt-1 text-xs"
                   />
                 </div>
@@ -1164,14 +1164,14 @@ function TasksTab({ agent }: { agent: Agent }) {
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
                     {isRunning && task.started_at
-                      ? `Started ${new Date(task.started_at).toLocaleString()}`
+                      ? t("time.started", { time: new Date(task.started_at).toLocaleString() })
                       : task.status === "dispatched" && task.dispatched_at
-                        ? `Dispatched ${new Date(task.dispatched_at).toLocaleString()}`
+                        ? t("time.dispatched", { time: new Date(task.dispatched_at).toLocaleString() })
                         : task.status === "completed" && task.completed_at
-                          ? `Completed ${new Date(task.completed_at).toLocaleString()}`
+                          ? t("time.completed", { time: new Date(task.completed_at).toLocaleString() })
                           : task.status === "failed" && task.completed_at
-                            ? `Failed ${new Date(task.completed_at).toLocaleString()}`
-                            : `Queued ${new Date(task.created_at).toLocaleString()}`}
+                            ? t("time.failed", { time: new Date(task.completed_at).toLocaleString() })
+                            : t("time.queued", { time: new Date(task.created_at).toLocaleString() })}
                   </div>
                 </div>
                 <span className={`shrink-0 text-xs font-medium ${config.color}`}>
@@ -1704,7 +1704,7 @@ export default function AgentsPage() {
                 variant="ghost"
                 size="icon-xs"
                 onClick={() => setShowCreateTemplate(true)}
-                title="Create from template"
+                title={t("createFromTemplate")}
               >
                 <Sparkles className="h-4 w-4 text-muted-foreground" />
               </Button>

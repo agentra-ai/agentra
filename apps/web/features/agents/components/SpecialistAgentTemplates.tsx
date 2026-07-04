@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Bot, Code, TestTube, FileText, Shield, Globe, Database, Wrench, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,22 +17,49 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { api } from "@/shared/api";
 
-interface SpecialistTemplate {
-  id: string;
+// Translatable strings (name / description / long instructions) live in
+// messages/<lang>.json under agents.specialists.templates.<id>.*
+// so the UI renders in the user's current locale.
+const SPECIALIST_TEMPLATE_IDS = [
+  "frontendEngineer",
+  "backendEngineer",
+  "testEngineer",
+  "securityEngineer",
+  "devopsEngineer",
+  "technicalWriter",
+] as const;
+
+type SpecialistTemplateId = (typeof SPECIALIST_TEMPLATE_IDS)[number];
+
+const TEMPLATE_ICON: Record<SpecialistTemplateId, typeof Code> = {
+  frontendEngineer: Code,
+  backendEngineer: Database,
+  testEngineer: TestTube,
+  securityEngineer: Shield,
+  devopsEngineer: Wrench,
+  technicalWriter: FileText,
+};
+
+const TEMPLATE_SUGGESTED_TOOLS: Record<SpecialistTemplateId, string[]> = {
+  frontendEngineer: ["GitHub", "Playwright", "npm"],
+  backendEngineer: ["PostgreSQL", "Docker", "GitHub"],
+  testEngineer: ["Playwright", "Vitest", "GitHub Actions"],
+  securityEngineer: ["SAST", "DAST", "Secret Scanner"],
+  devopsEngineer: ["Docker", "GitHub Actions", "AWS", "PostgreSQL"],
+  technicalWriter: ["Markdown", "OpenAPI", "Mermaid"],
+};
+
+interface SpecialistResolved {
+  id: SpecialistTemplateId;
   name: string;
   description: string;
   icon: typeof Code;
-  instructions: string;
   suggested_tools: string[];
+  instructions: string;
 }
 
-const SPECIALIST_TEMPLATES: SpecialistTemplate[] = [
-  {
-    id: "frontend-engineer",
-    name: "Frontend Engineer",
-    description: "Specializes in React, TypeScript, and CSS. Writes clean, testable components.",
-    icon: Code,
-    instructions: `You are an expert frontend engineer specializing in React, TypeScript, and modern CSS.
+const INSTRUCTIONS: Record<SpecialistTemplateId, string> = {
+  frontendEngineer: `You are an expert frontend engineer specializing in React, TypeScript, and modern CSS.
 
 ## Working Style
 - Write small, focused PRs — one commit per logical change
@@ -55,14 +83,8 @@ const SPECIALIST_TEMPLATES: SpecialistTemplate[] = [
 - Do not modify shared/ types without explicit approval
 - Keep API calls in shared/api.ts, not in components
 - Use @/ alias for imports`,
-    suggested_tools: ["GitHub", "Playwright", "npm"],
-  },
-  {
-    id: "backend-engineer",
-    name: "Backend Engineer",
-    description: "Go expert with PostgreSQL, API design, and system reliability focus.",
-    icon: Database,
-    instructions: `You are an expert backend engineer specializing in Go, PostgreSQL, and API design.
+
+  backendEngineer: `You are an expert backend engineer specializing in Go, PostgreSQL, and API design.
 
 ## Working Style
 - Write small, focused PRs with clear commit messages
@@ -85,14 +107,8 @@ const SPECIALIST_TEMPLATES: SpecialistTemplate[] = [
 - Never commit secrets or API keys
 - Use transaction patterns for multi-table operations
 - Add proper context cancellation to all DB operations`,
-    suggested_tools: ["PostgreSQL", "Docker", "GitHub"],
-  },
-  {
-    id: "test-engineer",
-    name: "Test Engineer",
-    description: "QA-focused agent that writes comprehensive tests and finds edge cases.",
-    icon: TestTube,
-    instructions: `You are a meticulous test engineer focused on finding edge cases and ensuring quality.
+
+  testEngineer: `You are a meticulous test engineer focused on finding edge cases and ensuring quality.
 
 ## Working Style
 - Write tests BEFORE or alongside implementation
@@ -118,14 +134,8 @@ const SPECIALIST_TEMPLATES: SpecialistTemplate[] = [
 - Tests must be deterministic (no flaky tests)
 - E2E tests must clean up after themselves
 - Do not commit commented-out test code`,
-    suggested_tools: ["Playwright", "Vitest", "GitHub Actions"],
-  },
-  {
-    id: "security-engineer",
-    name: "Security Engineer",
-    description: "OWASP expert focused on finding and fixing security vulnerabilities.",
-    icon: Shield,
-    instructions: `You are a security expert specializing in OWASP Top 10 and secure coding practices.
+
+  securityEngineer: `You are a security expert specializing in OWASP Top 10 and secure coding practices.
 
 ## Focus Areas
 - Input validation and sanitization
@@ -154,14 +164,8 @@ const SPECIALIST_TEMPLATES: SpecialistTemplate[] = [
 - Never store passwords in plain text
 - Never log sensitive data (tokens, passwords, PII)
 - Always use HTTPS in production`,
-    suggested_tools: ["SAST", "DAST", "Secret Scanner"],
-  },
-  {
-    id: "devops-engineer",
-    name: "DevOps Engineer",
-    description: "Infrastructure, CI/CD, and deployment automation expert.",
-    icon: Wrench,
-    instructions: `You are a DevOps engineer focused on reliable deployments and infrastructure.
+
+  devopsEngineer: `You are a DevOps engineer focused on reliable deployments and infrastructure.
 
 ## Working Style
 - Automate everything that can be automated
@@ -190,14 +194,8 @@ const SPECIALIST_TEMPLATES: SpecialistTemplate[] = [
 - Never commit production secrets
 - Use environment variables for all config
 - Ensure all services have health endpoints`,
-    suggested_tools: ["Docker", "GitHub Actions", "AWS", "PostgreSQL"],
-  },
-  {
-    id: "technical-writer",
-    name: "Technical Writer",
-    description: "Creates clear documentation, API docs, and user guides.",
-    icon: FileText,
-    instructions: `You are a technical writer focused on clear, concise documentation.
+
+  technicalWriter: `You are a technical writer focused on clear, concise documentation.
 
 ## Writing Style
 - Use active voice and short sentences
@@ -226,9 +224,18 @@ const SPECIALIST_TEMPLATES: SpecialistTemplate[] = [
 - Never leave TODO comments in final code
 - Remove commented-out code from PRs
 - Keep docs in the repository near the code they describe`,
-    suggested_tools: ["Markdown", "OpenAPI", "Mermaid"],
-  },
-];
+};
+
+function resolveTemplates(t: ReturnType<typeof useTranslations>): SpecialistResolved[] {
+  return SPECIALIST_TEMPLATE_IDS.map((id) => ({
+    id,
+    name: t(`specialists.templates.${id}.name`),
+    description: t(`specialists.templates.${id}.description`),
+    icon: TEMPLATE_ICON[id],
+    suggested_tools: TEMPLATE_SUGGESTED_TOOLS[id],
+    instructions: INSTRUCTIONS[id],
+  }));
+}
 
 interface CreateFromTemplateDialogProps {
   open: boolean;
@@ -238,11 +245,13 @@ interface CreateFromTemplateDialogProps {
 }
 
 export function CreateFromTemplateDialog({ open, onOpenChange, runtimes, onCreated }: CreateFromTemplateDialogProps) {
-  const [selectedTemplate, setSelectedTemplate] = useState<SpecialistTemplate | null>(null);
+  const t = useTranslations("agents");
+  const templates = resolveTemplates(t);
+  const [selectedTemplate, setSelectedTemplate] = useState<SpecialistResolved | null>(null);
   const [customName, setCustomName] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const handleSelectTemplate = (template: SpecialistTemplate) => {
+  const handleSelectTemplate = (template: SpecialistResolved) => {
     setSelectedTemplate(template);
     setCustomName(template.name);
   };
@@ -263,13 +272,13 @@ export function CreateFromTemplateDialog({ open, onOpenChange, runtimes, onCreat
           { id: `${Date.now()}-2`, type: "on_comment", enabled: true, config: {} },
         ],
       });
-      toast.success(`${selectedTemplate.name} agent created`);
+      toast.success(t("specialists.success", { name: selectedTemplate.name }));
       onCreated(agent.id);
       onOpenChange(false);
       setSelectedTemplate(null);
       setCustomName("");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create agent");
+      toast.error(err instanceof Error ? err.message : t("specialists.failed"));
     } finally {
       setCreating(false);
     }
@@ -291,15 +300,15 @@ export function CreateFromTemplateDialog({ open, onOpenChange, runtimes, onCreat
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4" />
-                Create from Template
+                {t("specialists.title")}
               </DialogTitle>
               <DialogDescription>
-                Choose a specialist template to快速创建一个专业AI代理
+                {t("specialists.subtitle")}
               </DialogDescription>
             </DialogHeader>
 
             <div className="grid grid-cols-2 gap-3 py-4">
-              {SPECIALIST_TEMPLATES.map((template) => {
+              {templates.map((template) => {
                 const Icon = template.icon;
                 return (
                   <button
@@ -326,23 +335,27 @@ export function CreateFromTemplateDialog({ open, onOpenChange, runtimes, onCreat
             <DialogHeader>
               <DialogTitle>{selectedTemplate.name}</DialogTitle>
               <DialogDescription>
-                Customize the agent name before creating
+                {t("specialists.customizeHint")}
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-4">
               <div>
-                <Label className="text-xs text-muted-foreground">Agent Name</Label>
+                <Label className="text-xs text-muted-foreground">
+                  {t("specialists.agentNameLabel")}
+                </Label>
                 <Input
                   value={customName}
                   onChange={(e) => setCustomName(e.target.value)}
                   className="mt-1"
-                  placeholder="Enter agent name"
+                  placeholder={t("specialists.namePlaceholder")}
                 />
               </div>
 
               <div>
-                <Label className="text-xs text-muted-foreground">Instructions Preview</Label>
+                <Label className="text-xs text-muted-foreground">
+                  {t("specialists.instructionsPreviewLabel")}
+                </Label>
                 <div className="mt-1 rounded-md border bg-muted/50 p-3 text-xs font-mono whitespace-pre-wrap max-h-40 overflow-y-auto">
                   {selectedTemplate.instructions.slice(0, 300)}...
                 </div>
@@ -359,10 +372,10 @@ export function CreateFromTemplateDialog({ open, onOpenChange, runtimes, onCreat
 
             <DialogFooter>
               <Button variant="ghost" onClick={() => setSelectedTemplate(null)}>
-                Back
+                {t("specialists.back")}
               </Button>
               <Button onClick={handleCreate} disabled={creating || !customName.trim()}>
-                {creating ? "Creating..." : "Create Agent"}
+                {creating ? t("specialists.creating") : t("specialists.createButton")}
               </Button>
             </DialogFooter>
           </>
