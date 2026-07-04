@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -16,7 +17,8 @@ interface AutoDecomposeButtonProps {
 }
 
 export function AutoDecomposeButton({ issueId }: AutoDecomposeButtonProps) {
-  const { decomposeGraph, isLoading, error } = useTaskGraph();
+  const t = useTranslations("taskGraph");
+  const { decomposeGraph, isLoading } = useTaskGraph();
   const [decomposing, setDecomposing] = useState(false);
 
   const handleDecompose = async (maxNodes: number = 10) => {
@@ -32,7 +34,7 @@ export function AutoDecomposeButton({ issueId }: AutoDecomposeButtonProps) {
     return (
       <Button variant="outline" size="sm" disabled>
         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-        Decomposing...
+        {t("autoDecompose.decomposing")}
       </Button>
     );
   }
@@ -43,22 +45,22 @@ export function AutoDecomposeButton({ issueId }: AutoDecomposeButtonProps) {
         render={
           <Button variant="outline" size="sm">
             <Sparkles className="h-4 w-4 mr-2" />
-            Auto-Decompose
+            {t("autoDecompose.button")}
           </Button>
         }
       />
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={() => handleDecompose(5)}>
-          5 nodes (quick)
+          {t("autoDecompose.quick")}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleDecompose(10)}>
-          10 nodes (balanced)
+          {t("autoDecompose.balanced")}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleDecompose(15)}>
-          15 nodes (detailed)
+          {t("autoDecompose.detailed")}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleDecompose(20)}>
-          20 nodes (comprehensive)
+          {t("autoDecompose.comprehensive")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

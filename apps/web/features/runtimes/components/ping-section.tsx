@@ -1,21 +1,22 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+"use client";
+
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { Loader2, CheckCircle2, XCircle, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/shared/api";
 import type { RuntimePingStatus } from "@/shared/types";
 
-const pingStatusConfig: Record<
-  RuntimePingStatus,
-  { label: string; icon: typeof Loader2; color: string }
-> = {
-  pending: { label: "Waiting for daemon...", icon: Loader2, color: "text-muted-foreground" },
-  running: { label: "Running test...", icon: Loader2, color: "text-info" },
-  completed: { label: "Connected", icon: CheckCircle2, color: "text-success" },
-  failed: { label: "Failed", icon: XCircle, color: "text-destructive" },
-  timeout: { label: "Timeout", icon: XCircle, color: "text-warning" },
+const PING_STATUS_KEYS: Record<RuntimePingStatus, { key: string; icon: typeof Loader2; color: string }> = {
+  pending: { key: "waiting", icon: Loader2, color: "text-muted-foreground" },
+  running: { key: "running", icon: Loader2, color: "text-info" },
+  completed: { key: "completed", icon: CheckCircle2, color: "text-success" },
+  failed: { key: "failed", icon: XCircle, color: "text-destructive" },
+  timeout: { key: "timeout", icon: XCircle, color: "text-warning" },
 };
 
 export function PingSection({ runtimeId }: { runtimeId: string }) {
+  const t = useTranslations("runtimes");
   const [status, setStatus] = useState<RuntimePingStatus | null>(null);
   const [output, setOutput] = useState("");
   const [error, setError] = useState("");
@@ -31,6 +32,21 @@ export function PingSection({ runtimeId }: { runtimeId: string }) {
   }, []);
 
   useEffect(() => cleanup, [cleanup]);
+
+  const pingStatusConfig = useMemo(
+    () =>
+      (
+        Object.keys(PING_STATUS_KEYS) as RuntimePingStatus[]
+      ).reduce(
+        (acc, s) => {
+          const cfg = PING_STATUS_KEYS[s];
+          acc[s] = { label: t(`ping.${cfg.key}`), icon: cfg.icon, color: cfg.color };
+          return acc;
+        },
+        {} as Record<RuntimePingStatus, { label: string; icon: typeof Loader2; color: string }>,
+      ),
+    [t],
+  );
 
   const handleTest = async () => {
     cleanup();
@@ -54,7 +70,7 @@ export function PingSection({ runtimeId }: { runtimeId: string }) {
             setTesting(false);
             cleanup();
           } else if (result.status === "failed" || result.status === "timeout") {
-            setError(result.error ?? "Unknown error");
+            setError(result.error ?? t("ping.unknownError"));
             setDurationMs(result.duration_ms ?? null);
             setTesting(false);
             cleanup();
@@ -65,7 +81,7 @@ export function PingSection({ runtimeId }: { runtimeId: string }) {
       }, 2000);
     } catch {
       setStatus("failed");
-      setError("Failed to initiate test");
+      setError(t("ping.initiatedFailed"));
       setTesting(false);
     }
   };
@@ -88,7 +104,7 @@ export function PingSection({ runtimeId }: { runtimeId: string }) {
           ) : (
             <Zap className="h-3 w-3" />
           )}
-          {testing ? "Testing..." : "Test Connection"}
+          {testing ? t("ping.testingButton") : t("ping.testButton")}
         </Button>
 
         {config && Icon && (

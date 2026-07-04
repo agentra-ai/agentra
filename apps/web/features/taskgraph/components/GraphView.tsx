@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import {
   ReactFlow,
   MiniMap,
@@ -34,6 +35,7 @@ interface DAGEdge {
 }
 
 function TaskNode({ data }: { data: DAGNode }) {
+  const t = useTranslations("taskGraph");
   const typeColors: Record<string, string> = {
     executor: "bg-blue-100 border-blue-300",
     synthesis: "bg-purple-100 border-purple-300",
@@ -60,11 +62,13 @@ function TaskNode({ data }: { data: DAGNode }) {
       </div>
 
       <p className="text-sm font-medium line-clamp-2">
-        {data.context?.description || "No description"}
+        {data.context?.description || t("graph.noDescription")}
       </p>
 
       {data.context?.suggested_agent && (
-        <p className="text-xs text-gray-500 mt-1">Agent: {data.context.suggested_agent}</p>
+        <p className="text-xs text-gray-500 mt-1">
+          {t("graph.agentLabel", { name: data.context.suggested_agent })}
+        </p>
       )}
 
       <Handle type="source" position={Position.Bottom} className="!bg-gray-400 !w-2 !h-2" />
@@ -75,6 +79,7 @@ function TaskNode({ data }: { data: DAGNode }) {
 const nodeTypes = { taskNode: TaskNode };
 
 export function GraphView({ issueId }: { issueId: string }) {
+  const t = useTranslations("taskGraph");
   const { nodes: storeNodes, edges: storeEdges, fetchGraph, isLoading, error } = useTaskGraph();
 
   // Fetch graph when issueId changes
@@ -108,9 +113,9 @@ export function GraphView({ issueId }: { issueId: string }) {
   const [nodes, , onNodesChange] = useNodesState(initialNodes);
   const [edges, , onEdgesChange] = useEdgesState(initialEdges);
 
-  if (isLoading) return <div className="text-muted-foreground text-sm p-4">Loading DAG view...</div>;
-  if (error) return <div className="text-red-500 text-sm p-4">Error: {error}</div>;
-  if (storeNodes.length === 0) return <div className="text-muted-foreground text-sm p-4">No graph data. Auto-decompose an issue to create one.</div>;
+  if (isLoading) return <div className="text-muted-foreground text-sm p-4">{t("graph.loading")}</div>;
+  if (error) return <div className="text-red-500 text-sm p-4">{t("graph.error", { detail: error })}</div>;
+  if (storeNodes.length === 0) return <div className="text-muted-foreground text-sm p-4">{t("graph.empty")}</div>;
 
   return (
     <div className="h-[400px] border rounded-lg overflow-hidden">

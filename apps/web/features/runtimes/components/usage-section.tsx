@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { BarChart3 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { RuntimeUsage } from "@/shared/types";
@@ -24,6 +25,7 @@ const TIME_RANGES = [
 type TimeRange = (typeof TIME_RANGES)[number]["days"];
 
 export function UsageSection({ runtimeId }: { runtimeId: string }) {
+  const t = useTranslations("runtimes");
   const [usage, setUsage] = useState<RuntimeUsage[]>([]);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState<TimeRange>(30);
@@ -62,7 +64,7 @@ export function UsageSection({ runtimeId }: { runtimeId: string }) {
     return (
       <div className="flex flex-col items-center rounded-lg border border-dashed py-6">
         <BarChart3 className="h-5 w-5 text-muted-foreground/40" />
-        <p className="mt-2 text-xs text-muted-foreground">No usage data yet</p>
+        <p className="mt-2 text-xs text-muted-foreground">{t("usage.noData")}</p>
       </div>
     );
   }
@@ -116,16 +118,16 @@ export function UsageSection({ runtimeId }: { runtimeId: string }) {
 
       {/* Summary cards */}
       <div className="grid grid-cols-4 gap-3">
-        <TokenCard label="Input" value={formatTokens(totals.input)} />
-        <TokenCard label="Output" value={formatTokens(totals.output)} />
-        <TokenCard label="Cache Read" value={formatTokens(totals.cacheRead)} />
-        <TokenCard label="Cache Write" value={formatTokens(totals.cacheWrite)} />
+        <TokenCard label={t("usage.input")} value={formatTokens(totals.input)} />
+        <TokenCard label={t("usage.output")} value={formatTokens(totals.output)} />
+        <TokenCard label={t("usage.cacheRead")} value={formatTokens(totals.cacheRead)} />
+        <TokenCard label={t("usage.cacheWrite")} value={formatTokens(totals.cacheWrite)} />
       </div>
 
       {totals.cost > 0 && (
         <div className="rounded-lg border bg-muted/30 px-3 py-2">
           <span className="text-xs text-muted-foreground">
-            Estimated cost ({days}d):{" "}
+            {t("usage.estimatedCost", { days })}{" "}
           </span>
           <span className="text-sm font-semibold">
             ${totals.cost.toFixed(2)}
@@ -150,12 +152,12 @@ export function UsageSection({ runtimeId }: { runtimeId: string }) {
       {/* Daily breakdown table */}
       <div className="rounded-lg border">
         <div className="grid grid-cols-[100px_1fr_80px_80px_80px_80px] gap-2 border-b px-3 py-2 text-xs font-medium text-muted-foreground">
-          <div>Date</div>
-          <div>Model</div>
-          <div className="text-right">Input</div>
-          <div className="text-right">Output</div>
-          <div className="text-right">Cache R</div>
-          <div className="text-right">Cache W</div>
+          <div>{t("usage.date")}</div>
+          <div>{t("usage.model")}</div>
+          <div className="text-right">{t("usage.input")}</div>
+          <div className="text-right">{t("usage.output")}</div>
+          <div className="text-right">{t("usage.cacheR")}</div>
+          <div className="text-right">{t("usage.cacheW")}</div>
         </div>
         <div className="max-h-64 overflow-y-auto divide-y">
           {[...byDate.entries()].map(([date, rows]) =>

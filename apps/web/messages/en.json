@@ -16,7 +16,10 @@
     "next": "Next",
     "previous": "Previous",
     "submit": "Submit",
-    "reset": "Reset"
+    "reset": "Reset",
+    "searching": "Searching...",
+    "saving": "Saving...",
+    "creating": "Creating..."
   },
   "auth": {
     "login": "Login",
@@ -191,9 +194,124 @@
     "status": {
       "online": "Online",
       "offline": "Offline",
-      "busy": "Busy"
+      "busy": "Busy",
+      "badge": {
+        "online": "Online",
+        "offline": "Offline"
+      }
     },
-    "noRuntimes": "No runtimes configured"
+    "noRuntimes": "No runtimes configured",
+    "noSelection": "Select a runtime to view details",
+    "list": {
+      "hint": "Run <code>agentra daemon start</code> to register a local runtime."
+    },
+    "ping": {
+      "waiting": "Waiting for daemon...",
+      "running": "Running test...",
+      "completed": "Connected",
+      "failed": "Failed",
+      "timeout": "Timeout",
+      "testButton": "Test Connection",
+      "testingButton": "Testing...",
+      "initiatedFailed": "Failed to initiate test",
+      "unknownError": "Unknown error"
+    },
+    "update": {
+      "waiting": "Waiting for daemon...",
+      "running": "Updating...",
+      "completed": "Update complete. Daemon is restarting...",
+      "failed": "Update failed",
+      "timeout": "Timeout",
+      "cliHeader": "CLI Version",
+      "cliValueUnknown": "unknown",
+      "latest": "Latest",
+      "available": "available",
+      "updateButton": "Update",
+      "retry": "Retry",
+      "initiatedFailed": "Failed to initiate update",
+      "unknownError": "Unknown error"
+    },
+    "detail": {
+      "runtimeMode": "Runtime Mode",
+      "provider": "Provider",
+      "status": "Status",
+      "lastSeen": "Last Seen",
+      "device": "Device",
+      "daemonId": "Daemon ID",
+      "cliVersion": "CLI Version",
+      "connectionTest": "Connection Test",
+      "tokenUsage": "Token Usage",
+      "metadata": "Metadata",
+      "created": "Created",
+      "updated": "Updated"
+    },
+    "usage": {
+      "noData": "No usage data yet",
+      "input": "Input",
+      "output": "Output",
+      "cacheRead": "Cache Read",
+      "cacheWrite": "Cache Write",
+      "estimatedCost": "Estimated cost ({days}d):",
+      "date": "Date",
+      "model": "Model",
+      "cacheR": "Cache R",
+      "cacheW": "Cache W"
+    },
+    "charts": {
+      "hourlyTitle": "Hourly Distribution",
+      "loading": "Loading...",
+      "noTaskData": "No task data yet",
+      "tokenByModel": "Token Usage by Model",
+      "tokens": "tokens",
+      "dailyTokenTitle": "Daily Token Usage",
+      "dailyCostTitle": "Daily Estimated Cost",
+      "cost": "Cost",
+      "tasks": "Tasks",
+      "activity": "Activity",
+      "noActivity": "No activity",
+      "less": "Less",
+      "more": "More",
+      "mon": "Mon",
+      "wed": "Wed",
+      "fri": "Fri"
+    }
+  },
+  "taskGraph": {
+    "autoDecompose": {
+      "decomposing": "Decomposing...",
+      "button": "Auto-Decompose",
+      "quick": "5 nodes (quick)",
+      "balanced": "10 nodes (balanced)",
+      "detailed": "15 nodes (detailed)",
+      "comprehensive": "20 nodes (comprehensive)"
+    },
+    "graph": {
+      "loading": "Loading DAG view...",
+      "error": "Error: {detail}",
+      "empty": "No graph data. Auto-decompose an issue to create one.",
+      "noDescription": "No description",
+      "agentLabel": "Agent: {name}"
+    },
+    "tree": {
+      "title": "Task Graph",
+      "loading": "Loading task graph...",
+      "error": "Error: {detail}",
+      "empty": "No subtasks yet."
+    }
+  },
+  "traces": {
+    "status": {
+      "loading": "Loading traces",
+      "detailLoading": "Loading trace...",
+      "empty": "No traces yet.",
+      "detailEmpty": "No trace steps found."
+    },
+    "error": "Error: {detail}",
+    "detail": {
+      "input": "Input",
+      "output": "Output"
+    },
+    "summary": "{steps} steps, {tokens} tokens, ${cost}"
   },
   "inbox": {
     "title": "Inbox",

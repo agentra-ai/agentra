@@ -1,3 +1,7 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+
 const TYPE_COLORS: Record<string, string> = {
   root: "bg-gray-100 text-gray-800",
   planner: "bg-blue-100 text-blue-800",
@@ -14,6 +18,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function NodeCard({ node }: { node: any }) {
+  const t = useTranslations("taskGraph");
   return (
     <div className="border rounded-lg p-3">
       <div className="flex items-center gap-2 mb-1">
@@ -25,7 +30,9 @@ export function NodeCard({ node }: { node: any }) {
         </span>
       </div>
       {node.agent_id && (
-        <div className="text-xs text-muted-foreground">Agent: {node.agent_id}</div>
+        <div className="text-xs text-muted-foreground">
+          {t("graph.agentLabel", { name: node.agent_id })}
+        </div>
       )}
     </div>
   );

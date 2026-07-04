@@ -1,11 +1,13 @@
+"use client";
+
 import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 import type { RuntimeUsage } from "@/shared/types";
 import { formatTokens } from "../../utils";
 
 const HEATMAP_WEEKS = 13;
 const CELL_SIZE = 11;
 const CELL_GAP = 2;
-const DAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""];
 
 function getHeatmapColor(level: number): string {
   const colors = [
@@ -19,6 +21,11 @@ function getHeatmapColor(level: number): string {
 }
 
 export function ActivityHeatmap({ usage }: { usage: RuntimeUsage[] }) {
+  const t = useTranslations("runtimes");
+  const DAY_LABELS = useMemo(
+    () => ["", t("charts.mon"), "", t("charts.wed"), "", t("charts.fri"), ""],
+    [t],
+  );
   const { cells, monthLabels } = useMemo(() => {
     const dateTokens = new Map<string, number>();
     for (const u of usage) {
@@ -96,7 +103,7 @@ export function ActivityHeatmap({ usage }: { usage: RuntimeUsage[] }) {
 
   return (
     <div className="rounded-lg border p-4">
-      <h4 className="text-xs font-medium text-muted-foreground mb-3">Activity</h4>
+      <h4 className="text-xs font-medium text-muted-foreground mb-3">{t("charts.activity")}</h4>
       <div className="overflow-x-auto">
         <svg width={svgWidth} height={svgHeight} className="block">
           {monthLabels.map((m) => (
@@ -137,8 +144,8 @@ export function ActivityHeatmap({ usage }: { usage: RuntimeUsage[] }) {
               <title>
                 {c.date}:{" "}
                 {c.tokens > 0
-                  ? formatTokens(c.tokens) + " tokens"
-                  : "No activity"}
+                  ? `${formatTokens(c.tokens)} ${t("charts.tokens")}`
+                  : t("charts.noActivity")}
               </title>
             </rect>
           ))}
@@ -146,7 +153,7 @@ export function ActivityHeatmap({ usage }: { usage: RuntimeUsage[] }) {
       </div>
       {/* Legend */}
       <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
-        <span>Less</span>
+        <span>{t("charts.less")}</span>
         {[0, 1, 2, 3, 4].map((level) => (
           <div
             key={level}
@@ -154,7 +161,7 @@ export function ActivityHeatmap({ usage }: { usage: RuntimeUsage[] }) {
             style={{ backgroundColor: getHeatmapColor(level) }}
           />
         ))}
-        <span>More</span>
+        <span>{t("charts.more")}</span>
       </div>
     </div>
   );

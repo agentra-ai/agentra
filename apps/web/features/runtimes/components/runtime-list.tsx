@@ -68,11 +68,11 @@ export function RuntimeList({
             {t("noRuntimes")}
           </p>
           <p className="mt-1 text-xs text-muted-foreground text-center">
-            Run{" "}
-            <code className="rounded bg-muted px-1 py-0.5">
-              agentra daemon start
-            </code>{" "}
-            to register a local runtime.
+            {t.rich("list.hint", {
+              code: (chunks) => (
+                <code className="rounded bg-muted px-1 py-0.5">{chunks}</code>
+              ),
+            })}
           </p>
         </div>
       ) : (

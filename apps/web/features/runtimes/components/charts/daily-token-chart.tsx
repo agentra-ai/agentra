@@ -1,3 +1,7 @@
+"use client";
+
+import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 import {
   AreaChart,
   Area,
@@ -16,17 +20,20 @@ import {
 import type { DailyTokenData } from "../../utils";
 import { formatTokens } from "../../utils";
 
-const tokenChartConfig = {
-  input: { label: "Input", color: "hsl(var(--chart-1))" },
-  output: { label: "Output", color: "hsl(var(--chart-2))" },
-  cacheRead: { label: "Cache Read", color: "hsl(var(--chart-3))" },
-  cacheWrite: { label: "Cache Write", color: "hsl(var(--chart-4))" },
-} satisfies ChartConfig;
-
 export function DailyTokenChart({ data }: { data: DailyTokenData[] }) {
+  const t = useTranslations("runtimes");
+  const tokenChartConfig = useMemo(
+    () => ({
+      input: { label: t("usage.input"), color: "hsl(var(--chart-1))" },
+      output: { label: t("usage.output"), color: "hsl(var(--chart-2))" },
+      cacheRead: { label: t("usage.cacheRead"), color: "hsl(var(--chart-3))" },
+      cacheWrite: { label: t("usage.cacheWrite"), color: "hsl(var(--chart-4))" },
+    }),
+    [t],
+  ) satisfies ChartConfig;
   return (
     <div className="rounded-lg border p-4">
-      <h4 className="text-xs font-medium text-muted-foreground mb-3">Daily Token Usage</h4>
+      <h4 className="text-xs font-medium text-muted-foreground mb-3">{t("charts.dailyTokenTitle")}</h4>
       <ChartContainer config={tokenChartConfig} className="aspect-[2.5/1] w-full">
         <AreaChart data={data} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
           <CartesianGrid vertical={false} />

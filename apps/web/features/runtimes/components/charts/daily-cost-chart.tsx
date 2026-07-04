@@ -1,3 +1,7 @@
+"use client";
+
+import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 import {
   BarChart,
   Bar,
@@ -13,16 +17,19 @@ import {
 } from "@/components/ui/chart";
 import type { DailyCostData } from "../../utils";
 
-const costChartConfig = {
-  cost: { label: "Cost", color: "hsl(var(--chart-1))" },
-} satisfies ChartConfig;
-
 export function DailyCostChart({ data }: { data: DailyCostData[] }) {
+  const t = useTranslations("runtimes");
+  const costChartConfig = useMemo(
+    () => ({
+      cost: { label: t("charts.cost"), color: "hsl(var(--chart-1))" },
+    }),
+    [t],
+  ) satisfies ChartConfig;
   if (data.every((d) => d.cost === 0)) return null;
 
   return (
     <div className="rounded-lg border p-4">
-      <h4 className="text-xs font-medium text-muted-foreground mb-3">Daily Estimated Cost</h4>
+      <h4 className="text-xs font-medium text-muted-foreground mb-3">{t("charts.dailyCostTitle")}</h4>
       <ChartContainer config={costChartConfig} className="aspect-[2.5/1] w-full">
         <BarChart data={data} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
           <CartesianGrid vertical={false} />

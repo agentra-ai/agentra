@@ -1,4 +1,7 @@
+"use client";
+
 import { Monitor, Cloud, Wifi, WifiOff } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 
 export function RuntimeModeIcon({ mode }: { mode: string }) {
@@ -9,7 +12,9 @@ export function RuntimeModeIcon({ mode }: { mode: string }) {
   );
 }
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status, t: externalT }: { status: string; t?: (key: string) => string }) {
+  const internalT = useTranslations("runtimes");
+  const t = externalT ?? internalT;
   const isOnline = status === "online";
   return (
     <Badge
@@ -21,7 +26,7 @@ export function StatusBadge({ status }: { status: string }) {
       ) : (
         <WifiOff className="h-3 w-3" />
       )}
-      {isOnline ? "Online" : "Offline"}
+      {isOnline ? t("status.badge.online") : t("status.badge.offline")}
     </Badge>
   );
 }

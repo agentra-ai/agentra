@@ -194,9 +194,124 @@
     "status": {
       "online": "在线",
       "offline": "离线",
-      "busy": "忙碌"
+      "busy": "忙碌",
+      "badge": {
+        "online": "在线",
+        "offline": "离线"
+      }
     },
-    "noRuntimes": "暂无配置的运行时"
+    "noRuntimes": "暂无配置的运行时",
+    "noSelection": "选择运行时以查看详情",
+    "list": {
+      "hint": "运行 <code>agentra daemon start</code> 以注册本地运行时。"
+    },
+    "ping": {
+      "waiting": "正在等待守护进程...",
+      "running": "正在测试...",
+      "completed": "已连接",
+      "failed": "失败",
+      "timeout": "超时",
+      "testButton": "测试连接",
+      "testingButton": "测试中...",
+      "initiatedFailed": "启动测试失败",
+      "unknownError": "未知错误"
+    },
+    "update": {
+      "waiting": "正在等待守护进程...",
+      "running": "正在更新...",
+      "completed": "更新完成，守护进程正在重启...",
+      "failed": "更新失败",
+      "timeout": "超时",
+      "cliHeader": "CLI 版本",
+      "cliValueUnknown": "未知",
+      "latest": "最新版本",
+      "available": "可用",
+      "updateButton": "更新",
+      "retry": "重试",
+      "initiatedFailed": "启动更新失败",
+      "unknownError": "未知错误"
+    },
+    "detail": {
+      "runtimeMode": "运行模式",
+      "provider": "提供者",
+      "status": "状态",
+      "lastSeen": "最近活跃",
+      "device": "设备",
+      "daemonId": "守护进程 ID",
+      "cliVersion": "CLI 版本",
+      "connectionTest": "连接测试",
+      "tokenUsage": "Token 使用量",
+      "metadata": "元数据",
+      "created": "创建时间",
+      "updated": "更新时间"
+    },
+    "usage": {
+      "noData": "暂无使用数据",
+      "input": "输入",
+      "output": "输出",
+      "cacheRead": "缓存读",
+      "cacheWrite": "缓存写",
+      "estimatedCost": "估算费用（{days} 天）:",
+      "date": "日期",
+      "model": "模型",
+      "cacheR": "缓存读",
+      "cacheW": "缓存写"
+    },
+    "charts": {
+      "hourlyTitle": "分时段分布",
+      "loading": "加载中...",
+      "noTaskData": "暂无任务数据",
+      "tokenByModel": "按模型 Token 用量",
+      "tokens": "tokens",
+      "dailyTokenTitle": "每日 Token 用量",
+      "dailyCostTitle": "每日估算费用",
+      "cost": "费用",
+      "tasks": "任务数",
+      "activity": "活跃度",
+      "noActivity": "暂无活动",
+      "less": "少",
+      "more": "多",
+      "mon": "周一",
+      "wed": "周三",
+      "fri": "周五"
+    }
+  },
+  "taskGraph": {
+    "autoDecompose": {
+      "decomposing": "正在分解...",
+      "button": "自动拆解",
+      "quick": "5 个节点（快速）",
+      "balanced": "10 个节点（均衡）",
+      "detailed": "15 个节点（详细）",
+      "comprehensive": "20 个节点（全面）"
+    },
+    "graph": {
+      "loading": "正在加载 DAG 视图...",
+      "error" : "错误：{detail}",
+      "empty": "暂无图数据。请自动拆解某个议题以创建。",
+      "noDescription": "暂无描述",
+      "agentLabel": "代理：{name}"
+    },
+    "tree": {
+      "title": "任务图",
+      "loading": "正在加载任务图...",
+      "error": "错误：{detail}",
+      "empty": "暂无子任务。"
+    }
+  },
+  "traces": {
+    "status": {
+      "loading": "正在加载 Traces",
+      "detailLoading": "正在加载 Trace...",
+      "empty": "暂无 Trace。",
+      "detailEmpty": "暂无 Trace 步骤。"
+    },
+    "error": "错误：{detail}",
+    "detail": {
+      "input": "输入",
+      "output": "输出"
+    },
+    "summary": "{steps} 步, {tokens} tokens, ${cost}"
   },
   "inbox": {
     "title": "收件箱",

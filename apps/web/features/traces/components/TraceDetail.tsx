@@ -1,16 +1,20 @@
+"use client";
+
 import { useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { useTraceStore } from '../hooks/useTraces'
 
 export function TraceDetail({ taskId, runId }: { taskId: string; runId?: string }) {
+  const t = useTranslations('traces')
   const { currentSteps, isLoading, error, fetchTraceDetail } = useTraceStore()
 
   useEffect(() => {
     fetchTraceDetail(taskId, runId)
   }, [taskId, runId])
 
-  if (isLoading) return <div className="text-muted-foreground">Loading trace...</div>
-  if (error) return <div className="text-destructive">Error: {error}</div>
-  if (currentSteps.length === 0) return <div className="text-muted-foreground">No trace steps found.</div>
+  if (isLoading) return <div className="text-muted-foreground">{t('status.detailLoading')}</div>
+  if (error) return <div className="text-destructive">{t('error', { detail: error })}</div>
+  if (currentSteps.length === 0) return <div className="text-muted-foreground">{t('status.detailEmpty')}</div>
 
   return (
     <div className="space-y-2">
@@ -25,13 +29,13 @@ export function TraceDetail({ taskId, runId }: { taskId: string; runId?: string 
           </div>
           {step.input_text && (
             <div className="mt-2 text-sm">
-              <div className="text-muted-foreground">Input:</div>
+              <div className="text-muted-foreground">{t('detail.input')}:</div>
               <pre className="bg-muted p-2 rounded text-xs overflow-x-auto">{step.input_text}</pre>
             </div>
           )}
           {step.output_text && (
             <div className="mt-2 text-sm">
-              <div className="text-muted-foreground">Output:</div>
+              <div className="text-muted-foreground">{t('detail.output')}:</div>
               <pre className="bg-muted p-2 rounded text-xs overflow-x-auto">{step.output_text}</pre>
             </div>
           )}
