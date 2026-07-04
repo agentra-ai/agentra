@@ -40,7 +40,7 @@ func TestRecordTaskMetric_FireAndForget(t *testing.T) {
 	queries := db.New(pool)
 
 	// Fixture: pick any agent from the workspace.
-	agents, err := queries.ListAgentsByWorkspace(ctx, mustFirstWorkspaceID(t, queries))
+	agents, err := queries.ListAgents(ctx, mustFirstWorkspaceID(t, queries))
 	if err != nil || len(agents) == 0 {
 		t.Skipf("no agent fixture: %v", err)
 	}
