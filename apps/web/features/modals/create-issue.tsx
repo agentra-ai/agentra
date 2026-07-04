@@ -29,7 +29,7 @@ import { Button } from "@/components/ui/button";
 import { ContentEditor, type ContentEditorRef } from "@/features/editor";
 import { TitleEditor } from "@/features/editor";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
-import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
+import { ALL_STATUSES, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
 import { ISSUE_TEMPLATES, type IssueTemplate } from "@/features/issues/config/templates";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useIssueStore } from "@/features/issues";
@@ -68,7 +68,7 @@ function PillButton({
 // ---------------------------------------------------------------------------
 
 export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?: Record<string, unknown> | null }) {
-  const t = useTranslations("issues");
+  const tIssues = useTranslations("issues");
   const tCommon = useTranslations("common");
   const tModals = useTranslations("modals");
   const f = useFormatter();
@@ -111,7 +111,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
   const assigneeLabel =
     assigneeType && assigneeId
       ? getActorName(assigneeType, assigneeId)
-      : t("assignee");
+      : tIssues("assignee");
 
   const dueDateObj = dueDate ? new Date(dueDate) : undefined;
 
@@ -160,7 +160,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
             <div className="flex items-center justify-center size-5 rounded-full bg-emerald-500/15 text-emerald-500">
               <Check className="size-3" />
             </div>
-            <span className="text-sm font-medium">Issue created</span>
+            <span className="text-sm font-medium">{tIssues("issueCreated")}</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground ml-7">
             <StatusIcon status={issue.status} className="size-3.5 shrink-0" />
@@ -174,12 +174,12 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
               toast.dismiss(t);
             }}
           >
-            View issue
+            {tIssues("viewIssue")}
           </button>
         </div>
       ), { duration: 5000 });
     } catch {
-      toast.error("Failed to create issue");
+      toast.error(tIssues("failedToCreate"));
     } finally {
       setSubmitting(false);
     }
@@ -205,11 +205,11 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
           <div className="flex items-center gap-1.5 text-xs">
             <span className="text-muted-foreground">{workspaceName}</span>
             <ChevronRight className="size-3 text-muted-foreground/50" />
-            <span className="font-medium">{t("newIssue")}</span>
+            <span className="font-medium">{tIssues("newIssue")}</span>
             {selectedTemplate && (
               <>
                 <ChevronRight className="size-3 text-muted-foreground/50" />
-                <span className="text-primary font-medium">{selectedTemplate.label}</span>
+                <span className="text-primary font-medium">{tIssues(`templates.${selectedTemplate.id}.label`)}</span>
               </>
             )}
           </div>
@@ -225,7 +225,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                   </button>
                 }
               />
-              <TooltipContent side="bottom">{isExpanded ? "Collapse" : "Expand"}</TooltipContent>
+              <TooltipContent side="bottom">{isExpanded ? tIssues("create.collapse") : tIssues("create.expand")}</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger
@@ -246,19 +246,19 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
         {/* Template selector */}
         <div className="px-5 pb-2 shrink-0">
           <div className="flex items-center gap-1.5">
-            {ISSUE_TEMPLATES.map((t) => (
+            {ISSUE_TEMPLATES.map((tpl) => (
               <button
-                key={t.id}
+                key={tpl.id}
                 type="button"
-                onClick={() => applyTemplate(t)}
+                onClick={() => applyTemplate(tpl)}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors cursor-pointer",
-                  selectedTemplate?.id === t.id
+                  selectedTemplate?.id === tpl.id
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-border hover:bg-accent/60 text-muted-foreground hover:text-foreground",
                 )}
               >
-                <span className="font-medium">{t.label}</span>
+                <span className="font-medium">{tIssues(`templates.${tpl.id}.label`)}</span>
               </button>
             ))}
           </div>
@@ -269,7 +269,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
           <TitleEditor
             autoFocus
             defaultValue={draft.title}
-            placeholder="Issue title"
+            placeholder={tIssues("editor.titlePlaceholder")}
             className="text-lg font-semibold"
             onChange={(v) => updateTitle(v)}
             onSubmit={handleSubmit}
@@ -281,7 +281,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
           <ContentEditor
             ref={descEditorRef}
             defaultValue={draft.description}
-            placeholder="Add description..."
+            placeholder={tIssues("editor.descriptionPlaceholder")}
             onUpdate={(md) => setDraft({ description: md })}
             onUploadFile={handleUpload}
             debounceMs={500}
@@ -296,7 +296,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
               render={
                 <PillButton>
                   <StatusIcon status={status} className="size-3.5" />
-                  <span>{STATUS_CONFIG[status].label}</span>
+                  <span>{tIssues(`status.${status}`)}</span>
                 </PillButton>
               }
             />
@@ -304,7 +304,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
               {ALL_STATUSES.map((s) => (
                 <DropdownMenuItem key={s} onClick={() => updateStatus(s)}>
                   <StatusIcon status={s} className="size-3.5" />
-                  <span>{STATUS_CONFIG[s].label}</span>
+                  <span>{tIssues(`status.${s}`)}</span>
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -316,7 +316,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
               render={
                 <PillButton>
                   <PriorityIcon priority={priority} />
-                  <span>{PRIORITY_CONFIG[priority].label}</span>
+                  <span>{tIssues(`priority.${priority}`)}</span>
                 </PillButton>
               }
             />
@@ -325,7 +325,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                 <DropdownMenuItem key={p} onClick={() => updatePriority(p)}>
                   <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[p].badgeBg} ${PRIORITY_CONFIG[p].badgeText}`}>
                     <PriorityIcon priority={p} className="h-3 w-3" inheritColor />
-                    {PRIORITY_CONFIG[p].label}
+                    {tIssues(`priority.${p}`)}
                   </span>
                 </DropdownMenuItem>
               ))}
@@ -343,7 +343,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                       <span>{assigneeLabel}</span>
                     </>
                   ) : (
-                    <span className="text-muted-foreground">{t("assignee")}</span>
+                    <span className="text-muted-foreground">{tIssues("assignee")}</span>
                   )}
                 </PillButton>
               }
@@ -354,7 +354,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                   type="text"
                   value={assigneeFilter}
                   onChange={(e) => setAssigneeFilter(e.target.value)}
-                  placeholder="Assign to..."
+                  placeholder={tIssues("assignee.assignToPlaceholder")}
                   className="w-full bg-transparent text-sm placeholder:text-muted-foreground outline-none"
                 />
               </div>
@@ -369,13 +369,13 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                   className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
                 >
                   <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-muted-foreground">Unassigned</span>
+                  <span className="text-muted-foreground">{tIssues("assignee.unassigned")}</span>
                 </button>
 
                 {/* Members */}
                 {filteredMembers.length > 0 && (
                   <>
-                    <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">Members</div>
+                    <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">{tIssues("assignee.membersSection")}</div>
                     {filteredMembers.map((m) => (
                       <button
                         type="button"
@@ -396,7 +396,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                 {/* Agents */}
                 {filteredAgents.length > 0 && (
                   <>
-                    <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">Agents</div>
+                    <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">{tIssues("assignee.agentsSection")}</div>
                     {filteredAgents.map((a) => (
                       <button
                         type="button"
@@ -415,7 +415,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                 )}
 
                 {filteredMembers.length === 0 && filteredAgents.length === 0 && assigneeFilter && (
-                  <div className="px-2 py-3 text-center text-sm text-muted-foreground">No results</div>
+                  <div className="px-2 py-3 text-center text-sm text-muted-foreground">{tCommon("noResults")}</div>
                 )}
               </div>
             </PopoverContent>
@@ -430,7 +430,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                   {dueDateObj ? (
                     <span>{f.dateTime(dueDateObj, { month: "short", day: "numeric" })}</span>
                   ) : (
-                    <span className="text-muted-foreground">Due date</span>
+                    <span className="text-muted-foreground">{tIssues("due.label")}</span>
                   )}
                 </PillButton>
               }
@@ -455,7 +455,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                     }}
                     className="text-muted-foreground hover:text-foreground"
                   >
-                    Clear date
+                    {tIssues("due.clear")}
                   </Button>
                 </div>
               )}
@@ -469,7 +469,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
             onSelect={(file) => descEditorRef.current?.uploadFile(file)}
           />
           <Button size="sm" onClick={handleSubmit} disabled={!title.trim() || submitting}>
-            {submitting ? "Creating..." : "Create Issue"}
+            {submitting ? tIssues("create.creating") : tIssues("create.createButton")}
           </Button>
         </div>
       </DialogContent>
