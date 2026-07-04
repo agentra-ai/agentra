@@ -2,10 +2,7 @@
 
 > How to ship Agentra to production: **automated CI/CD** (push a tag → images land on Docker Hub) and **manual self-hosted** (`docker compose up` on your VM).
 
-- [Automated: GitHub Actions → Docker Hub](#automated-github-actions--docker-hub)
-- [Manual: Docker Compose Self-Host](#manual-docker-compose-self-host)
-- [Secrets Reference](#secrets-reference)
-- [Release Calendar](#release-calendar)
+**TOC:** [Automated](#automated-github-actions--docker-hub) · [Manual](#manual-docker-compose-self-host) · [Secrets](#secrets-reference) · [Releases](#release-calendar)
 
 ---
 
@@ -243,4 +240,4 @@ Both jobs run in parallel from the same tag push. The CLI binaries land on GitHu
 
 ---
 
-*中文版本: [部署指南 (zh)](docs/zh/DEPLOYMENT.md)*
+*sin*

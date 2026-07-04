@@ -2,10 +2,10 @@
 
 > 如何将 Agentra 交付到生产环境: **自动化 CI/CD** (push 一个 tag → Docker Hub 自动收货) 和 **手动自托管** (在 VM 上 `docker compose up`)。
 
-- [自动化: GitHub Actions → Docker Hub](#自动化-github-actions--docker-hub)
-- [手动: Docker Compose 自托管](#手动-docker-compose-自托管)
-- [密钥参考](#密钥参考)
-- [发版日历](#发版日历)
+- [自动化: GitHub Actions → Docker Hub](#_1)
+- [手动: Docker Compose 自托管](#_2)
+- [密钥参考](#_3)
+- [发版日历](#_4)
 
 ---
 
@@ -227,4 +227,4 @@ docker compose run --rm migrate down
 
 ---
 
-*English version: [Deployment Guide](../DEPLOYMENT.md)*
+*sin*
