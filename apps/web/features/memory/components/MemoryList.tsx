@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl'
 import { MemoryItem } from './MemoryItem'
 
 interface MemoryListProps {
@@ -11,8 +12,9 @@ interface MemoryListProps {
 }
 
 export function MemoryList({ memories }: MemoryListProps) {
+  const t = useTranslations('memory')
   if (memories.length === 0) {
-    return <p className="text-muted-foreground text-sm">No memories yet.</p>
+    return <p className="text-muted-foreground text-sm">{t('empty')}</p>
   }
   return (
     <div className="flex flex-col gap-2">

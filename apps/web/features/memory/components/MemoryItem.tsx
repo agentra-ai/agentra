@@ -1,4 +1,7 @@
+'use client'
+
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { useMemoryStore } from '../hooks/useMemoryStore'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,7 +23,16 @@ interface MemoryItemProps {
   }
 }
 
+const TYPE_LABEL_KEYS: Record<string, 'learnings' | 'results' | 'context' | 'patterns'> = {
+  learning: 'learnings',
+  task_result: 'results',
+  context: 'context',
+  pattern: 'patterns',
+}
+
 export function MemoryItem({ memory }: MemoryItemProps) {
+  const t = useTranslations('memory')
+  const tc = useTranslations('common')
   const { deleteMemory } = useMemoryStore()
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -28,7 +40,7 @@ export function MemoryItem({ memory }: MemoryItemProps) {
     <div className="border rounded-lg p-3 hover:bg-muted/50 transition-colors">
       <div className="flex items-center gap-2 mb-2">
         <Badge className={TYPE_COLORS[memory.memory_type] || 'bg-gray-100'}>
-          {memory.memory_type}
+          {t(`tabs.${TYPE_LABEL_KEYS[memory.memory_type] ?? 'all'}`)}
         </Badge>
         <span className="text-xs text-muted-foreground">
           {new Date(memory.created_at).toLocaleDateString()}
@@ -39,15 +51,15 @@ export function MemoryItem({ memory }: MemoryItemProps) {
         {confirmDelete ? (
           <div className="flex gap-2">
             <Button size="xs" variant="destructive" onClick={() => deleteMemory(memory.id, memory.agent_id)}>
-              Confirm
+              {tc('confirm')}
             </Button>
             <Button size="xs" variant="ghost" onClick={() => setConfirmDelete(false)}>
-              Cancel
+              {tc('cancel')}
             </Button>
           </div>
         ) : (
           <Button size="xs" variant="ghost" onClick={() => setConfirmDelete(true)}>
-            Delete
+            {tc('delete')}
           </Button>
         )}
       </div>

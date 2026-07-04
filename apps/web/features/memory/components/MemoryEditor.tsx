@@ -1,4 +1,7 @@
+'use client'
+
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { useMemoryStore } from '../hooks/useMemoryStore'
 import { useWorkspaceStore } from '@/features/workspace'
 import { Button } from '@/components/ui/button'
@@ -13,6 +16,8 @@ interface MemoryEditorProps {
 }
 
 export function MemoryEditor({ open, onClose, agentId }: MemoryEditorProps) {
+  const t = useTranslations('memory')
+  const tc = useTranslations('common')
   const { workspace } = useWorkspaceStore()
   const { storeMemory } = useMemoryStore()
   const [content, setContent] = useState('')
@@ -36,7 +41,7 @@ export function MemoryEditor({ open, onClose, agentId }: MemoryEditorProps) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add Memory</DialogTitle>
+          <DialogTitle>{t('editor.title')}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <Select value={memoryType ?? 'learning'} onValueChange={setMemoryType}>
@@ -44,14 +49,14 @@ export function MemoryEditor({ open, onClose, agentId }: MemoryEditorProps) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="learning">Learning</SelectItem>
-              <SelectItem value="task_result">Task Result</SelectItem>
-              <SelectItem value="context">Context</SelectItem>
-              <SelectItem value="pattern">Pattern</SelectItem>
+              <SelectItem value="learning">{t('editor.types.learning')}</SelectItem>
+              <SelectItem value="task_result">{t('editor.types.taskResult')}</SelectItem>
+              <SelectItem value="context">{t('editor.types.context')}</SelectItem>
+              <SelectItem value="pattern">{t('editor.types.pattern')}</SelectItem>
             </SelectContent>
           </Select>
           <Textarea
-            placeholder="What should this agent remember?"
+            placeholder={t('editor.contentPlaceholder')}
             value={content}
             onChange={e => setContent(e.target.value)}
             rows={4}
@@ -63,9 +68,9 @@ export function MemoryEditor({ open, onClose, agentId }: MemoryEditorProps) {
               checked={isPrivate}
               onChange={e => setIsPrivate(e.target.checked)}
             />
-            <label htmlFor="is-private" className="text-sm">Private (only this agent)</label>
+            <label htmlFor="is-private" className="text-sm">{t('editor.private')}</label>
           </div>
-          <Button onClick={handleSave}>Save</Button>
+          <Button onClick={handleSave}>{tc('save')}</Button>
         </div>
       </DialogContent>
     </Dialog>

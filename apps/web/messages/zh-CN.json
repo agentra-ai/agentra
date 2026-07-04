@@ -16,7 +16,10 @@
     "next": "下一步",
     "previous": "上一步",
     "submit": "提交",
-    "reset": "重置"
+    "reset": "重置",
+    "searching": "搜索中...",
+    "saving": "正在保存...",
+    "creating": "创建中..."
   },
   "auth": {
     "login": "登录",
@@ -136,6 +139,42 @@
     "saving": "保存中...",
     "saveCloudRuntime": "保存云端运行时",
     "memory": "记忆"
+  },
+  "memory": {
+    "title": "记忆",
+    "add": "+ 记忆",
+    "addButton": "+ 新增记忆",
+    "tabs": {
+      "all": "全部",
+      "learnings": "教训",
+      "results": "结果",
+      "context": "上下文",
+      "patterns": "模式"
+    },
+    "loading": "加载中...",
+    "empty": "还没有记忆项。",
+    "search": {
+      "placeholder": "搜索记忆...",
+      "button": "搜索",
+      "searching": "搜索中..."
+    },
+    "editor": {
+      "title": "新增记忆",
+      "types": {
+        "learning": "教训",
+        "taskResult": "任务结果",
+        "context": "上下文",
+        "pattern": "模式"
+      },
+      "contentPlaceholder": "这个 agent 应该记住什么?",
+      "private": "私有 (只有这个 agent)",
+      "save": "保存"
+    },
+    "item": {
+      "delete": "删除",
+      "confirm": "确认",
+      "cancel": "取消"
+    }
   },
   "navigation": {
     "dashboard": "仪表盘",
