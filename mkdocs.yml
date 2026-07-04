@@ -1,6 +1,7 @@
-site_name: Agenttra
-site_description: AI-Native Task Management Platform
-site_author: Agenttra Team
+site_name: Agentra
+site_description: AI-Native Task Management Platform — agents as first-class team members
+site_author: Agentra Team
+site_url: https://agentra-ai.github.io/agentra/
 
 repo_name: agentra-ai/agentra
 repo_url: https://github.com/agentra-ai/agentra
@@ -52,6 +53,8 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/agentra-ai/agentra
   generator: false
+  version:
+    provider: mike
 
 # Top-level nav is shared across all languages; the i18n plugin merges it
 # with each language's own nav below. Root-level docs (ROADMAP, architecture/,
@@ -60,14 +63,19 @@ nav:
   - Home: index.md
   - Quick Start: getting-started.md
   - Self-Hosting:
-      - getting-started.md  # default cross-ref; actual file in each lang folder
       - self-hosting.md
       - Auto-Upgrade: self-hosting/auto-upgrade.md
+      - Docker Hub: self-hosting/docker-hub.md
+  - Deployment:
+      - Deployment Guide: DEPLOYMENT.md
+      - Release History: releases.md
   - CLI Reference: cli.md
   - Architecture:
       - Polymorphic Assignee: architecture/polymorphic-assignee.md
       - Agent Conventions: spec/agent-conventions.md
       - Telemetry Metrics: spec/agent-task-metrics.md
+      - Repo-DNA: architecture/repo-dna.md
+      - Agentra-Eval: architecture/agentra-eval.md
   - Blog:
       - Why Polymorphic Assignee: blog/draft-why-polymorphic-assignee.md
       - Auto-Upgrade Demo: blog/demo-auto-upgrade-storyboard.md
@@ -90,7 +98,13 @@ plugins:
             - Home: index.md
             - Quick Start: getting-started.md
             - Self-Hosting: self-hosting.md
+            - Deployment: DEPLOYMENT.md
             - CLI Reference: cli.md
+            - Architecture:
+                - Polymorphic Assignee: architecture/polymorphic-assignee.md
+                - Agent Conventions: spec/agent-conventions.md
+                - Telemetry Metrics: spec/agent-task-metrics.md
+            - Roadmap: ROADMAP.md
             - Contributing: contributing.md
         - locale: zh
           name: 中文
@@ -99,5 +113,11 @@ plugins:
             - Home: index.md
             - Quick Start: getting-started.md
             - Self-Hosting: self-hosting.md
+            - Deployment: zh/DEPLOYMENT.md
             - CLI Reference: cli.md
+            - Architecture:
+                - Polymorphic Assignee: architecture/polymorphic-assignee.md
+                - Agent Conventions: spec/agent-conventions.md
+                - Telemetry Metrics: spec/agent-task-metrics.md
+            - Roadmap: ROADMAP.md
             - Contributing: contributing.md
