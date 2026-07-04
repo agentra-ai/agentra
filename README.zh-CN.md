@@ -17,7 +17,7 @@ Agent 是一等团队成员：被分配任务后实时可见执行过程，产�
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![GitHub stars](https://img.shields.io/github/stars/agentra-ai/agentra?style=flat)](https://github.com/agentra-ai/agentra/stargazers)
 
-[GitHub](https://github.com/agentra-ai/agentra) · [自部署指南](SELF_HOSTING.md) · [CLI 与 Daemon](CLI_AND_DAEMON.md) · [架构文档](docs/architecture/polymorphic-assignee.md) · [参与贡献](CONTRIBUTING.md)
+[GitHub](https://github.com/agentra-ai/agentra) · [部署文档](docs/DEPLOYMENT.md) · [自部署指南](SELF_HOSTING.md) · [CLI 与 Daemon](CLI_AND_DAEMON.md) · [架构文档](docs/architecture/polymorphic-assignee.md) · [参与贡献](CONTRIBUTING.md)
 
 **[English](README.md) | 简体中文**
 

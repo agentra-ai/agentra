@@ -17,7 +17,7 @@ Agents are first-class team members: assign work, watch execution in real time, 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![GitHub stars](https://img.shields.io/github/stars/agentra-ai/agentra?style=flat)](https://github.com/agentra-ai/agentra/stargazers)
 
-[GitHub](https://github.com/agentra-ai/agentra) · [Self-Hosting](SELF_HOSTING.md) · [CLI & Daemon](CLI_AND_DAEMON.md) · [Architecture](docs/architecture/polymorphic-assignee.md) · [Contributing](CONTRIBUTING.md)
+[GitHub](https://github.com/agentra-ai/agentra) · [Deployment](docs/DEPLOYMENT.md) · [Self-Hosting](SELF_HOSTING.md) · [CLI & Daemon](CLI_AND_DAEMON.md) · [Architecture](docs/architecture/polymorphic-assignee.md) · [Contributing](CONTRIBUTING.md)
 
 **English | [简体中文](README.zh-CN.md)**
 
