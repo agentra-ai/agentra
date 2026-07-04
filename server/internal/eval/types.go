@@ -50,7 +50,7 @@ func (e *Evaluator) CompileExpected(gc GoldenIssue) (*regexp.Regexp, error) {
 
 // Score returns 0-1 based on whether the agent output matches expected test.
 func (e *Evaluator) Score(gc GoldenIssue, output string) float64 {
-	r, err := e.CompileExpected(gc
+	r, err := e.CompileExpected(gc)
 	if err != nil || r == nil {
 		return 0
 	}

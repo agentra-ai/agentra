@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
 
 // TestRecordTaskMetric_FireAndForget verifies the hook at the heart of Issue #11:
@@ -36,18 +37,19 @@ func TestRecordTaskMetric_FireAndForget(t *testing.T) {
 		t.Skipf("skipping: db not reachable: %v", err)
 	}
 
-	q := generated.New(pool)
+	queries := db.New(pool)
 
-	agents, err := q.ListAgentsByWorkspace(ctx, mustFirstWorkspaceID(t, q))
+	// Fixture: pick any agent from the workspace.
+	agents, err := queries.ListAgentsByWorkspace(ctx, mustFirstWorkspaceID(t, queries))
 	if err != nil || len(agents) == 0 {
 		t.Skipf("no agent fixture: %v", err)
 	}
 	agent := agents[0]
 
-	// Synthetic issue so the test is self-contained.
-	issue, err := q.CreateIssue(ctx, generated.CreateIssueParams{
+	// Fixture: one issue to attach metrics to.
+	issue, err := queries.CreateIssue(ctx, db.CreateIssueParams{
 		WorkspaceID: agent.WorkspaceID,
-		Title:       "[smoke] metrics hook test " + time.Now().Format("20060102150405"),
+		Title:       "[smoke] metrics hook " + time.Now().Format("20060102150405"),
 		Status:      "todo",
 		Priority:    "low",
 		CreatorType: "member",
@@ -57,8 +59,8 @@ func TestRecordTaskMetric_FireAndForget(t *testing.T) {
 		t.Fatalf("create issue: %v", err)
 	}
 
-	// Synthetic task row is required so recordTaskMetric can build FK refs.
-	task, err := q.CreateAgentTask(ctx, generated.CreateAgentTaskParams{
+	// Fixture: a completed task is required for the FK in agent_task_metrics.
+	task, err := queries.CreateAgentTask(ctx, db.CreateAgentTaskParams{
 		AgentID:     agent.ID,
 		RuntimeID:   agent.RuntimeID,
 		IssueID:     issue.ID,
@@ -70,10 +72,9 @@ func TestRecordTaskMetric_FireAndForget(t *testing.T) {
 		t.Fatalf("create task: %v", err)
 	}
 
-	ts := &TaskService{Queries: q}
-
-	// Fire the hook exactly as production CompleteTask does.
-	ts.recordTaskMetric(ctx, generated.AgentTaskQueue{
+	// Fire the hook the same way CompleteTask does.
+	ts := &TaskService{Queries: queries}
+	ts.recordTaskMetric(ctx, db.AgentTaskQueue{
 		ID:          task.ID,
 		WorkspaceID: agent.WorkspaceID,
 		IssueID:     issue.ID,
@@ -81,13 +82,8 @@ func TestRecordTaskMetric_FireAndForget(t *testing.T) {
 		RuntimeType: "local",
 	}, "completed", 1234, 100, 200, 0.001, "")
 
-	// Verify: exactly one metric row exists for this issue.
-	rows, err := q.GetMetricsByIssue(ctx, task.ID)
-	if err != nil {
-		t.Fatalf("GetMetricsByIssue: %v", err)
-	}
-	// task.ID matches the IssueID param? No — GetMetricsByIssue takes issueID.
-	rows, err = q.GetMetricsByIssue(ctx, issue.ID)
+	// Verify: exactly one metric row exists for this issue, status=completed.
+	rows, err := queries.GetMetricsByIssue(ctx, issue.ID)
 	if err != nil {
 		t.Fatalf("GetMetricsByIssue: %v", err)
 	}
@@ -102,10 +98,10 @@ func TestRecordTaskMetric_FireAndForget(t *testing.T) {
 	}
 }
 
-// mustFirstWorkspaceID returns the first workspace (CI seeds exactly one).
-func mustFirstWorkspaceID(t *testing.T, q *generated.Queries) pgtype.UUID {
+
+func mustFirstWorkspaceID(t *testing.T, queries *db.Queries) pgtype.UUID {
 	t.Helper()
-	ws, err := q.ListWorkspaces(context.Background())
+	ws, err := queries.ListWorkspaces(context.Background())
 	if err != nil || len(ws) == 0 {
 		t.Skipf("no workspace fixture: %v", err)
 	}
