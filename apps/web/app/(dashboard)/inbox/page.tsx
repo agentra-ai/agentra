@@ -6,7 +6,6 @@ import { useDefaultLayout } from "react-resizable-panels";
 import { useFormatter, useTranslations } from "next-intl";
 import { useInboxStore } from "@/features/inbox";
 import { IssueDetail, StatusIcon, PriorityIcon } from "@/features/issues/components";
-import { STATUS_CONFIG, PRIORITY_CONFIG } from "@/features/issues/config";
 import { useActorName } from "@/features/workspace";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { toast } from "sonner";
@@ -85,12 +84,13 @@ function shortDate(dateStr: string, f: Formatter): string {
 function InboxDetailLabel({ item }: { item: InboxItem }) {
   const { getActorName } = useActorName();
   const f = useFormatter();
+  const tIssues = useTranslations("issues");
   const details = item.details ?? {};
 
   switch (item.type) {
     case "status_changed": {
       if (!details.to) return <span>{typeLabels[item.type]}</span>;
-      const label = STATUS_CONFIG[details.to as IssueStatus]?.label ?? details.to;
+      const label = tIssues(`status.${details.to}`);
       return (
         <span className="inline-flex items-center gap-1">
           Set status to
@@ -101,7 +101,7 @@ function InboxDetailLabel({ item }: { item: InboxItem }) {
     }
     case "priority_changed": {
       if (!details.to) return <span>{typeLabels[item.type]}</span>;
-      const label = PRIORITY_CONFIG[details.to as IssuePriority]?.label ?? details.to;
+      const label = tIssues(`priority.${details.to}`);
       return (
         <span className="inline-flex items-center gap-1">
           Set priority to
