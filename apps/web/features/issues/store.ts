@@ -5,6 +5,7 @@ import type { Issue } from "@/shared/types";
 import { toast } from "sonner";
 import { api } from "@/shared/api";
 import { createLogger } from "@/shared/logger";
+import { storeT } from "@/shared/i18n-store";
 
 const logger = createLogger("issue-store");
 
@@ -35,7 +36,7 @@ export const useIssueStore = create<IssueState>((set, get) => ({
       set({ issues: res.issues, loading: false });
     } catch (err) {
       logger.error("fetch failed", err);
-      toast.error("Failed to load issues");
+      toast.error(storeT("issuesStore.loadFailed"));
       if (isInitialLoad) set({ loading: false });
     }
   },

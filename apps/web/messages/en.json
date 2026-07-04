@@ -478,6 +478,12 @@
       "empty": "No subtasks yet."
     }
   },
+  "realtime": {
+    "workspaceDeleted": "This workspace was deleted",
+    "memberRemoved": "You were removed from this workspace",
+    "invited": "You were invited to {workspace}",
+    "invitedFallback": "a workspace"
+  },
   "traces": {
     "status": {
       "loading": "Loading traces",
@@ -548,6 +554,20 @@
     "deleteIssue": "Delete Issue",
     "deleteConfirm": "Are you sure you want to delete this issue?",
     "deleteWarning": "This action cannot be undone."
+  },
+  "issuesStore": {
+    "loadFailed": "Failed to load issues"
+  },
+  "workspaceStore": {
+    "loadMembersFailed": "Failed to load members",
+    "loadAgentsFailed": "Failed to load agents",
+    "refreshWorkspacesFailed": "Failed to refresh workspaces",
+    "refreshMembersFailed": "Failed to refresh members",
+    "refreshAgentsFailed": "Failed to refresh agents",
+    "refreshSkillsFailed": "Failed to refresh skills"
+  },
+  "inboxStore": {
+    "loadFailed": "Failed to load inbox"
   },
   "time": {
     "justNow": "Just now",
@@ -839,12 +859,34 @@
     "dangerZone": "Danger Zone",
     "leaveWorkspace": "Leave workspace",
     "leaveWorkspaceDescription": "Remove yourself from this workspace.",
+    "leaveWarningTitle": "Leave workspace?",
+    "leaveWarningBody": "You will lose access to this workspace. You can only rejoin if invited.",
     "deleteWorkspace": "Delete workspace",
     "deleteWorkspaceDescription": "Permanently delete this workspace and its data.",
+    "deleteWarningTitle": "Delete workspace?",
+    "deleteWarningBody": "This permanently deletes the workspace, its issues, comments, and all associated data. This cannot be undone.",
     "repositories": "Repositories",
     "repositoriesDescription": "GitHub repositories associated with this workspace. Agents use these to clone and work on code.",
     "repositoryPlaceholder": "git@github.com:owner/repo.git",
-    "descriptionPlaceholder": "Description (e.g. Go backend + Next.js frontend)"
+    "repositoryUrlPlaceholder": "https://github.com/org/repo",
+    "descriptionPlaceholder": "Description (e.g. Go backend + Next.js frontend)",
+    "addRepository": "Add repository",
+    "saving": "Saving...",
+    "save": "Save",
+    "adminOnly": "Only admins and owners can manage repositories.",
+    "saveSuccess": "Repositories saved",
+    "saveFailed": "Failed to save repositories",
+    "leaveFailed": "Failed to leave workspace",
+    "deleteFailed": "Failed to delete workspace",
+    "settingsSaveSuccess": "Workspace settings saved",
+    "settingsSaveFailed": "Failed to save workspace settings",
+    "slug": "Slug"
+  },
+  "account": {
+    "avatarUpdated": "Avatar updated",
+    "profileUpdated": "Profile updated",
+    "uploadAvatarFailed": "Failed to upload avatar",
+    "profileUpdateFailed": "Failed to update profile"
   },
   "loops": {
     "title": "Loops",

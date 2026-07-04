@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useTranslations } from "next-intl";
 import type { WSClient } from "@/shared/api";
 import { toast } from "sonner";
 import { useIssueStore } from "@/features/issues";
@@ -33,6 +34,7 @@ const logger = createLogger("realtime-sync");
  * by individual components via useWSEvent — not here.
  */
 export function useRealtimeSync(ws: WSClient | null) {
+  const t = useTranslations("realtime");
   // Main sync: onAny → refreshMap with debounce
   useEffect(() => {
     if (!ws) return;
@@ -120,7 +122,7 @@ export function useRealtimeSync(ws: WSClient | null) {
       const currentWs = useWorkspaceStore.getState().workspace;
       if (currentWs?.id === workspace_id) {
         logger.warn("current workspace deleted, switching");
-        toast.info("This workspace was deleted");
+        toast.info(t("workspaceDeleted"));
         useWorkspaceStore.getState().refreshWorkspaces();
       }
     });
@@ -130,7 +132,7 @@ export function useRealtimeSync(ws: WSClient | null) {
       const myUserId = useAuthStore.getState().user?.id;
       if (user_id === myUserId) {
         logger.warn("removed from workspace, switching");
-        toast.info("You were removed from this workspace");
+        toast.info(t("memberRemoved"));
         useWorkspaceStore.getState().refreshWorkspaces();
       }
     });
@@ -141,7 +143,7 @@ export function useRealtimeSync(ws: WSClient | null) {
       if (member.user_id === myUserId) {
         useWorkspaceStore.getState().refreshWorkspaces();
         toast.info(
-          `You were invited to ${workspace_name ?? "a workspace"}`,
+          t("invited", { workspace: workspace_name ?? t("invitedFallback") }),
         );
       }
     });

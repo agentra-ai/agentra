@@ -14,6 +14,7 @@ import { useFileUpload } from "@/shared/hooks/use-file-upload";
 
 export function AccountTab() {
   const t = useTranslations("settings");
+  const tAccount = useTranslations("account");
   const tCommon = useTranslations("common");
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
@@ -44,9 +45,9 @@ export function AccountTab() {
       if (!result) return;
       const updated = await api.updateMe({ avatar_url: result.link });
       setUser(updated);
-      toast.success("Avatar updated");
+      toast.success(tAccount("avatarUpdated"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to upload avatar");
+      toast.error(err instanceof Error ? err.message : tAccount("uploadAvatarFailed"));
     }
   };
 
@@ -55,9 +56,9 @@ export function AccountTab() {
     try {
       const updated = await api.updateMe({ name: profileName });
       setUser(updated);
-      toast.success("Profile updated");
+      toast.success(tAccount("profileUpdated"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to update profile");
+      toast.error(e instanceof Error ? e.message : tAccount("profileUpdateFailed"));
     } finally {
       setProfileSaving(false);
     }

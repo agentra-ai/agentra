@@ -8,6 +8,7 @@ import { useRuntimeStore } from "@/features/runtimes";
 import { toast } from "sonner";
 import { api } from "@/shared/api";
 import { createLogger } from "@/shared/logger";
+import { storeT } from "@/shared/i18n-store";
 
 const logger = createLogger("workspace-store");
 
@@ -79,12 +80,12 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     const [nextMembers, nextAgents, nextSkills] = await Promise.all([
       api.listMembers(nextWorkspace.id).catch((e) => {
         logger.error("failed to load members", e);
-        toast.error("Failed to load members");
+        toast.error(storeT("workspaceStore.loadMembersFailed"));
         return [] as MemberWithUser[];
       }),
       api.listAgents({ workspace_id: nextWorkspace.id, include_archived: true }).catch((e) => {
         logger.error("failed to load agents", e);
-        toast.error("Failed to load agents");
+        toast.error(storeT("workspaceStore.loadAgentsFailed"));
         return [] as Agent[];
       }),
       api.listSkills().catch(() => [] as Skill[]),
@@ -128,7 +129,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       return wsList;
     } catch (e) {
       logger.error("failed to refresh workspaces", e);
-      toast.error("Failed to refresh workspaces");
+      toast.error(storeT("workspaceStore.refreshWorkspacesFailed"));
       return get().workspaces;
     }
   },
@@ -141,7 +142,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       set({ members });
     } catch (e) {
       logger.error("failed to refresh members", e);
-      toast.error("Failed to refresh members");
+      toast.error(storeT("workspaceStore.refreshMembersFailed"));
     }
   },
 
@@ -158,7 +159,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       set({ agents });
     } catch (e) {
       logger.error("failed to refresh agents", e);
-      toast.error("Failed to refresh agents");
+      toast.error(storeT("workspaceStore.refreshAgentsFailed"));
     }
   },
 
@@ -178,7 +179,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       set({ skills: merged });
     } catch (e) {
       logger.error("failed to refresh skills", e);
-      toast.error("Failed to refresh skills");
+      toast.error(storeT("workspaceStore.refreshSkillsFailed"));
     }
   },
 

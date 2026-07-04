@@ -478,6 +478,12 @@
       "empty": "暂无子任务。"
     }
   },
+  "realtime": {
+    "workspaceDeleted": "该工作区已被删除",
+    "memberRemoved": "你已被移出该工作区",
+    "invited": "你已被邀请加入 {workspace}",
+    "invitedFallback": "一个工作区"
+  },
   "traces": {
     "status": {
       "loading": "正在加载 Traces",
@@ -548,6 +554,20 @@
     "deleteIssue": "删除问题",
     "deleteConfirm": "确定要删除这个问题吗？",
     "deleteWarning": "此操作无法撤销。"
+  },
+  "issuesStore": {
+    "loadFailed": "加载议题失败"
+  },
+  "workspaceStore": {
+    "loadMembersFailed": "加载成员失败",
+    "loadAgentsFailed": "加载代理失败",
+    "refreshWorkspacesFailed": "刷新工作空间失败",
+    "refreshMembersFailed": "刷新成员失败",
+    "refreshAgentsFailed": "刷新代理失败",
+    "refreshSkillsFailed": "刷新技能失败"
+  },
+  "inboxStore": {
+    "loadFailed": "加载收件箱失败"
   },
   "time": {
     "justNow": "刚刚",
@@ -839,12 +859,34 @@
     "dangerZone": "危险区域",
     "leaveWorkspace": "离开工作空间",
     "leaveWorkspaceDescription": "从工作空间中移除您自己。",
+    "leaveWarningTitle": "离开工作空间？",
+    "leaveWarningBody": "您将失去此工作空间的访问权限。仅在被邀请后才能重新加入。",
     "deleteWorkspace": "删除工作空间",
     "deleteWorkspaceDescription": "永久删除此工作空间及其数据。",
+    "deleteWarningTitle": "删除工作空间？",
+    "deleteWarningBody": "此操作将永久删除工作空间、其议题、评论以及所有相关数据，且无法撤销。",
     "repositories": "仓库",
     "repositoriesDescription": "与工作空间关联的 GitHub 仓库。代理使用这些来克隆和处理代码。",
     "repositoryPlaceholder": "git@github.com:owner/repo.git",
-    "descriptionPlaceholder": "描述（例如：Go 后端 + Next.js 前端）"
+    "repositoryUrlPlaceholder": "https://github.com/org/repo",
+    "descriptionPlaceholder": "描述（例如：Go 后端 + Next.js 前端）",
+    "addRepository": "添加仓库",
+    "saving": "保存中…",
+    "save": "保存",
+    "adminOnly": "仅管理员和所有者可以管理仓库。",
+    "saveSuccess": "仓库已保存",
+    "saveFailed": "保存仓库失败",
+    "leaveFailed": "离开工作空间失败",
+    "deleteFailed": "删除工作空间失败",
+    "settingsSaveSuccess": "工作空间设置已保存",
+    "settingsSaveFailed": "保存工作空间设置失败",
+    "slug": "标识"
+  },
+  "account": {
+    "avatarUpdated": "头像已更新",
+    "profileUpdated": "个人资料已更新",
+    "uploadAvatarFailed": "上传头像失败",
+    "profileUpdateFailed": "更新个人资料失败"
   },
   "loops": {
     "title": "循环",

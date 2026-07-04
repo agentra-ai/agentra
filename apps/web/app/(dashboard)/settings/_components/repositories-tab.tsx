@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Save, Plus, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import { api } from "@/shared/api";
 import type { WorkspaceRepo } from "@/shared/types";
 
 export function RepositoriesTab() {
+  const t = useTranslations("workspaceSettings");
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.workspace);
   const members = useWorkspaceStore((s) => s.members);
@@ -33,9 +35,9 @@ export function RepositoriesTab() {
     try {
       const updated = await api.updateWorkspace(workspace.id, { repos });
       updateWorkspace(updated);
-      toast.success("Repositories saved");
+      toast.success(t("saveSuccess"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to save repositories");
+      toast.error(e instanceof Error ? e.message : t("saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -58,12 +60,12 @@ export function RepositoriesTab() {
   return (
     <div className="space-y-8">
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold">Repositories</h2>
+        <h2 className="text-sm font-semibold">{t("repositories")}</h2>
 
         <Card>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              GitHub repositories associated with this workspace. Agents use these to clone and work on code.
+              {t("repositoriesDescription")}
             </p>
 
             {repos.map((repo, index) => (
@@ -74,7 +76,7 @@ export function RepositoriesTab() {
                     value={repo.url}
                     onChange={(e) => handleRepoChange(index, "url", e.target.value)}
                     disabled={!canManageWorkspace}
-                    placeholder="https://github.com/org/repo"
+                    placeholder={t("repositoryUrlPlaceholder")}
                     className="text-sm"
                   />
                   <Input
@@ -82,7 +84,7 @@ export function RepositoriesTab() {
                     value={repo.description}
                     onChange={(e) => handleRepoChange(index, "description", e.target.value)}
                     disabled={!canManageWorkspace}
-                    placeholder="Description (e.g. Go backend + Next.js frontend)"
+                    placeholder={t("descriptionPlaceholder")}
                     className="text-sm"
                   />
                 </div>
@@ -103,7 +105,7 @@ export function RepositoriesTab() {
               <div className="flex items-center justify-between pt-1">
                 <Button variant="outline" size="sm" onClick={handleAddRepo}>
                   <Plus className="h-3 w-3" />
-                  Add repository
+                  {t("addRepository")}
                 </Button>
                 <Button
                   size="sm"
@@ -111,14 +113,14 @@ export function RepositoriesTab() {
                   disabled={saving}
                 >
                   <Save className="h-3 w-3" />
-                  {saving ? "Saving..." : "Save"}
+                  {saving ? t("saving") : t("save")}
                 </Button>
               </div>
             )}
 
             {!canManageWorkspace && (
               <p className="text-xs text-muted-foreground">
-                Only admins and owners can manage repositories.
+                {t("adminOnly")}
               </p>
             )}
           </CardContent>

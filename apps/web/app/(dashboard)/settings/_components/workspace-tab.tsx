@@ -26,6 +26,7 @@ import { api } from "@/shared/api";
 export function WorkspaceTab() {
   const t = useTranslations("workspaceSettings");
   const tc = useTranslations("common");
+  const tws = useTranslations("workspaceSettings");
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.workspace);
   const members = useWorkspaceStore((s) => s.members);
@@ -65,9 +66,9 @@ export function WorkspaceTab() {
         context,
       });
       updateWorkspace(updated);
-      toast.success("Workspace settings saved");
+      toast.success(t("settingsSaveSuccess"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to save workspace settings");
+      toast.error(e instanceof Error ? e.message : t("settingsSaveFailed"));
     } finally {
       setSaving(false);
     }
@@ -76,15 +77,15 @@ export function WorkspaceTab() {
   const handleLeaveWorkspace = () => {
     if (!workspace) return;
     setConfirmAction({
-      title: "Leave workspace",
-      description: `Leave ${workspace.name}? You will lose access until re-invited.`,
+      title: t("leaveWarningTitle"),
+      description: t("leaveWarningBody"),
       variant: "destructive",
       onConfirm: async () => {
         setActionId("leave");
         try {
           await leaveWorkspace(workspace.id);
         } catch (e) {
-          toast.error(e instanceof Error ? e.message : "Failed to leave workspace");
+          toast.error(e instanceof Error ? e.message : t("leaveFailed"));
         } finally {
           setActionId(null);
         }
@@ -95,15 +96,15 @@ export function WorkspaceTab() {
   const handleDeleteWorkspace = () => {
     if (!workspace) return;
     setConfirmAction({
-      title: "Delete workspace",
-      description: `Delete ${workspace.name}? This cannot be undone. All issues, agents, and data will be permanently removed.`,
+      title: t("deleteWarningTitle"),
+      description: t("deleteWarningBody"),
       variant: "destructive",
       onConfirm: async () => {
         setActionId("delete-workspace");
         try {
           await deleteWorkspace(workspace.id);
         } catch (e) {
-          toast.error(e instanceof Error ? e.message : "Failed to delete workspace");
+          toast.error(e instanceof Error ? e.message : t("deleteFailed"));
         } finally {
           setActionId(null);
         }
@@ -154,7 +155,7 @@ export function WorkspaceTab() {
               />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Slug</Label>
+              <Label className="text-xs text-muted-foreground">{t("slug")}</Label>
               <div className="mt-1 rounded-md border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
                 {workspace.slug}
               </div>
