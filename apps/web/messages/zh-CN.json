@@ -492,6 +492,14 @@
     },
     "summary": "{steps} 步, {tokens} tokens, ${cost}"
   },
+  "github": {
+    "loading": "加载中…",
+    "connectTitle": "连接 GitHub",
+    "connectDescription": "连接你的 GitHub 账号以启用 PR 状态同步和自动提交。",
+    "connectButton": "连接 GitHub App",
+    "disconnect": "断开连接",
+    "prLabel": "PR"
+  },
   "inbox": {
     "title": "收件箱",
     "notifications": "通知",

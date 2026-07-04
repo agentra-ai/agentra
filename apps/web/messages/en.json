@@ -492,6 +492,14 @@
     },
     "summary": "{steps} steps, {tokens} tokens, ${cost}"
   },
+  "github": {
+    "loading": "Loading...",
+    "connectTitle": "Connect GitHub",
+    "connectDescription": "Connect your GitHub account to enable PR status sync and automatic commits.",
+    "connectButton": "Connect GitHub App",
+    "disconnect": "Disconnect",
+    "prLabel": "PR"
+  },
   "inbox": {
     "title": "Inbox",
     "notifications": "Notifications",

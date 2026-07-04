@@ -1,3 +1,7 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+
 interface PRStatusBadgeProps {
   prNumber?: number
   repository?: string
@@ -5,11 +9,12 @@ interface PRStatusBadgeProps {
 }
 
 export function PRStatusBadge({ prNumber, repository, status }: PRStatusBadgeProps) {
+  const t = useTranslations("github")
   if (!prNumber) return null
 
   return (
     <div className="flex items-center gap-1 text-sm">
-      <span className="text-muted-foreground">PR</span>
+      <span className="text-muted-foreground">{t("prLabel")}</span>
       <a
         href={`https://github.com/${repository}/pull/${prNumber}`}
         target="_blank"
