@@ -2,7 +2,7 @@
 // covers the 5 Agentra categories with enough surface to catch template
 // regressions without bursting the time budget.
 
-package seed
+package seed // auto-generated dataset
 
 import "github.com/agentra-ai/agentra/server/internal/eval"
 

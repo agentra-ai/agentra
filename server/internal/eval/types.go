@@ -50,7 +50,7 @@ func (e *Evaluator) CompileExpected(gc GoldenIssue) (*regexp.Regexp, error) {
 
 // Score returns 0-1 based on whether the agent output matches expected test.
 func (e *Evaluator) Score(gc GoldenIssue, output string) float64 {
-	r, err := e.compileExpectedHelper(gc)
+	r, err := e.CompileExpected(gc
 	if err != nil || r == nil {
 		return 0
 	}
@@ -58,4 +58,33 @@ func (e *Evaluator) Score(gc GoldenIssue, output string) float64 {
 		return 1.0
 	}
 	return 0
+}
+
+// RunHeadless runs eval against the golden dataset without spawning an
+// agent. It scores each golden case against pre-computed canned answers
+// exported from seed.DefaultAnswers (v0 smoke test only — real runs hook
+// into the daemon via Evaluator.Runner).
+func (e *Evaluator) RunHeadless(ctx context.Context, cases []GoldenIssue) RunReport {
+	report := RunReport{Total: len(cases)}
+	for _, c := range cases {
+		output := LookupAnswer(c.Slug)
+		score := e.Score(c, output)
+		cr := CaseResult{
+			Slug:     c.Slug,
+			Category: c.Category,
+			Passed:   score >= 0.5,
+			Score:    score,
+		}
+		if !cr.Passed {
+			cr.Error = "score < 0.5 in headless mode"
+			report.Failed++
+		} else {
+			report.Passed++
+		}
+		report.Cases = append(report.Cases, cr)
+	}
+	if report.Total > 0 {
+		report.Score = float64(report.Passed) / float64(report.Total) * 100.0
+	}
+	return report
 }
