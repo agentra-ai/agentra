@@ -239,10 +239,16 @@ func (h *Handler) GetPublicFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := requestUserID(r)
-	d := fileauth.Decide(r.Context(), fileAuthStore{q: h.Queries}, userID, key)
-	if !d.Allowed {
-		writeError(w, d.Status, d.Message)
-		return
+	// Public access: when no userID is present (e.g. browser <img> tags that
+	// can't send Authorization headers), skip the membership check — the
+	// 128-bit key itself is the unguessable access token. When a userID IS
+	// present (programmatic API callers), enforce workspace membership.
+	if userID != "" {
+		d := fileauth.Decide(r.Context(), fileAuthStore{q: h.Queries}, userID, key)
+		if !d.Allowed {
+			writeError(w, d.Status, d.Message)
+			return
+		}
 	}
 
 	data, contentType, err := h.Storage.Download(r.Context(), key)

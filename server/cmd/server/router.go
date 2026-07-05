@@ -184,7 +184,18 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 		r.Get("/api/me", h.GetMe)
 		r.Patch("/api/me", h.UpdateMe)
 		r.Post("/api/upload-file", h.UploadFile)
-		r.Get("/api/files/{key}", h.GetPublicFile)
+	})
+
+	// Public file access — the 128-bit key IS the access token (unguessable).
+	// <img> tags can't send Authorization headers, so this route lives
+	// outside the auth group. GetPublicFile still enforces workspace
+	// membership when a userID is supplied (programmatic API clients).
+	r.Get("/api/files/{key}", h.GetPublicFile)
+	r.Get("/files/{key}", h.GetPublicFile)
+
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Auth(queries))
+		r.Use(middleware.RefreshCloudFrontCookies(cfSigner))
 
 		r.Route("/api/workspaces", func(r chi.Router) {
 			r.Get("/", h.ListWorkspaces)
