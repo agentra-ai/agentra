@@ -3,7 +3,7 @@
 ## Overview
 
 **Feature:** Real-time Agent Workflow Visualization
-**Spec:** `docs/superpowers/specs/2026-04-25-agent-workflow-visualization-design.md`
+**Spec:** `docs/archive/specs/2026-04-25-agent-workflow-visualization-design.md`
 **Start:** 2026-04-25
 
 ## Task Breakdown

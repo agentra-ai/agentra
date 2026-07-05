@@ -1389,7 +1389,7 @@ git commit -m "feat(memory): complete agent memory RAG system"
 
 ---
 
-Plan complete and saved to `docs/superpowers/plans/2026-05-09-agent-memory-plan.md`. Two execution options:
+Plan complete and saved to `docs/archive/plans/2026-05-09-agent-memory-plan.md`. Two execution options:
 
 **1. Subagent-Driven (recommended)** - I dispatch a fresh subagent per task, review between tasks, fast iteration
 

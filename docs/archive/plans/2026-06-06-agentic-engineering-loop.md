@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.26 (server), pgx/v5 + sqlc, in-process `events.Bus` (sync pub/sub), `pkg/agent.Backend` (existing facade), `pgxpool.Pool`, `next-intl`/shadcn (web — zero new code, reuse `TaskList` view).
 
-**Spec:** `docs/superpowers/specs/2026-06-06-agentic-engineering-loop-design.md`
+**Spec:** `docs/archive/specs/2026-06-06-agentic-engineering-loop-design.md`
 
 **Prerequisites:**
 - Read the spec end-to-end (especially §5 数据模型, §6 组件, §13 实现影响)
@@ -3478,7 +3478,7 @@ Expected: PR exists, CI is running (or passing), and the diff matches the issue 
 
 - [ ] **Step 6: Document the dogfood result**
 
-Add a short entry to `docs/superpowers/dogfood-log.md` (create the file if it doesn't exist) summarizing:
+Add a short entry to `docs/archive/dogfood-log.md` (create the file if it doesn't exist) summarizing:
 - Issue ID and title
 - Number of iterations (plan → develop → review → fix → ... → done)
 - Total token cost (read from `loops.config.total_cost` once M2 lands, or estimate from backend logs)
@@ -3487,7 +3487,7 @@ Add a short entry to `docs/superpowers/dogfood-log.md` (create the file if it do
 - [ ] **Step 7: Commit the dogfood log**
 
 ```bash
-git add docs/superpowers/dogfood-log.md
+git add docs/archive/dogfood-log.md
 git commit -m "docs: log first Agentra-on-Agentra dogfood run"
 ```
 
@@ -3552,4 +3552,4 @@ git commit -m "docs: log first Agentra-on-Agentra dogfood run"
 - Token cost tracking (§8.5) is not explicitly implemented; the `task_runs.total_tokens` column already exists and is populated by the daemon's existing trace code. Coordinator simply needs to read and sum it; add this as a stretch goal in Task 16 if time permits.
 - The integration test in Task 16 is intentionally skeletal (one passing, one skipped). The implementer should flesh out the second one once the helper for seeding task_runs.output JSON is in place. This is a known gap, not a defect.
 
-Plan is complete. Saved to `docs/superpowers/plans/2026-06-06-agentic-engineering-loop.md`.
+Plan is complete. Saved to `docs/archive/plans/2026-06-06-agentic-engineering-loop.md`.

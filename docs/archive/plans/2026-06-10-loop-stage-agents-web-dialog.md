@@ -524,4 +524,4 @@ OK,所有 spec 条款都有对应 task,类型与符号一致。
 
 ## Execution
 
-Plan 写完保存到 `docs/superpowers/plans/2026-06-10-loop-stage-agents-web-dialog.md`。下面开执行,5 个 task 串行,中间有 typecheck/test 门禁。
+Plan 写完保存到 `docs/archive/plans/2026-06-10-loop-stage-agents-web-dialog.md`。下面开执行,5 个 task 串行,中间有 typecheck/test 门禁。

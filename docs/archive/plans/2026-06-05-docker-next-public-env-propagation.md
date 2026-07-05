@@ -8,7 +8,7 @@
 
 **Tech Stack:** Docker Compose, Next.js 16, Alpine-based multi-stage Dockerfile
 
-**Spec:** `docs/superpowers/specs/2026-06-05-docker-next-public-env-propagation-design.md`
+**Spec:** `docs/archive/specs/2026-06-05-docker-next-public-env-propagation-design.md`
 
 ---
 
@@ -18,7 +18,7 @@
 |------|--------|---------|
 | `.dockerignore` | Modify (delete 1 line) | Allow `.env` into build context |
 | `Dockerfile` | Modify (add 1 line) | `COPY .env apps/web/.env` into `web-builder` stage |
-| `docs/superpowers/specs/2026-06-05-...md` | Reference | Source of truth (already committed) |
+| `docs/archive/specs/2026-06-05-...md` | Reference | Source of truth (already committed) |
 
 No new files. No code changes. No test infrastructure added (this is a build-config fix; verification is the build artifact itself).
 
