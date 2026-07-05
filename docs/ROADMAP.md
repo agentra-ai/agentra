@@ -2,9 +2,18 @@
 
 **The platform where AI agents work alongside humans as true teammates — not just tools.**
 
-- Version: 0.3.0
-- Last Updated: May 2026
+- Version: v0.4.4 (working)
+- Last Updated: Jul 2026 (post-Council Route B verdict)
 - License: Apache 2.0 Open Source
+
+## Council Verdict (Jul 2026): Phase 3 Begins
+
+Per council-of-high-intelligence deliberation (Karpathy 1.5× + Machiavelli + Watts):
+
+**Route chosen: B (Billing-first)** — Seats → Billing → Projects sequence.
+- Window to capture enterprise AI-spend budget before Linear/Jira bolt on agent-native UX: 6-12 months
+- Free ≤5 seats · $6/seat base · $10/seat with agent runtime
+- Projects hierarchy deferred until billing ships (retention play, not revenue unlock)
 
 ## At a Glance
 
@@ -265,15 +274,47 @@ Expand beyond Claude/Codex/OpenCode to match swarmclaw's 23+ providers.
 
 ---
 
-## Phase 3 — Q1–Q2 2026 (6 months)
+## Phase 3 — 2026 Q3 (IN PROGRESS via Council Route B)
 
-**Team Scale — PLANNED**
+**Team Scale — STARTED**
 
-Grow beyond single workspaces. Add project hierarchy, sprint planning, collaborative review workflows, billing and seat management, and a mobile companion app.
+Per Council of High Intelligence verdict (Jul 2026): **Billing-first sequence.**
+Build seats layer first, then Stripe billing, then projects hierarchy.
+Free ≤5 seats · $6/seat/mo base · $10/seat/mo with agent runtime.
+
+### Active Issues
+
+| # | Title | Depends | Status |
+|---|---|---|---|
+| #21 | Seat Management (members + invitations + seats enforcement) | — | 🚧 |
+| #22 | Stripe Billing Integration (subscription + metering + invoices) | #21 | ⏳ |
+| #23 | Projects Hierarchy (issue grouping + milestones) | #22 | ⏳ |
 
 ### Milestones
 
-#### 3.1 Project Hierarchy & Sprint Planning
+#### 3.1 Seat Management (NEW — replaces old 3.1)
+
+Build multi-user workspace foundation:
+
+- Workspace members with roles (owner/admin/member/guest)
+- Email-based invitation flow (pending → active lifecycle)
+- Soft cap enforcement (`max_seats` from plan)
+- Roles determine billing access (only owner/admin manage subscription)
+
+Issue: [#21](https://github.com/agentra-ai/agentra/issues/21)
+
+#### 3.2 Stripe Billing Integration
+
+Seat-based subscription with two tiers:
+
+- **Pro Base** $6/seat/mo — issue management, comment, agents on self-hosted daemon
+- **Pro Agent Runtime** $10/seat/mo — includes cloud runtime agents + per-task metrics
+
+Implementation: Stripe Checkout + Customer Portal + webhook sync worker.
+
+Issue: [#22](https://github.com/agentra-ai/agentra/issues/22)
+
+#### 3.3 Project Hierarchy & Sprint Planning (DEFERRED)
 
 Introduce Projects above Issues.
 
