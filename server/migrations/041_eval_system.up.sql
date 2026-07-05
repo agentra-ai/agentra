@@ -5,7 +5,7 @@ CREATE TABLE eval_golden_issues (
     slug          TEXT NOT NULL UNIQUE,                  -- e.g. "bug-001-login-redirect"
     category      TEXT NOT NULL CHECK (category IN ('feature', 'bug', 'refactor', 'test', 'docs')),
     workspace_id  UUID NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
-    issue_id      UUID REFERENCES issues(id) ON DELETE SET NULL,
+    issue_id      UUID REFERENCES issue(id) ON DELETE SET NULL,
     title         TEXT NOT NULL,
     description   TEXT NOT NULL,
     expected_test TEXT,                                 -- regex the agent output should match
