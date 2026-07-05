@@ -218,19 +218,19 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 				})
 				// Goal-first execute endpoint
 				r.Post("/execute", h.ExecuteGoal)
-			})
 
-			// Billing (workspace-scoped, owner/admin). Note: branch is registered
-			// inside /api/workspaces above; this is a distinct set of endpoints
-			// under /api/workspaces/{id}/billing defined directly here to keep the
-			// middleware-friendly `id` param visible in the request context.
-			r.Route("/billing", func(r chi.Router) {
-				r.Use(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner", "admin"))
-				r.Get("/subscription", billingHandler.GetSubscription)
-				r.Get("/checkout", billingHandler.CreateCheckoutSession)
-				r.Get("/portal", billingHandler.CreatePortalSession)
-				r.Get("/invoices", billingHandler.ListInvoices)
-				r.Get("/usage", billingHandler.GetUsage)
+				// Billing (workspace-scoped, owner/admin). Must live inside the
+				// {id} subrouter so chi.URLParam(r, "id") resolves to the workspace
+				// id from the matched path — registering it as a sibling of {id}
+				// captures the literal segment "billing" as the id param instead.
+				r.Route("/billing", func(r chi.Router) {
+					r.Use(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner", "admin"))
+					r.Get("/subscription", billingHandler.GetSubscription)
+					r.Get("/checkout", billingHandler.CreateCheckoutSession)
+					r.Get("/portal", billingHandler.CreatePortalSession)
+					r.Get("/invoices", billingHandler.ListInvoices)
+					r.Get("/usage", billingHandler.GetUsage)
+				})
 			})
 
 			// Projects (workspace-scoped)
