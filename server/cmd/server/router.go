@@ -284,6 +284,37 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 			r.Use(middleware.RequireWorkspaceMember(queries))
 		})
 
+		// Issues (workspace-scoped; workspace_id comes from X-Workspace-ID header or query param)
+		r.Route("/api/issues", func(r chi.Router) {
+			r.Get("/", h.ListIssues)
+			r.Post("/", h.CreateIssue)
+			r.Post("/batch-update", h.BatchUpdateIssues)
+			r.Post("/batch-delete", h.BatchDeleteIssues)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", h.GetIssue)
+				r.Put("/", h.UpdateIssue)
+				r.Delete("/", h.DeleteIssue)
+				r.Post("/comments", h.CreateComment)
+				r.Get("/comments", h.ListComments)
+				r.Get("/timeline", h.ListTimeline)
+				r.Get("/subscribers", h.ListIssueSubscribers)
+				r.Post("/subscribe", h.SubscribeToIssue)
+				r.Post("/unsubscribe", h.UnsubscribeFromIssue)
+				r.Get("/active-task", h.GetActiveTaskForIssue)
+				r.Post("/tasks/{taskId}/cancel", h.CancelTask)
+				r.Get("/task-runs", h.ListTasksByIssue)
+				r.Get("/traces", h.ListTracesByIssue)
+				r.Post("/reactions", h.AddIssueReaction)
+				r.Delete("/reactions", h.RemoveIssueReaction)
+				r.Get("/attachments", h.ListAttachments)
+				r.Post("/auto-decompose", h.AutoDecomposeIssue)
+			})
+		})
+
+		// Attachments
+		r.Get("/api/attachments/{id}", h.GetAttachmentByID)
+		r.Delete("/api/attachments/{id}", h.DeleteAttachment)
+
 		// Git hooks API
 		r.Route("/api/git", func(r chi.Router) {
 			r.Post("/link-commit", h.LinkCommit)
