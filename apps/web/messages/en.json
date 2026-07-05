@@ -78,7 +78,12 @@
       "low": "Low",
       "no_priority": "No Priority"
     },
-    "assignee": "Assignee",
+    "assignee": {
+      "assignToPlaceholder": "Assign to...",
+      "membersSection": "Members",
+      "agentsSection": "Agents",
+      "unassigned": "Unassigned"
+    },
     "reporter": "Reporter",
     "labels": "Labels",
     "dueDate": "Due Date",
@@ -90,7 +95,13 @@
     "all": "All",
     "allIssues": "All Issues",
     "myIssues": "My Issues",
-    "board": "Board",
+    "board": {
+      "addIssue": "Add issue",
+      "hiddenColumns": "Hidden columns",
+      "hideColumn": "Hide column",
+      "noIssues": "No issues",
+      "showColumn": "Show column"
+    },
     "activity": {
       "created": "created this issue",
       "statusChanged": "changed status from {from} to {to}",
@@ -132,23 +143,10 @@
       "unknown": "Agent",
       "waitingForOutput": "Waiting for agent output..."
     },
-    "assignee": {
-      "assignToPlaceholder": "Assign to...",
-      "membersSection": "Members",
-      "agentsSection": "Agents",
-      "unassigned": "Unassigned"
-    },
     "batch": {
       "deleteQuestion": "Delete {count} issue{count, plural, one {} other {s}}?",
       "deleteDescription": "This action cannot be undone. This will permanently delete the selected issue{count, plural, one {} other {s}} and all associated data.",
       "selectedLabel": "{count} selected"
-    },
-    "board": {
-      "addIssue": "Add issue",
-      "hiddenColumns": "Hidden columns",
-      "hideColumn": "Hide column",
-      "noIssues": "No issues",
-      "showColumn": "Show column"
     },
     "comments": {
       "copy": "Copy",
@@ -266,6 +264,9 @@
       "loadReactionsFailed": "Failed to load reactions",
       "loadSubscribersFailed": "Failed to load subscribers",
       "updateSubscriberFailed": "Failed to update subscriber"
+    },
+    "addColumn": {
+      "addIssue": "Add issue"
     }
   },
   "workspace": {

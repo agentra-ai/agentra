@@ -89,7 +89,7 @@ export function BoardColumn({
                 </Button>
               }
             />
-            <TooltipContent>Add issue</TooltipContent>
+            <TooltipContent>{t("addColumn.addIssue")}</TooltipContent>
           </Tooltip>
         </div>
       </div>

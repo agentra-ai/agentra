@@ -78,7 +78,12 @@
       "low": "低",
       "no_priority": "无优先级"
     },
-    "assignee": "负责人",
+    "assignee": {
+      "assignToPlaceholder": "分配给…",
+      "membersSection": "成员",
+      "agentsSection": "代理",
+      "unassigned": "未分配"
+    },
     "reporter": "报告人",
     "labels": "标签",
     "dueDate": "截止日期",
@@ -90,7 +95,13 @@
     "all": "全部",
     "allIssues": "所有问题",
     "myIssues": "我的问题",
-    "board": "看板",
+    "board": {
+      "addIssue": "添加问题",
+      "hiddenColumns": "已隐藏的列",
+      "hideColumn": "隐藏列",
+      "noIssues": "没有问题",
+      "showColumn": "显示列"
+    },
     "activity": {
       "created": "创建了此问题",
       "statusChanged": "状态从 {from} 更改为 {to}",
@@ -132,23 +143,10 @@
       "unknown": "Agent",
       "waitingForOutput": "等待 Agent 输出..."
     },
-    "assignee": {
-      "assignToPlaceholder": "分配给…",
-      "membersSection": "成员",
-      "agentsSection": "代理",
-      "unassigned": "未分配"
-    },
     "batch": {
       "deleteQuestion": "删除 {count} 个问题？",
       "deleteDescription": "此操作无法撤销。将永久删除选中的问题及其所有关联数据。",
       "selectedLabel": "已选择 {count} 个"
-    },
-    "board": {
-      "addIssue": "添加问题",
-      "hiddenColumns": "已隐藏的列",
-      "hideColumn": "隐藏列",
-      "noIssues": "没有问题",
-      "showColumn": "显示列"
     },
     "comments": {
       "copy": "复制",
@@ -266,6 +264,9 @@
       "loadReactionsFailed": "加载反应失败",
       "loadSubscribersFailed": "加载订阅者失败",
       "updateSubscriberFailed": "更新订阅者失败"
+    },
+    "addColumn": {
+      "addIssue": "添加 Issue"
     }
   },
   "workspace": {
@@ -466,7 +467,7 @@
     },
     "graph": {
       "loading": "正在加载 DAG 视图...",
-      "error" : "错误：{detail}",
+      "error": "错误：{detail}",
       "empty": "暂无图数据。请自动拆解某个议题以创建。",
       "noDescription": "暂无描述",
       "agentLabel": "代理：{name}"
