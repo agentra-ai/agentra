@@ -4,9 +4,16 @@ import (
 	"context"
 	"regexp"
 	"time"
-
-	"github.com/agentra-ai/agentra/server/pkg/codex/dna"
 )
+
+// LookupAnswer is a package-level func var so the seed package can register
+// its answer lookup without a circular import (eval ↔ seed).
+// Callers must call seed.RegisterLookup() before using Evaluator.RunHeadless.
+var LookupAnswer func(slug string) string
+
+func init() {
+	LookupAnswer = func(slug string) string { return "" }
+}
 
 // Evaluator orchestrates one benchmark run over the golden dataset.
 type Evaluator struct {

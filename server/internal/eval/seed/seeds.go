@@ -2,14 +2,22 @@
 // covers the 5 Agentra categories with enough surface to catch template
 // regressions without bursting the time budget.
 
-package seed // auto-generated dataset
+package seed
 
-import "github.com/agentra-ai/agentra/server/internal/eval"
+// GoldenIssue is mirrored here to avoid import cycle (eval ↔ seed).
+// The eval package exports its own copy; both stay in sync manually.
+type GoldenIssue struct {
+	Slug         string
+	Category     string
+	Title        string
+	Description  string
+	ExpectedTest string
+}
 
 // DefaultCases is the v0 golden dataset. Categories are interleaved so a
 // regression that drops, say, all bug-fixing capability shows up immediately
 // even if the overall score change is small.
-var DefaultCases = []eval.GoldenIssue{
+var DefaultCases = []GoldenIssue{
 	// ---------------- feature ----------------
 	{
 		Slug:        "feat-001-cli-status-json",

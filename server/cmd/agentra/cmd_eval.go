@@ -10,6 +10,12 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/eval/seed"
 )
 
+func init() {
+	// Wire the headless-mode answer lookup so `agentra eval run` works without
+	// a daemon. Safe to call in all CLI subcommands; is a no-op on subsequent calls.
+	seed.RegisterLookup()
+}
+
 var evalCmd = &cobra.Command{
 	Use:   "eval",
 	Short: "Run the Agentra-Eval benchmark suite (Issue #13)",
