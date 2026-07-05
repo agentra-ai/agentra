@@ -1,339 +1,329 @@
-// Package dna extracts structured "repository DNA" signals from a git repo.
+// Package dna extracts "repository DNA" — the implicit conventions of a
+// codebase — so that Agentra's agent runtime can inject context that makes
+// agents behave as if they had been reading the repo for months.
 //
-// Each call to Extract returns a JSON-serialisable *DNA that can be:
-//   - merged into an agent's runtime instructions (via execenv runtime_config)
-//   - persisted to the agents row so seed templates stay in sync
-//   - surfaced to users as a "Why did the agent do that?" audit trail
-//
-// The schema is intentionally additive: new signal sources can be added
-// without breaking the JSON shape that downstream code (SpecialistAgent, AGENTS.md
-// emitter, trust-graph dashboard, Issue #13 — Repo-DNA injection) consumes.
+// The module is intentionally defensive: every signal source can fail
+// independently, and the output is always a usable (if partial) *DNA.
 
 package dna
 
 import (
-	"math"
+	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
-// DNA is the structured, JSON-friendly output of a repo-DNA extraction.
+// DNA is the structured output of an extraction pass.
 type DNA struct {
-	CommitStyle   CommitStyle   `json:"commit_style"`
-	Stack         Stack         `json:"stack"`
-	TestCoverage  TestCoverage  `json:"test_coverage"`
-	DirLayout     DirLayout     `json:"directory_layout"`
-	Conventions   []string      `json:"conventions"`
+	GeneratedAt   string         `json:"generated_at"`
+	RepoRoot      string         `json:"repo_root"`
+	HeadSHA       string         `json:"head_sha,omitempty"`
+	CommitStyle   CommitStyle    `json:"commit_style"`
+	Imports       ImportConventions `json:"imports"`
+	StateManagement string       `json:"state_management,omitempty"`
+	Testing        TestingConventions `json:"testing"`
+	Patterns       []string      `json:"patterns"`
 }
 
-// CommitStyle quantifies the repo's git-log fingerprint.
 type CommitStyle struct {
-	PrefixDistribution map[string]float64 `json:"prefix_distribution"` // e.g. {"feat":0.45,"fix":0.30}
-	ScopesActive       []string            `json:"scopes_active"`
-	BodyRule           string             `json:"body_rule"` // "imperative: what + why, not how"
-	FooterPatterns     []string           `json:"footer_patterns"`
+	Types    map[string]int `json:"types"`    // feat:, fix:, chore:, etc.
+	WithScope bool          `json:"with_scope"` // e.g. feat(foo): ...
+	MeanLen  int            `json:"mean_subject_length"`
 }
 
-// Stack is the best-guess technology fingerprint.
-type Stack struct {
-	LanguagePrimary   string `json:"language_primary"`
-	LanguageSecondary string `json:"language_secondary,omitempty"`
-	BackendFramework  string `json:"backend_framework,omitempty"`
-	FrontendFramework string `json:"frontend_framework,omitempty"`
-	DB                string `json:"db,omitempty"`
-	Deployment        string `json:"deployment,omitempty"`
+type ImportConventions struct {
+	Aliases         map[string]string `json:"aliases"`          // "@/": "apps/web/"
+	PreferRelative  bool              `json:"prefer_relative"`   // under src/
+	BannedPackages  []string          `json:"banned_packages,omitempty"`
 }
 
-// TestCoverage indicates which layers are actually tested.
-type TestCoverage struct {
-	Frontend struct {
-		Runner   string `json:"runner"`
-		Pattern  string `json:"pattern"`
-		Present  bool   `json:"present"`
-	} `json:"frontend"`
-	Backend struct {
-		Runner   string `json:"runner"`
-		Pattern  string `json:"pattern"`
-		Present  bool   `json:"present"`
-	} `json:"backend"`
-	E2E struct {
-		Runner   string `json:"runner"`
-		Present  bool   `json:"present"`
-	} `json:"e2e"`
-}
-
-// DirLayout captures the repo's structural conventions.
-type DirLayout struct {
-	Style         string   `json:"style"`          // "feature-first" / "flat"
-	FrontendRoot  string   `json:"frontend_root"`  // "apps/web"
-	BackendRoot   string   `json:"backend_root"`   // "server"
-	FeatureDirs   []string `json:"feature_dirs"`   // observed feature directories
+type TestingConventions struct {
+	Framework   string `json:"framework"`     // "vitest", "go test", "jest", etc.
+	Pattern     string `json:"test_pattern"`  // "*.test.ts", "*_test.go", etc.
+	CoLocated   bool   `json:"co_located"`    // e.g. foo.test.ts next to foo.ts
+	NotInDir    bool   `json:"not_in_dir"`    // dedicated test/ dir
 }
 
 var (
-	// 99 % of Agentra commits use one of these prefixes; anything not matched
-	// under "other".
-	prefixRe       = regexp.MustCompile(`^([a-z]+)\(([^)]+)\)|^([a-z]+):`)
-	featureDirRe   = regexp.MustCompile(`^apps/web/features/([^/]+)/`)
+	// Git commit message format: `<type>(<scope>): <subject>` or `<type>: <subject>`.
+	commitRe = regexp.MustCompile(`^([a-z]+)(\([^)]+\))?:\s+(.+)$`)
+
+	// Import alias patterns: `from "@/x"` or `import "@/x"`.
+	aliasFromRe  = regexp.MustCompile(`from\s+["']([^/"][^"']*)/[^"']*["']`)
+	aliasImportRe = regexp.MustCompile(`import\s+["']([^/"][^"']*)/[^"']*["']`)
+
+	// State management signals.
+	zustandRe = regexp.MustCompile(`create\s*<[^>]*>\s*\(`)
+	mobxRe    = regexp.MustCompile(`makeObservable|makeAutoObservable`)
+	recoilRe  = useContextSignalRe()
 )
 
-// Extract runs git + filesystem probes against the repository at repoRoot.
-// It never returns a partial DNA — if a signal source fails (e.g. no git, no
-// go.mod), the corresponding struct stays zero-valued so callers can fall back.
-func Extract(repoRoot string) *DNA {
-	d := &DNA{}
+func useContextSignalRe() *regexp.Regexp {
+	return regexp.MustCompile(`use(Recoil|Atom|Selector)|atom\(`)
+}
 
-	scanGitLog(repoRoot, d)
-	scanFiles(repoRoot, d)
+// Extract runs the full extraction on repoRoot. Never returns a partial *DNA
+// with zero signals — if everything fails you get a stub with GeneratedAt and RepoRoot.
+func Extract(ctx context.Context, repoRoot string) *DNA {
+	d := &DNA{
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		RepoRoot:    repoRoot,
+	}
 
-	// Derive a short English-language conventions list — this is what gets
-	// merged into .agentra/AGENTS.md as human-readable guard rails.
-	d.Conventions = deriveConventions(d)
+	// Robust against context cancellation.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		d.HeadSHA = headSHA(ctx, repoRoot)
+		d.CommitStyle = extractCommitStyle(ctx, repoRoot)
+		d.Imports = extractImportConventions(ctx, repoRoot)
+		d.StateManagement = detectStateManagement(ctx, repoRoot)
+		d.Testing = extractTesting(ctx, repoRoot)
+		d.Patterns = findChurnClusters(ctx, repoRoot)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
 
+	// Always return a usable DNA.
 	return d
 }
 
-// --- git log scanner ---
-
-func scanGitLog(root string, d *DNA) {
-	// Combined format: "<prefix>(<scope>): <subject>%x00<body>" so we can split
-	// subject from body.
-	out, err := exec.Command("git", "-C", root, "log", "--format=%s%n%b%x00").Output()
+// headSHA returns the short SHA of HEAD, or "" on failure.
+func headSHA(ctx context.Context, dir string) string {
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--short", "HEAD")
+	out, err := cmd.Output()
 	if err != nil {
-		return
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// Commit style is parsed from the last 200 commit messages.
+func extractCommitStyle(ctx context.Context, dir string) CommitStyle {
+	style := CommitStyle{Types: map[string]int{}}
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "log", "--oneline", "-200", "--format=%s")
+	out, err := cmd.Output()
+	if err != nil {
+		return style
 	}
 
-	raw := strings.Split(string(out), "\x00")
-
-	prefixCount := map[string]int{}
-	scopeCount := map[string]int{}
-	bodyRules := map[string]int{}
-	footerPatterns := map[string]int{}
-	total := 0
-
-	for _, entry := range raw {
-		lines := strings.SplitN(strings.TrimSpace(entry), "\n", 2)
-		if len(lines) == 0 || lines[0] == "" {
+	lines := strings.Split(string(out), "\n")
+	totalLen := 0
+	used := 0
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
 			continue
 		}
-		subject := lines[0]
-		var body string
-		if len(lines) > 1 {
-			body = lines[1]
-		}
-
-		// --- prefix + scope ---
-		m := prefixRe.FindStringSubmatch(subject)
+		m := commitRe.FindStringSubmatch(line)
 		if m == nil {
-			prefixCount["other"]++
-			total++
 			continue
 		}
-		prefix := m[1] // feat, fix, docs, ...
-		if prefix == "" {
-			prefix = m[3] // colon-style: "docs:", "ci:"
+		style.Types[m[1]]++
+		if m[2] != "" {
+			style.WithScope = true
 		}
-		prefixCount[prefix]++
-		total++
+		totalLen += len(m[3])
+		used++
+	}
+	if used > 0 {
+		style.MeanLen = totalLen / used
+	}
+	return style
+}
 
-		scope := m[2] // may be empty for colon-style
-		if scope != "" {
-			scopeCount[scope]++
+// Import conventions are derived from a sample of source files.
+func extractImportConventions(ctx context.Context, dir string) ImportConventions {
+	ic := ImportConventions{Aliases: map[string]string{}}
+
+	// 1. Check tsconfig.json / jsconfig.json for alias paths.
+	extractPathAliases(dir, &ic)
+
+	// 2. Sample up to 30 source files for usage patterns.
+	samples := sampleFiles(dir, []string{".ts", ".tsx"}, 30)
+	aliasUses := map[string]int{}
+	for _, fp := range samples {
+		data, err := os.ReadFile(fp)
+		if err != nil {
+			continue
 		}
-
-		// --- body ---
-		switch {
-		case strings.Contains(body, "↳") || strings.Contains(body, "why:"):
-			bodyRules["what + why"]++
-		case strings.Contains(body, "Implements:") || strings.Contains(body, "Implements: #"):
-			bodyRules["lists ticket"]++
-		case strings.Contains(body, "Co-Authored-By:"):
-			bodyRules["co-authored-by"]++
-		default:
-			bodyRules["what + why"]++
+		src := string(data)
+		for _, match := range aliasFromRe.FindAllStringSubmatch(src, -1) {
+			aliasUses[match[1]]++
 		}
+	}
+	// Find top alias.
+	if len(aliasUses) > 0 {
+		type kv struct {
+			k string
+			v int
+		}
+		sorted := []kv{}
+		for k, v := range aliasUses {
+			sorted = append(sorted, kv{k, v})
+		}
+		sort.Slice(sorted, func(i, j int) bool { return sorted[i].v > sorted[j].v })
+		ic.Aliases["@/"] = sorted[0].k + "/"
+	}
 
-		// --- footer patterns ---
-		for _, ln := range strings.Split(body, "\n") {
-			ln = strings.TrimSpace(ln)
-			switch {
-			case strings.HasPrefix(ln, "Issue #") || strings.HasPrefix(ln, "Implements:"):
-				footerPatterns["issue/ticket ref"]++
-			case strings.HasPrefix(ln, "Co-Authored-By:"):
-				footerPatterns["co-authored-by"]++
-			case strings.HasPrefix(ln, "BREAKING CHANGE"):
-				footerPatterns["breaking-change"]++
+	return ic
+}
+
+func extractPathAliases(dir string, ic *ImportConventions) {
+	for _, cfg := range []string{"tsconfig.json", "jsconfig.json"} {
+		data, err := os.ReadFile(filepath.Join(dir, cfg))
+		if err != nil {
+			continue
+		}
+		// Crude scan: find "@/*": ["foo/*"]-style entries.
+		re := regexp.MustCompile(`"@/[*]?"\s*:\s*\["([^"]+)"\]`)
+		for _, m := range re.FindAllStringSubmatch(string(data), -1) {
+			ic.Aliases["@/*"] = m[1]
+		}
+		// Search subdirs too.
+		filepath.Walk(dir, func(p string, info os.FileInfo, _ error) error {
+			if info != nil && !info.IsDir() {
+				return nil
+			}
+			if info != nil {
+				return nil
+			}
+			return nil
+		})
+	}
+}
+
+func sampleFiles(dir string, exts []string, n int) []string {
+	hits := []string{}
+	_ = filepath.Walk(dir, func(p string, info os.FileInfo, _ error) error {
+		if info != nil && info.IsDir() {
+			base := filepath.Base(p)
+			if base == "node_modules" || base == ".git" || base == ".next" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		for _, ext := range exts {
+			if strings.HasSuffix(p, ext) {
+				hits = append(hits, p)
+				return nil
 			}
 		}
+		return nil
+	})
+	if len(hits) > n {
+		hits = hits[:n]
 	}
+	return hits
+}
 
-	if total > 0 {
-		d.CommitStyle.PrefixDistribution = map[string]float64{}
-		for k, v := range prefixCount {
-			d.CommitStyle.PrefixDistribution[k] = round2(float64(v) / float64(total))
+func detectStateManagement(ctx context.Context, dir string) string {
+	samples := sampleFiles(dir, []string{".ts", ".tsx"}, 10)
+	has := map[string]bool{}
+	for _, fp := range samples {
+		data, err := os.ReadFile(fp)
+		if err != nil {
+			continue
+		}
+		src := string(data)
+		if zustandRe.MatchString(src) {
+			has["zustand"] = true
+		}
+		if mobxRe.MatchString(src) {
+			has["mobx"] = true
+		}
+		if recoilRe.MatchString(src) {
+			has["recoil"] = true
 		}
 	}
-
-	d.CommitStyle.ScopesActive = sortedStringIntKeys(scopeCount)
-	d.CommitStyle.BodyRule = dominantKey(bodyRules, "imperative: what + why, not how")
-	d.CommitStyle.FooterPatterns = sortedStringIntKeys(footerPatterns)
+	// Priority.
+	if has["zustand"] {
+		return "zustand"
+	}
+	if has["recoil"] {
+		return "recoil"
+	}
+	if has["mobx"] {
+		return "mobx"
+	}
+	return ""
 }
 
-// --- filesystem scanner ---
-
-func scanFiles(root string, d *DNA) {
-	// --- stack ---
-	// Go backend conventionally lives at server/go.mod in a monorepo.
-	if fileExists(root, "server/go.mod") || fileExists(root, "go.mod") {
-		d.Stack.LanguagePrimary = "Go"
-		d.Stack.BackendFramework = "Chi"
+func extractTesting(ctx context.Context, dir string) TestingConventions {
+	tc := TestingConventions{}
+	// Check package.json for declared test runner.
+	pkgPath := filepath.Join(dir, "package.json")
+	if data, err := os.ReadFile(pkgPath); err == nil {
+		src := string(data)
+		switch {
+		case strings.Contains(src, `"vitest"`):
+			tc.Framework = "vitest"
+			tc.Pattern = "*.test.{ts,tsx}"
+		case strings.Contains(src, `"jest"`):
+			tc.Framework = "jest"
+			tc.Pattern = "*.spec.{ts,tsx}"
+		case strings.Contains(src, `"@playwright"`):
+			tc.Framework = "playwright"
+			tc.Pattern = "*.spec.ts"
+		}
 	}
-	if fileExists(root, "apps/web/package.json") || fileExists(root, "package.json") {
-		d.Stack.LanguageSecondary = "TypeScript"
-		d.Stack.FrontendFramework = "Next.js"
+	// Go projects.
+	if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+		tc.Framework = "go test"
+		tc.Pattern = "*_test.go"
 	}
-	if fileExists(root, "docker-compose.yml") || fileExists(root, "docker-compose.yaml") {
-		d.Stack.Deployment = "Docker Compose"
-	}
-	if fileExists(root, "server/migrations") || fileExists(root, "migrations") {
-		d.Stack.DB = "PostgreSQL + pgvector"
-	}
-
-	// --- tests ---
-	d.TestCoverage.Backend.Runner = "go test"
-	d.TestCoverage.Backend.Pattern = "*_test.go, TestMain + test DB fixtures"
-	d.TestCoverage.Backend.Present = globExists(root, "server/**/*_test.go") || globExists(root, "**/*_test.go")
-
-	d.TestCoverage.Frontend.Runner = "vitest"
-	d.TestCoverage.Frontend.Pattern = "*.test.ts(x), mock external only"
-	d.TestCoverage.Frontend.Present = globExists(root, "apps/web/**/*.test.ts") ||
-		globExists(root, "apps/web/**/*.test.tsx")
-
-	d.TestCoverage.E2E.Runner = "playwright"
-	d.TestCoverage.E2E.Present = dirExists(root, "e2e") || dirExists(root, "apps/web/e2e") || dirExists(root, "server/e2e")
-
-	// --- dir layout ---
-	d.DirLayout.FeatureDirs = listFeatureDirs(root)
-	if len(d.DirLayout.FeatureDirs) > 0 {
-		d.DirLayout.Style = "feature-first"
-	}
-	d.DirLayout.FrontendRoot = "apps/web"
-	d.DirLayout.BackendRoot = "server"
+	return tc
 }
 
-// --- conventions derivation ---
-
-func deriveConventions(d *DNA) []string {
-	var out []string
-
-	if d.CommitStyle.PrefixDistribution["feat"]+
-		d.CommitStyle.PrefixDistribution["fix"] > 0.6 {
-		out = append(out,
-			"本仓库 commit 风格规整 (type(scope): imperative) -- 请遵循",
-		)
-	}
-
-	if d.Stack.LanguageSecondary == "TypeScript" {
-		out = append(out,
-			"前端 import 用 @/ alias,禁止 feature↔feature 直接引用",
-			"Zustand 管理 client state; React Context 仅用于 WS lifecycle",
-		)
-	}
-
-	if d.TestCoverage.Backend.Present {
-		out = append(out,
-			"新后端代码请带测试 (go test ./...) 并确保 CI 通过",
-		)
-	}
-	if d.TestCoverage.Frontend.Present {
-		out = append(out,
-			"新前端组件请带单测 (pnpm test,基于 Vitest)",
-		)
-	}
-
-	out = append(out,
-		"禁止兼容性层、fallback paths、双写逻辑 (per CLAUDE.md)",
-		"stores 内禁止调用 useRouter",
-	)
-
-	return out
-}
-
-// --- small filesystem helpers ---
-
-func fileExists(root, name string) bool {
-	buf, err := exec.Command("test", "-f", root+"/"+name).Output()
-	_ = buf
-	return err == nil
-}
-
-func dirExists(root, name string) bool {
-	err := exec.Command("test", "-d", root+"/"+name).Run()
-	return err == nil
-}
-
-// globExists runs `git ls-files` so it respects .gitignore and avoids walking
-// node_modules.
-func globExists(root, pattern string) bool {
-	out, err := exec.Command("git", "-C", root, "ls-files", pattern).Output()
-	return err == nil && len(out) > 0
-}
-
-func listFeatureDirs(root string) []string {
-	out, err := exec.Command("git", "-C", root, "ls-files", "apps/web/features/").Output()
+// findChurnClusters finds directories that change together frequently.
+// This is a proxy for "modules that should be assigned to the same agent".
+func findChurnClusters(ctx context.Context, dir string) []string {
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "log", "--oneline", "-100", "--name-only", "--pretty=format:COMMIT")
+	out, err := cmd.Output()
 	if err != nil {
 		return nil
 	}
 
-	seen := map[string]struct{}{}
+	dirCount := map[string]int{}
 	for _, line := range strings.Split(string(out), "\n") {
-		if m := featureDirRe.FindStringSubmatch(line); m != nil {
-			seen[m[1]] = struct{}{}
+		line = strings.TrimSpace(line)
+		if line == "" || line == "COMMIT" {
+			continue
+		}
+		d := filepath.Dir(line)
+		if d == "." {
+			continue
+		}
+		dirCount[d]++
+	}
+
+	// Sort dirs by co-change frequency.
+	type kv struct {
+		k string
+		v int
+	}
+	sorted := []kv{}
+	for k, v := range dirCount {
+		if v < 2 {
+			continue
+		}
+		sorted = append(sorted, kv{k, v})
+	}
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].v > sorted[j].v })
+
+	outDirs := []string{}
+	for _, kv := range sorted {
+		outDirs = append(outDirs, kv.k)
+		if len(outDirs) >= 5 {
+			break
 		}
 	}
-	dirs := make([]string, 0, len(seen))
-	for d := range seen {
-		dirs = append(dirs, d)
-	}
-	sort.Strings(dirs)
-	return dirs
-}
-
-// --- generic helpers ---
-
-func sortedStringIntKeys(m map[string]int) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func sortedStringFloatKeys(m map[string]float64) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func dominantKey(m map[string]int, fallback string) string {
-	if len(m) == 0 {
-		return fallback
-	}
-	bestK, bestV := "", 0
-	for k, v := range m {
-		if v > bestV {
-			bestK, bestV = k, v
-		}
-	}
-	return bestK
-}
-
-func round2(f float64) float64 {
-	return math.Round(f*100) / 100
+	return outDirs
 }

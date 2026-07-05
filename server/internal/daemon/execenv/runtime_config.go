@@ -1,6 +1,7 @@
 package execenv
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -17,7 +18,11 @@ import (
 // For Codex:    writes {workDir}/AGENTS.md  (skills discovered natively via CODEX_HOME)
 // For OpenCode: writes {workDir}/AGENTS.md  (skills discovered natively from .config/opencode/skills/)
 func InjectRuntimeConfig(workDir, provider string, ctx TaskContextForEnv) error {
-	content := buildMetaSkillContent(provider, ctx)
+	// Best-effort repo-DNA extraction (Issue #12). Never fail the injection
+	// because extraction depends on the repo layout. Passing workDir directly
+	// is the simplest reliable path; DNA extractor tolerates non-git error.
+	dnadata := dna.Extract(context.Background(), workDir)
+	content := buildMetaSkillContent(provider, ctx, dnadata)
 
 	switch provider {
 	case "claude":
@@ -32,7 +37,7 @@ func InjectRuntimeConfig(workDir, provider string, ctx TaskContextForEnv) error 
 
 // buildMetaSkillContent generates the meta skill markdown that teaches the agent
 // about the Agentra runtime environment and available CLI tools.
-func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
+func buildMetaSkillContent(provider string, ctx TaskContextForEnv, dnaData *dna.DNA) string {
 	var b strings.Builder
 
 	b.WriteString("# Agentra Agent Runtime\n\n")
@@ -183,32 +188,72 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 	b.WriteString("Good: \"Fixed the login redirect. PR: https://...\"\n")
 	b.WriteString("Bad: \"1. Read the issue 2. Found the bug in auth.go 3. Created branch 4. ...\"\n")
 
-	// Repo-DNA injection (Issue #12). When the daemon knows the on-disk path
-	// to the workspace root, extract structured signals and append them so the
-	// agent inherits the repo's commit + layout + testing conventions.
-	if ctx.WorkspaceRoot != "" {
-		if d := dna.Extract(ctx.WorkspaceRoot); d != nil {
-			b.WriteString("\n---\n\n")
-			b.WriteString("## Repo-DNA (auto-extracted)\n\n")
-			b.WriteString("This repo was auto-scanned. Internalise these signals.\n\n")
-
-			// JSON blob — most providers parse it natively; human-readable too.
-			b.WriteString("```json\n")
-			if j, err := json.MarshalIndent(d, "", "  "); err == nil && len(j) > 2 {
-				b.Write(j)
-			}
-			b.WriteString("\n```\n\n")
-
-			// Human-readable highlight.
-			if len(d.Conventions) > 0 {
-				b.WriteString("### Conventions\n\n")
-				for _, c := range d.Conventions {
-					b.WriteString("- " + c + "\n")
-				}
-				b.WriteString("\n")
-			}
-		}
+	// Repo-DNA injection (Issue #12). When we have a DNA blob (passed from the
+	// caller via InjectRuntimeConfig), embed a compact summary to save tokens.
+	if dnaData != nil {
+		writeDNASummary(&b, dnaData)
 	}
 
 	return b.String()
 }
+
+// writeDNASummary appends the most actionable repo-DNA sections to the
+// markdown being built. Kept small — every token here reduces the space for
+// the actual task.
+func writeDNASummary(b *strings.Builder, d *dna.DNA) {
+	b.WriteString("\n---\n\n")
+	b.WriteString("## Repo-DNA (auto-extracted)\n\n")
+	b.WriteString("This repo was auto-scanned. Internalise these signals.\n\n")
+
+	// Commit style.
+	if len(d.CommitStyle.Types) > 0 {
+		b.WriteString("### Commit Style\n\n")
+		b.WriteString("Format: `<type>(<scope>): <subject>`\n\n")
+		b.WriteString("Types seen: ")
+		first := true
+		for t, n := range d.CommitStyle.Types {
+			if !first {
+				b.WriteString(", ")
+			}
+			fmt.Fprintf(b, "%s(%d)", t, n)
+			first = false
+		}
+		b.WriteString(fmt.Sprintf("\nMean subject length: %d chars\n\n", d.CommitStyle.MeanLen))
+	}
+
+	// Imports.
+	if len(d.Imports.Aliases) > 0 {
+		b.WriteString("### Import Conventions\n\n")
+		for alias, target := range d.Imports.Aliases {
+			fmt.Fprintf(b, "- `%s` maps to `%s`\n", alias, target)
+		}
+		b.WriteString("\n")
+	}
+
+	// State management.
+	if d.StateManagement != "" {
+		b.WriteString("### State Management\n\n")
+		fmt.Fprintf(b, "Primary: %s\n\n", d.StateManagement)
+	}
+
+	// Testing.
+	if d.Testing.Framework != "" {
+		b.WriteString("### Testing\n\n")
+		fmt.Fprintf(b, "Framework: `%s`, pattern: `%s`\n\n", d.Testing.Framework, d.Testing.Pattern)
+	}
+
+	// Patterns.
+	if len(d.Patterns) > 0 {
+		b.WriteString("### Hot Directories\n\n")
+		b.WriteString(strings.Join(d.Patterns, ", ") + "\n\n")
+	}
+
+	// Raw JSON for agents that prefer structured format.
+	b.WriteString("<details><summary>Full JSON</summary>\n\n")
+	b.WriteString("```json\n")
+	if j, err := json.MarshalIndent(d, "", "  "); err == nil {
+		b.Write(j)
+	}
+	b.WriteString("\n```\n\n</details>\n")
+}
+
