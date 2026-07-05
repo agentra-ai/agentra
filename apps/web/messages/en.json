@@ -320,39 +320,39 @@
     "memory": "Memory"
   },
   "memory": {
-    "title": "记译",
-    "add": "+ 记译",
-    "addButton": "+ 新增记译",
+    "title": "Memory",
+    "add": "+ Add Memory",
+    "addButton": "+ Add Memory",
     "tabs": {
-      "all": "全部",
-      "learnings": "教训",
-      "results": "结果",
-      "context": "上下文",
-      "patterns": "模式"
+      "all": "All",
+      "learnings": "Learnings",
+      "results": "Results",
+      "context": "Context",
+      "patterns": "Patterns"
     },
-    "loading": "加载中...",
-    "empty": "还没有记译项。",
+    "loading": "Loading...",
+    "empty": "No memories yet.",
     "search": {
-      "placeholder": "搜索记译...",
-      "button": "搜索",
-      "searching": "搜索中..."
+      "placeholder": "Search memories...",
+      "button": "Search",
+      "searching": "Searching..."
     },
     "editor": {
-      "title": "新增记译",
+      "title": "Add Memory",
       "types": {
-        "learning": "教训",
-        "taskResult": "任务结果",
-        "context": "上下文",
-        "pattern": "模式"
+        "learning": "Learning",
+        "taskResult": "Task Result",
+        "context": "Context",
+        "pattern": "Pattern"
       },
-      "contentPlaceholder": "这个 agent 应该记住什么?",
-      "private": "私有 (只有这个 agent)",
-      "save": "保存"
+      "contentPlaceholder": "What should this agent remember?",
+      "private": "Private (only this agent)",
+      "save": "Save"
     },
     "item": {
-      "delete": "删除",
-      "confirm": "确认",
-      "cancel": "取消"
+      "delete": "Delete",
+      "confirm": "Confirm",
+      "cancel": "Cancel"
     }
   },
   "navigation": {

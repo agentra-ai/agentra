@@ -88,21 +88,21 @@ import { CreateFromTemplateDialog } from "@/features/agents/components/Specialis
 // Helpers
 // ---------------------------------------------------------------------------
 
-const statusConfig: Record<AgentStatus, { label: string; color: string; dot: string }> = {
-  idle: { label: "Idle", color: "text-muted-foreground", dot: "bg-muted-foreground" },
-  working: { label: "Working", color: "text-success", dot: "bg-success" },
-  blocked: { label: "Blocked", color: "text-warning", dot: "bg-warning" },
-  error: { label: "Error", color: "text-destructive", dot: "bg-destructive" },
-  offline: { label: "Offline", color: "text-muted-foreground/50", dot: "bg-muted-foreground/40" },
+const statusConfig: Record<AgentStatus, { color: string; dot: string }> = {
+  idle: { color: "text-muted-foreground", dot: "bg-muted-foreground" },
+  working: { color: "text-success", dot: "bg-success" },
+  blocked: { color: "text-warning", dot: "bg-warning" },
+  error: { color: "text-destructive", dot: "bg-destructive" },
+  offline: { color: "text-muted-foreground/50", dot: "bg-muted-foreground/40" },
 };
 
-const taskStatusConfig: Record<string, { label: string; icon: typeof CheckCircle2; color: string }> = {
-  queued: { label: "Queued", icon: Clock, color: "text-muted-foreground" },
-  dispatched: { label: "Dispatched", icon: Play, color: "text-info" },
-  running: { label: "Running", icon: Loader2, color: "text-success" },
-  completed: { label: "Completed", icon: CheckCircle2, color: "text-success" },
-  failed: { label: "Failed", icon: XCircle, color: "text-destructive" },
-  cancelled: { label: "Cancelled", icon: XCircle, color: "text-muted-foreground" },
+const taskStatusConfig: Record<string, { icon: typeof CheckCircle2; color: string }> = {
+  queued: { icon: Clock, color: "text-muted-foreground" },
+  dispatched: { icon: Play, color: "text-info" },
+  running: { icon: Loader2, color: "text-success" },
+  completed: { icon: CheckCircle2, color: "text-success" },
+  failed: { icon: XCircle, color: "text-destructive" },
+  cancelled: { icon: XCircle, color: "text-muted-foreground" },
 };
 
 
@@ -361,7 +361,7 @@ function AgentListItem({
           ) : (
             <>
               <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
-              <span className={`text-xs ${st.color}`}>{st.label}</span>
+              <span className={`text-xs ${st.color}`}>{t(`status.${agent.status}`)}</span>
             </>
           )}
         </div>
@@ -893,7 +893,7 @@ function TriggersTab({
       id: generateId(),
       type,
       enabled: true,
-      config: type === "scheduled" ? { cron: "0 9 * * 1-5", timezone: "UTC" } : {},
+      config: type === "scheduled" ? { cron: t("cronExample"), timezone: t("timezoneExample") } : {},
     };
     setTriggers((prev) => [...prev, newTrigger]);
   };
@@ -1175,7 +1175,7 @@ function TasksTab({ agent }: { agent: Agent }) {
                   </div>
                 </div>
                 <span className={`shrink-0 text-xs font-medium ${config.color}`}>
-                  {config.label}
+                  {t(`taskStatus.${task.status}`)}
                 </span>
               </div>
             );
@@ -1431,7 +1431,7 @@ function AgentDetail({
             ) : (
               <span className={`flex items-center gap-1.5 text-xs ${st.color}`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
-                {st.label}
+                {t(`status.${agent.status}`)}
               </span>
             )}
             <span className="flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
