@@ -11,10 +11,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	stripelib "github.com/agentra-ai/agentra/server/pkg/stripe"
+
 	"github.com/agentra-ai/agentra/server/internal/auth"
+	"github.com/agentra-ai/agentra/server/internal/corsconfig"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/logger"
-	"github.com/agentra-ai/agentra/server/internal/corsconfig"
 	"github.com/agentra-ai/agentra/server/internal/realtime"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
@@ -80,7 +82,14 @@ func main() {
 	go runRuntimeSweeper(sweepCtx, queries, bus)
 	loopCoord := runLoopCoordinator(sweepCtx, queries, bus)
 
-	r := newRouter(pool, hub, bus, loopCoord)
+	stripeClient := stripelib.NewClient(
+		os.Getenv("STRIPE_SECRET_KEY"),
+		os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		os.Getenv(stripelib.PriceBaseSeat),
+		os.Getenv(stripelib.PriceAgentRuntime),
+	)
+
+	r := newRouter(pool, hub, bus, loopCoord, stripeClient)
 
 	srv := &http.Server{
 		Addr:    ":" + port,

@@ -28,6 +28,7 @@ require (
 	github.com/pgvector/pgvector-go v0.3.0
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/stretchr/testify v1.11.1
+	github.com/stripe/stripe-go/v76 v76.25.0
 )
 
 require (

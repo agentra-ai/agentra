@@ -318,6 +318,7 @@
     "profile": "Profile",
     "appearance": "Appearance",
     "tokens": "API Tokens",
+    "billing": "Billing",
     "general": "General",
     "repositories": "Repositories",
     "members": "Members",
@@ -348,6 +349,21 @@
     "saving": "Saving...",
     "saveCloudRuntime": "Save Cloud Runtime",
     "memory": "Memory"
+  },
+  "billing": {
+    "currentPlan": "Current plan",
+    "seatUsage": "{used} of {max} seats used",
+    "subscribePro": "Subscribe to Pro",
+    "manageBilling": "Manage billing",
+    "subscriptionInactive": "Subscription inactive — contact support",
+    "invoices": "Invoices",
+    "noInvoices": "No invoices yet",
+    "date": "Date",
+    "amount": "Amount",
+    "status": "Status",
+    "actions": "Actions",
+    "checkoutFailed": "Could not start checkout",
+    "portalFailed": "Could not open billing portal"
   },
   "memory": {
     "title": "Memory",

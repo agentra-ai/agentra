@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -375,4 +376,13 @@ func (q *Queries) UpdateSubscriptionStatus(ctx context.Context, arg UpdateSubscr
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const setStripeCustomerBySubscription = `-- name: SetStripeCustomerBySubscription :exec
+UPDATE subscriptions SET stripe_customer_id = $1, updated_at = now()
+WHERE stripe_subscription_id = $2;
+`
+
+func (q *Queries) SetStripeCustomerBySubscription(ctx context.Context, stripeCustomerID pgtype.Text, stripeSubscriptionID pgtype.Text) (pgconn.CommandTag, error) {
+	return q.db.Exec(ctx, setStripeCustomerBySubscription, stripeCustomerID, stripeSubscriptionID)
 }

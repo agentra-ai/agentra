@@ -78,7 +78,8 @@ func TestMain(m *testing.M) {
 
 	bus := events.New()
 	registerListeners(bus, hub)
-	router := NewRouter(pool, hub, bus)
+	stripeClient := stripelib.NewClient("", "", "", "")
+	router := NewRouter(pool, hub, bus, stripeClient)
 	testServer = httptest.NewServer(router)
 	// Allow the test server's own loopback origin for WebSocket upgrades.
 	// NewRouter wires corsconfig.AllowedOrigins() which reads FRONTEND_ORIGIN

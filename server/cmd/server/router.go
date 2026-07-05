@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/agentra-ai/agentra/pkg/taskgraph"
 	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/corsconfig"
 	"github.com/agentra-ai/agentra/server/internal/events"
@@ -23,7 +24,7 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/storage"
 	"github.com/agentra-ai/agentra/server/internal/util"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
-	"github.com/agentra-ai/agentra/pkg/taskgraph"
+	stripelib "github.com/agentra-ai/agentra/server/pkg/stripe"
 )
 
 // allowedOrigins delegates to internal/corsconfig so the resolution logic
@@ -35,15 +36,15 @@ func allowedOrigins() []string {
 }
 
 // NewRouter creates the fully-configured Chi router with all middleware and routes.
-func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Router {
-	return newRouter(pool, hub, bus, nil)
+func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, stripeClient *stripelib.Client) chi.Router {
+	return newRouter(pool, hub, bus, nil, stripeClient)
 }
 
 // newRouter is the internal form that accepts an optional loop Coordinator
 // to wire into the Handler. The Handler falls back to a nil coordinator
 // (CreateLoop then no-ops the StartLoop call) when nil is passed, which is
 // what unit tests want.
-func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord *loop.Coordinator) chi.Router {
+func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord *loop.Coordinator, stripeClient *stripelib.Client) chi.Router {
 	queries := db.New(pool)
 	emailSvc := service.NewEmailService()
 
@@ -87,6 +88,7 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 	plannerSvc := service.NewPlannerService(queries, graphStore)
 	h := handler.New(queries, pool, hub, bus, graphStore, plannerSvc, emailSvc, fileStorage, cfSigner)
 	projectsHandler := handler.NewProjectHandler(queries)
+	billingHandler := handler.NewBillingHandler(queries, stripeClient)
 	if loopCoord != nil {
 		h.SetLoopCoordinator(loopCoord)
 	}
@@ -142,6 +144,11 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 	r.Route("/github/oauth", func(r chi.Router) {
 		githubOAuth.RegisterRoutes(r)
 	})
+
+	// Stripe webhook — PUBLIC (no JWT). Must live outside the protected group
+	// so Stripe can POST without credentials. Signature verification is performed
+	// inside the handler using the configured STRIPE_WEBHOOK_SECRET.
+	r.Post("/webhooks/stripe", billingHandler.StripeWebhook)
 
 	// Daemon API routes (all require a valid token)
 	r.Route("/api/daemon", func(r chi.Router) {
@@ -207,6 +214,11 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 				r.Post("/execute", h.ExecuteGoal)
 			})
 
+			// Billing (workspace-scoped, owner/admin)
+			r.Route("/api/workspaces/{id}/billing", func(r chi.Router) {
+				billingHandler.RegisterRoutes(r)
+			})
+
 			// Projects (workspace-scoped)
 			r.Route("/api/workspaces/{id}/projects", func(r chi.Router) {
 				// Reads require workspace membership
@@ -240,100 +252,127 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 		// --- Workspace-scoped routes (all require workspace membership) ---
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireWorkspaceMember(queries))
-			})
+		})
 
-			// Git hooks API
-			r.Route("/api/git", func(r chi.Router) {
-				r.Post("/link-commit", h.LinkCommit)
-				r.Post("/link-pr", h.LinkPR)
-				r.Post("/link-branch", h.LinkBranch)
-				r.Get("/active-task", h.GetActiveTask)
-				r.Get("/issue-links/{issueId}", h.GetIssueLinks)
-			})
+		// Git hooks API
+		r.Route("/api/git", func(r chi.Router) {
+			r.Post("/link-commit", h.LinkCommit)
+			r.Post("/link-pr", h.LinkPR)
+			r.Post("/link-branch", h.LinkBranch)
+			r.Get("/active-task", h.GetActiveTask)
+			r.Get("/issue-links/{issueId}", h.GetIssueLinks)
+		})
 
-			// Comments
-			r.Route("/api/comments/{commentId}", func(r chi.Router) {
-				r.Put("/", h.UpdateComment)
-				r.Delete("/", h.DeleteComment)
-				r.Post("/reactions", h.AddReaction)
-				r.Delete("/reactions", h.RemoveReaction)
-			})
+		// Comments
+		r.Route("/api/comments/{commentId}", func(r chi.Router) {
+			r.Put("/", h.UpdateComment)
+			r.Delete("/", h.DeleteComment)
+			r.Post("/reactions", h.AddReaction)
+			r.Delete("/reactions", h.RemoveReaction)
+		})
 
-			// Agents
-			r.Route("/api/agents", func(r chi.Router) {
-				r.Get("/", h.ListAgents)
-				r.With(middleware.RequireWorkspaceRole(queries, "owner", "admin")).Post("/", h.CreateAgent)
-				r.Route("/{id}", func(r chi.Router) {
-					r.Get("/", h.GetAgent)
-					r.Put("/", h.UpdateAgent)
-					r.Post("/archive", h.ArchiveAgent)
-					r.Post("/restore", h.RestoreAgent)
-					r.Get("/tasks", h.ListAgentTasks)
-					r.Get("/skills", h.ListAgentSkills)
-					r.Put("/skills", h.SetAgentSkills)
-				})
+		// Agents
+		r.Route("/api/agents", func(r chi.Router) {
+			r.Get("/", h.ListAgents)
+			r.With(middleware.RequireWorkspaceRole(queries, "owner", "admin")).Post("/", h.CreateAgent)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", h.GetAgent)
+				r.Put("/", h.UpdateAgent)
+				r.Post("/archive", h.ArchiveAgent)
+				r.Post("/restore", h.RestoreAgent)
+				r.Get("/tasks", h.ListAgentTasks)
+				r.Get("/skills", h.ListAgentSkills)
+				r.Put("/skills", h.SetAgentSkills)
 			})
+		})
 
-			// Skills
-			r.Route("/api/skills", func(r chi.Router) {
-				r.Get("/", h.ListSkills)
-				r.With(middleware.RequireWorkspaceRole(queries, "owner", "admin")).Post("/", h.CreateSkill)
-				r.With(middleware.RequireWorkspaceRole(queries, "owner", "admin")).Post("/import", h.ImportSkill)
-				r.Route("/{id}", func(r chi.Router) {
-					r.Get("/", h.GetSkill)
-					r.Put("/", h.UpdateSkill)
-					r.Delete("/", h.DeleteSkill)
-					r.Get("/files", h.ListSkillFiles)
-					r.Put("/files", h.UpsertSkillFile)
-					r.Delete("/files/{fileId}", h.DeleteSkillFile)
-				})
+
+		// Projects (workspace-scoped, member-level reads / owner-admin writes)
+		r.Route("/api/workspaces/{id}/projects", func(r chi.Router) {
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
+				r.Get("/", projectsHandler.ListProjects)
+				r.Get("/unassigned", projectsHandler.ListUnassignedIssues)
+				r.Get("/{projectId}", projectsHandler.GetProject)
+				r.Get("/{projectId}/issues", projectsHandler.ListProjectIssues)
+				r.Get("/{projectId}/milestones", projectsHandler.ListMilestones)
 			})
-
-			// Runtimes
-			r.Route("/api/runtimes", func(r chi.Router) {
-				r.Get("/", h.ListAgentRuntimes)
-				r.Get("/{runtimeId}/usage", h.GetRuntimeUsage)
-				r.Get("/{runtimeId}/activity", h.GetRuntimeTaskActivity)
-				r.Post("/{runtimeId}/ping", h.InitiatePing)
-				r.Get("/{runtimeId}/ping/{pingId}", h.GetPing)
-				r.Post("/{runtimeId}/update", h.InitiateUpdate)
-				r.Get("/{runtimeId}/update/{updateId}", h.GetUpdate)
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner", "admin"))
+				r.Post("/", projectsHandler.CreateProject)
+				r.Put("/{projectId}", projectsHandler.UpdateProject)
+				r.Delete("/{projectId}", projectsHandler.DeleteProject)
+				r.Post("/{projectId}/issues/{issueId}", projectsHandler.AssignOrRemoveIssue)
+				r.Post("/{projectId}/milestones", projectsHandler.CreateMilestone)
+				r.Patch("/{projectId}/milestones/{milestoneId}", projectsHandler.UpdateMilestone)
 			})
+		})
 
-			// Cloud Runtime (admin-only)
-			r.Route("/api/cloud-runtime", func(r chi.Router) {
-				r.Use(middleware.RequireWorkspaceRole(queries, "owner", "admin"))
-				r.Post("/", h.RegisterCloudRuntime)
-				r.Get("/", h.GetCloudRuntime)
-				r.Delete("/", h.DeleteCloudRuntime)
-				r.Post("/validate", h.ValidateAPIKey)
+		// Billing (workspace-scoped, owner-admin only)
+		r.Route("/api/workspaces/{id}/billing", func(r chi.Router) {
+			billing := handler.NewBillingHandler(queries, stripeClient)
+			billing.RegisterRoutes(r)
+		})
+		// Skills
+		r.Route("/api/skills", func(r chi.Router) {
+			r.Get("/", h.ListSkills)
+			r.With(middleware.RequireWorkspaceRole(queries, "owner", "admin")).Post("/", h.CreateSkill)
+			r.With(middleware.RequireWorkspaceRole(queries, "owner", "admin")).Post("/import", h.ImportSkill)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", h.GetSkill)
+				r.Put("/", h.UpdateSkill)
+				r.Delete("/", h.DeleteSkill)
+				r.Get("/files", h.ListSkillFiles)
+				r.Put("/files", h.UpsertSkillFile)
+				r.Delete("/files/{fileId}", h.DeleteSkillFile)
+			})
+		})
+
+		// Runtimes
+		r.Route("/api/runtimes", func(r chi.Router) {
+			r.Get("/", h.ListAgentRuntimes)
+			r.Get("/{runtimeId}/usage", h.GetRuntimeUsage)
+			r.Get("/{runtimeId}/activity", h.GetRuntimeTaskActivity)
+			r.Post("/{runtimeId}/ping", h.InitiatePing)
+			r.Get("/{runtimeId}/ping/{pingId}", h.GetPing)
+			r.Post("/{runtimeId}/update", h.InitiateUpdate)
+			r.Get("/{runtimeId}/update/{updateId}", h.GetUpdate)
+		})
+
+		// Cloud Runtime (admin-only)
+		r.Route("/api/cloud-runtime", func(r chi.Router) {
+			r.Use(middleware.RequireWorkspaceRole(queries, "owner", "admin"))
+			r.Post("/", h.RegisterCloudRuntime)
+			r.Get("/", h.GetCloudRuntime)
+			r.Delete("/", h.DeleteCloudRuntime)
+			r.Post("/validate", h.ValidateAPIKey)
 		})
 
 		// Traces
 		r.Get("/api/traces/{taskId}", h.GetTraceByTask)
-			// Inbox
-			r.Route("/api/inbox", func(r chi.Router) {
-				r.Get("/", h.ListInbox)
-				r.Get("/unread-count", h.CountUnreadInbox)
-				r.Post("/mark-all-read", h.MarkAllInboxRead)
-				r.Post("/archive-all", h.ArchiveAllInbox)
-				r.Post("/archive-all-read", h.ArchiveAllReadInbox)
-				r.Post("/archive-completed", h.ArchiveCompletedInbox)
-				r.Post("/{id}/read", h.MarkInboxRead)
-				r.Post("/{id}/archive", h.ArchiveInboxItem)
-			})
+		// Inbox
+		r.Route("/api/inbox", func(r chi.Router) {
+			r.Get("/", h.ListInbox)
+			r.Get("/unread-count", h.CountUnreadInbox)
+			r.Post("/mark-all-read", h.MarkAllInboxRead)
+			r.Post("/archive-all", h.ArchiveAllInbox)
+			r.Post("/archive-all-read", h.ArchiveAllReadInbox)
+			r.Post("/archive-completed", h.ArchiveCompletedInbox)
+			r.Post("/{id}/read", h.MarkInboxRead)
+			r.Post("/{id}/archive", h.ArchiveInboxItem)
+		})
 
-			// Engineering loops
-			r.Route("/api/loops", func(r chi.Router) {
-				r.Get("/", h.ListLoops)
-				r.Post("/", h.CreateLoop)
-				r.Route("/{id}", func(r chi.Router) {
-					r.Get("/", h.GetLoop)
-					r.Post("/pause", h.PauseLoop)
-					r.Post("/resume", h.ResumeLoop)
-					r.Post("/cancel", h.CancelLoop)
-				})
+		// Engineering loops
+		r.Route("/api/loops", func(r chi.Router) {
+			r.Get("/", h.ListLoops)
+			r.Post("/", h.CreateLoop)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", h.GetLoop)
+				r.Post("/pause", h.PauseLoop)
+				r.Post("/resume", h.ResumeLoop)
+				r.Post("/cancel", h.CancelLoop)
 			})
+		})
 	})
 
 	return r

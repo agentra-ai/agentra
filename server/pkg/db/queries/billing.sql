@@ -42,3 +42,7 @@ INSERT INTO usage_records (workspace_id, metric, quantity) VALUES ($1, $2, $3) R
 SELECT * FROM usage_records
 WHERE workspace_id = $1 AND recorded_at >= $2 AND recorded_at < $3
 ORDER BY recorded_at DESC;
+
+-- name: SetStripeCustomerBySubscription :exec
+UPDATE subscriptions SET stripe_customer_id = $1, updated_at = now()
+WHERE stripe_subscription_id = $2;
