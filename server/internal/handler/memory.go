@@ -106,9 +106,14 @@ func (h *MemoryHandler) requireAgentWorkspaceMember(w http.ResponseWriter, r *ht
 	return aid, agent.WorkspaceID, true
 }
 
-// nullVector is a zero-valued pgvector.Vector (NULL in the DB). Frontends
-// currently don't send embeddings; a backfill job can populate them later.
-var nullVector = pgvector.Vector{}
+// zeroVector is a 1536-dimensional zero vector. Embeddings are a
+// migration-level NOT NULL column (the ivfflat index needs a fixed
+// dimension); the frontend doesn't send them on create, so we seed with
+// zeros as a placeholder until an embedding backfill job runs.
+var zeroVector = func() pgvector.Vector {
+	v := make([]float32, 1536)
+	return pgvector.NewVector(v)
+}()
 
 // --- Team memories -----------------------------------------------------------
 
@@ -155,7 +160,7 @@ func (h *MemoryHandler) CreateTeamMemory(w http.ResponseWriter, r *http.Request)
 		MemoryType:  body.MemoryType,
 		Content:     body.Content,
 		CreatedBy:   util.ParseUUID(handlerutil.RequestUserID(r)),
-		Embedding:   nullVector,
+		Embedding:   zeroVector,
 	})
 	if err != nil {
 		slog.Error("CreateTeamMemory query failed", "error", err)
@@ -239,7 +244,7 @@ func (h *MemoryHandler) CreateAgentMemory(w http.ResponseWriter, r *http.Request
 		MemoryType:  body.MemoryType,
 		Content:     body.Content,
 		IsPrivate:   isPrivate,
-		Embedding:   nullVector,
+		Embedding:   zeroVector,
 	})
 	if err != nil {
 		slog.Error("CreateAgentMemory query failed", "error", err)
