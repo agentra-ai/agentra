@@ -69,14 +69,16 @@
       "done": "已完成",
       "completed": "已完成",
       "blocked": "已阻塞",
-      "canceled": "已取消"
+      "canceled": "已取消",
+      "cancelled": "已取消"
     },
     "priority": {
       "urgent": "紧急",
       "high": "高",
       "medium": "中",
       "low": "低",
-      "no_priority": "无优先级"
+      "no_priority": "无优先级",
+      "none": "无优先级"
     },
     "assignee": {
       "assignToPlaceholder": "分配给…",

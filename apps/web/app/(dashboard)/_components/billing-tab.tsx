@@ -141,7 +141,7 @@ export function BillingTab({ workspaceId }: { workspaceId: string }) {
             </p>
           </div>
           <Badge variant={badgeVariant(subscription?.status)} className="text-sm">
-            {isPro ? planLabel(subscription?.plan) : t("freePlan") ?? "Free"}
+            {isPro ? planLabel(subscription?.plan) : tBilling("freePlan")}
           </Badge>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3 border-t pt-4">

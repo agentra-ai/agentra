@@ -69,14 +69,16 @@
       "done": "Done",
       "completed": "Completed",
       "blocked": "Blocked",
-      "canceled": "Canceled"
+      "canceled": "Canceled",
+      "cancelled": "Cancelled"
     },
     "priority": {
       "urgent": "Urgent",
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "no_priority": "No Priority"
+      "no_priority": "No Priority",
+      "none": "No Priority"
     },
     "assignee": {
       "assignToPlaceholder": "Assign to...",
