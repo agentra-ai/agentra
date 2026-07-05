@@ -255,11 +255,17 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 			r.Get("/api/attachments/{id}", h.GetAttachmentByID)
 			r.Delete("/api/attachments/{id}", h.DeleteAttachment)
 
-			// Task-level human-in-the-loop (Issue #17)
+			// Task-level human-in-the-loop (Issue #16)
 			r.Route("/api/tasks/{taskId}", func(r chi.Router) {
 				r.Use(middleware.RequireWorkspaceMember(queries))
 				approval := handler.NewTaskApprovalHandler(queries, hub, bus)
 				approval.RegisterRoutes(r)
+			})
+
+			// Admin metrics (Issue #17) — restricted to owners/admins via workspace_id query param
+			r.Route("/api/admin/metrics", func(r chi.Router) {
+				metrics := handler.NewMetricsHandler(queries)
+				metrics.RegisterRoutes(r)
 			})
 
 			// Git hooks API
