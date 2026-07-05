@@ -17,6 +17,7 @@ import { BillingTab } from "../_components/billing-tab";
 export default function SettingsPage() {
   const t = useTranslations("settings");
   const workspaceName = useWorkspaceStore((s) => s.workspace?.name);
+  const workspaceId = useWorkspaceStore((s) => s.workspace?.id);
 
   const accountTabs = [
     { value: "profile", label: t("profile"), icon: User },
@@ -74,7 +75,7 @@ export default function SettingsPage() {
           <TabsContent value="members"><MembersTab /></TabsContent>
           <TabsContent value="runtime"><RuntimeTab /></TabsContent>
           <TabsContent value="memory"><MemoryViewer /></TabsContent>
-          <TabsContent value="billing"><BillingTab /></TabsContent>
+          {workspaceId ? <TabsContent value="billing"><BillingTab workspaceId={workspaceId} /></TabsContent> : null}
         </div>
       </div>
     </Tabs>

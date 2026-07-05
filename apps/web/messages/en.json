@@ -352,6 +352,7 @@
   },
   "billing": {
     "currentPlan": "Current plan",
+    "freePlan": "Free plan",
     "seatUsage": "{used} of {max} seats used",
     "subscribePro": "Subscribe to Pro",
     "manageBilling": "Manage billing",

@@ -220,9 +220,17 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 				r.Post("/execute", h.ExecuteGoal)
 			})
 
-			// Billing (workspace-scoped, owner/admin)
-			r.Route("/api/workspaces/{id}/billing", func(r chi.Router) {
-				billingHandler.RegisterRoutes(r)
+			// Billing (workspace-scoped, owner/admin). Note: branch is registered
+			// inside /api/workspaces above; this is a distinct set of endpoints
+			// under /api/workspaces/{id}/billing defined directly here to keep the
+			// middleware-friendly `id` param visible in the request context.
+			r.Route("/billing", func(r chi.Router) {
+				r.Use(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner", "admin"))
+				r.Get("/subscription", billingHandler.GetSubscription)
+				r.Get("/checkout", billingHandler.CreateCheckoutSession)
+				r.Get("/portal", billingHandler.CreatePortalSession)
+				r.Get("/invoices", billingHandler.ListInvoices)
+				r.Get("/usage", billingHandler.GetUsage)
 			})
 
 			// Projects (workspace-scoped)
@@ -314,11 +322,6 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 			})
 		})
 
-		// Billing (workspace-scoped, owner-admin only)
-		r.Route("/api/workspaces/{id}/billing", func(r chi.Router) {
-			billing := handler.NewBillingHandler(queries, stripeClient)
-			billing.RegisterRoutes(r)
-		})
 		// Skills
 		r.Route("/api/skills", func(r chi.Router) {
 			r.Get("/", h.ListSkills)

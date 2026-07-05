@@ -58,7 +58,7 @@ function planLabel(plan?: string): string {
   return plan.charAt(0).toUpperCase() + plan.slice(1);
 }
 
-export function BillingTab() {
+export function BillingTab({ workspaceId }: { workspaceId: string }) {
   const t = useTranslations("settings");
   const tBilling = useTranslations("billing");
   const f = useFormatter();
@@ -73,9 +73,9 @@ export function BillingTab() {
     setLoading(true);
     try {
       const [sub, usg, inv] = await Promise.all([
-        api.get<Subscription>("/billing/subscription"),
-        api.get<Usage>("/billing/usage"),
-        api.get<Invoice[]>("/billing/invoices"),
+        api.get<Subscription>(`/api/workspaces/${workspaceId}/billing/subscription`),
+        api.get<Usage>(`/api/workspaces/${workspaceId}/billing/usage`),
+        api.get<Invoice[]>(`/api/workspaces/${workspaceId}/billing/invoices`),
       ]);
       setSubscription(sub);
       setUsage(usg);
@@ -86,7 +86,7 @@ export function BillingTab() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, workspaceId]);
 
   useEffect(() => {
     load();
@@ -95,7 +95,7 @@ export function BillingTab() {
   const onSubscribe = async () => {
     setSubscribing(true);
     try {
-      const res = await api.post<{ url: string }>("/billing/checkout");
+      const res = await api.post<{ url: string }>(`/api/workspaces/${workspaceId}/billing/checkout`);
       if (res?.url) {
         window.location.href = res.url;
       } else {
@@ -111,7 +111,7 @@ export function BillingTab() {
   const onManage = async () => {
     setManaging(true);
     try {
-      const res = await api.post<{ url: string }>("/billing/portal");
+      const res = await api.post<{ url: string }>(`/api/workspaces/${workspaceId}/billing/portal`);
       if (res?.url) {
         window.location.href = res.url;
       } else {

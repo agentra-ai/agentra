@@ -351,6 +351,7 @@
   },
   "billing": {
     "currentPlan": "当前套餐",
+    "freePlan": "免费套餐",
     "seatUsage": "已使用 {used} / {max} 个席位",
     "subscribePro": "订阅 Pro",
     "manageBilling": "管理账单",
