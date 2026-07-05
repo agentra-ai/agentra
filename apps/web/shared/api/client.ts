@@ -213,6 +213,13 @@ export class ApiClient {
     await this.fetch(`/api/issues/${id}`, { method: "DELETE" });
   }
 
+  // Admin metrics (Issue #18)
+  async getMetricSummary(days = 30): Promise<{ providers: any[] }> {
+    const wsId = this.workspaceId;
+    const q = new URLSearchParams({ workspace_id: wsId ?? "", days: String(days) });
+    return this.fetch(`/api/admin/metrics/summary?${q}`);
+  }
+
   async batchUpdateIssues(issueIds: string[], updates: UpdateIssueRequest): Promise<{ updated: number }> {
     return this.fetch("/api/issues/batch-update", {
       method: "POST",
