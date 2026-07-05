@@ -76,3 +76,8 @@ SELECT p.*,
        (SELECT count(*) FROM issue i WHERE i.project_id = p.id) AS issue_count
 FROM projects p
 WHERE p.id = $1;
+
+-- name: ListIssuesWithoutProject :many
+SELECT * FROM issue
+WHERE workspace_id = $1 AND project_id IS NULL
+ORDER BY position ASC, created_at DESC;

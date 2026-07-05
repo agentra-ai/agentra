@@ -609,6 +609,66 @@ export class ApiClient {
     await this.fetch(`/api/attachments/${id}`, { method: "DELETE" });
   }
 
+  // Projects
+  async listProjects(workspaceId: string): Promise<any[]> {
+    return this.fetch<any[]>(`/api/workspaces/${workspaceId}/projects`);
+  }
+
+  async getProject(workspaceId: string, projectId: string): Promise<any> {
+    return this.fetch<any>(`/api/workspaces/${workspaceId}/projects/${projectId}`);
+  }
+
+  async createProject(workspaceId: string, data: { title: string; slug: string; deadline?: string }): Promise<any> {
+    return this.fetch<any>(`/api/workspaces/${workspaceId}/projects`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateProject(workspaceId: string, projectId: string, data: { title?: string; slug?: string; deadline?: string | null }): Promise<any> {
+    return this.fetch<any>(`/api/workspaces/${workspaceId}/projects/${projectId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteProject(workspaceId: string, projectId: string): Promise<void> {
+    await this.fetch(`/api/workspaces/${workspaceId}/projects/${projectId}`, { method: "DELETE" });
+  }
+
+  async listProjectIssues(workspaceId: string, projectId: string): Promise<any[]> {
+    return this.fetch<any[]>(`/api/workspaces/${workspaceId}/projects/${projectId}/issues`);
+  }
+
+  async listUnassignedIssues(workspaceId: string): Promise<any[]> {
+    return this.fetch<any[]>(`/api/workspaces/${workspaceId}/projects/unassigned`);
+  }
+
+  async assignIssueToProject(workspaceId: string, projectId: string, issueId: string, action: "assign" | "remove"): Promise<any> {
+    return this.fetch<any>(`/api/workspaces/${workspaceId}/projects/${projectId}/issues/${issueId}`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    });
+  }
+
+  async listMilestones(workspaceId: string, projectId: string): Promise<any[]> {
+    return this.fetch<any[]>(`/api/workspaces/${workspaceId}/projects/${projectId}/milestones`);
+  }
+
+  async createMilestone(workspaceId: string, projectId: string, data: { title: string; deadline?: string }): Promise<any> {
+    return this.fetch<any>(`/api/workspaces/${workspaceId}/projects/${projectId}/milestones`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateMilestone(workspaceId: string, projectId: string, milestoneId: string, data: { status?: string; title?: string; deadline?: string | null }): Promise<any> {
+    return this.fetch<any>(`/api/workspaces/${workspaceId}/projects/${projectId}/milestones/${milestoneId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
   // Cloud Runtime
   async validateCloudRuntime(provider: string, apiKey: string): Promise<void> {
     await this.fetch("/api/cloud-runtime/validate", {

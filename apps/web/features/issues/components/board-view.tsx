@@ -60,6 +60,7 @@ export function BoardView({
   visibleStatuses,
   hiddenStatuses,
   onMoveIssue,
+  projectFilter,
 }: {
   issues: Issue[];
   allIssues: Issue[];
@@ -70,6 +71,9 @@ export function BoardView({
     newStatus: IssueStatus,
     newPosition?: number
   ) => void;
+  /** When defined, shows only issues matching this project_id.
+   *  `null` = only unassigned issues. `undefined` = no project filter. */
+  projectFilter?: string | null;
 }) {
   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
 
@@ -177,6 +181,7 @@ export function BoardView({
             key={status}
             status={status}
             issues={issues.filter((i) => i.status === status)}
+            projectFilter={projectFilter}
           />
         ))}
 

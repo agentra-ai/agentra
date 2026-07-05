@@ -319,6 +319,52 @@ func (q *Queries) ListIssuesByProjectWithLimit(ctx context.Context, arg ListIssu
 	return items, nil
 }
 
+const listIssuesWithoutProject = `-- name: ListIssuesWithoutProject :many
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id FROM issue
+WHERE workspace_id = $1 AND project_id IS NULL
+ORDER BY position ASC, created_at DESC
+`
+
+func (q *Queries) ListIssuesWithoutProject(ctx context.Context, workspaceID pgtype.UUID) ([]Issue, error) {
+	rows, err := q.db.Query(ctx, listIssuesWithoutProject, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Issue{}
+	for rows.Next() {
+		var i Issue
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.Priority,
+			&i.AssigneeType,
+			&i.AssigneeID,
+			&i.CreatorType,
+			&i.CreatorID,
+			&i.ParentIssueID,
+			&i.AcceptanceCriteria,
+			&i.ContextRefs,
+			&i.Position,
+			&i.DueDate,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Number,
+			&i.ProjectID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMilestonesByProject = `-- name: ListMilestonesByProject :many
 SELECT id, project_id, title, deadline, status, created_at, updated_at FROM milestones
 WHERE project_id = $1

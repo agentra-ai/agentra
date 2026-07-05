@@ -86,6 +86,7 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 	graphStore := taskgraph.NewGraphStore(pool)
 	plannerSvc := service.NewPlannerService(queries, graphStore)
 	h := handler.New(queries, pool, hub, bus, graphStore, plannerSvc, emailSvc, fileStorage, cfSigner)
+	projectsHandler := handler.NewProjectHandler(queries)
 	if loopCoord != nil {
 		h.SetLoopCoordinator(loopCoord)
 	}
@@ -204,6 +205,29 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 				r.With(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner")).Delete("/", h.DeleteWorkspace)
 				// Goal-first execute endpoint
 				r.Post("/execute", h.ExecuteGoal)
+			})
+
+			// Projects (workspace-scoped)
+			r.Route("/api/workspaces/{id}/projects", func(r chi.Router) {
+				// Reads require workspace membership
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
+					r.Get("/", projectsHandler.ListProjects)
+					r.Get("/unassigned", projectsHandler.ListUnassignedIssues)
+					r.Get("/{projectId}", projectsHandler.GetProject)
+					r.Get("/{projectId}/issues", projectsHandler.ListProjectIssues)
+					r.Get("/{projectId}/milestones", projectsHandler.ListMilestones)
+				})
+				// Writes require owner or admin role
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner", "admin"))
+					r.Post("/", projectsHandler.CreateProject)
+					r.Put("/{projectId}", projectsHandler.UpdateProject)
+					r.Delete("/{projectId}", projectsHandler.DeleteProject)
+					r.Post("/{projectId}/issues/{issueId}", projectsHandler.AssignOrRemoveIssue)
+					r.Post("/{projectId}/milestones", projectsHandler.CreateMilestone)
+					r.Patch("/{projectId}/milestones/{milestoneId}", projectsHandler.UpdateMilestone)
+				})
 			})
 		})
 

@@ -24,9 +24,13 @@ import { DraggableBoardCard } from "./board-card";
 export function BoardColumn({
   status,
   issues,
+  projectFilter,
 }: {
   status: IssueStatus;
   issues: Issue[];
+  /** When defined, filters to only issues with matching project_id.
+   *  `null` = only unassigned issues. `undefined` = no project filter. */
+  projectFilter?: string | null | undefined;
 }) {
   const t = useTranslations("issues");
   const cfg = STATUS_CONFIG[status];
@@ -35,9 +39,17 @@ export function BoardColumn({
   const sortBy = useViewStore((s) => s.sortBy);
   const sortDirection = useViewStore((s) => s.sortDirection);
 
+  const filteredIssues = useMemo(() => {
+    if (projectFilter === undefined) return issues;
+    if (projectFilter === null) {
+      return issues.filter((i) => !(i as Issue & { project_id?: string }).project_id);
+    }
+    return issues.filter((i) => (i as Issue & { project_id?: string }).project_id === projectFilter);
+  }, [issues, projectFilter]);
+
   const sortedIssues = useMemo(
-    () => sortIssues(issues, sortBy, sortDirection),
-    [issues, sortBy, sortDirection]
+    () => sortIssues(filteredIssues, sortBy, sortDirection),
+    [filteredIssues, sortBy, sortDirection]
   );
 
   const sortedIds = useMemo(
@@ -55,7 +67,7 @@ export function BoardColumn({
             {t(`status.${status}`)}
           </span>
           <span className="text-xs text-muted-foreground">
-            {issues.length}
+            {filteredIssues.length}
           </span>
         </div>
 
@@ -104,7 +116,7 @@ export function BoardColumn({
             <DraggableBoardCard key={issue.id} issue={issue} />
           ))}
         </SortableContext>
-        {issues.length === 0 && (
+        {filteredIssues.length === 0 && (
           <p className="py-8 text-center text-xs text-muted-foreground">
             No issues
           </p>

@@ -284,6 +284,35 @@
       "member": "Member"
     }
   },
+  "projects": {
+    "title": "Projects",
+    "newProject": "New Project",
+    "projectTitle": "Project Title",
+    "projectSlug": "Project Slug",
+    "deadline": "Deadline",
+    "issues": "Issues",
+    "milestones": "Milestones",
+    "noProjects": "No projects yet",
+    "noIssues": "No issues in this project",
+    "noMilestones": "No milestones yet",
+    "unassigned": "Unassigned Issues",
+    "assignIssue": "Add Issue",
+    "removeIssue": "Remove from Project",
+    "newMilestone": "New Milestone",
+    "milestoneTitle": "Milestone Title",
+    "status": {
+      "active": "Active",
+      "completed": "Completed",
+      "archived": "Archived"
+    },
+    "confirmDelete": "Delete this project? This cannot be undone.",
+    "create": "Create Project",
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "details": "Project Details"
+  },
   "settings": {
     "title": "Settings",
     "profile": "Profile",
