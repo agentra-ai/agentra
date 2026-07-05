@@ -158,6 +158,17 @@ export class ApiClient {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   }
+
+  async patch<T>(path: string, body?: unknown): Promise<T> {
+    return this.fetch<T>(path, {
+      method: "PATCH",
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  async delete(path: string): Promise<void> {
+    await this.fetch<void>(path, { method: "DELETE" });
+  }
   async verifyCode(email: string, code: string): Promise<LoginResponse> {
     return this.fetch("/auth/verify-code", {
       method: "POST",
