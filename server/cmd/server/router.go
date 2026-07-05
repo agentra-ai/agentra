@@ -89,6 +89,7 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 	h := handler.New(queries, pool, hub, bus, graphStore, plannerSvc, emailSvc, fileStorage, cfSigner)
 	projectsHandler := handler.NewProjectHandler(queries)
 	billingHandler := handler.NewBillingHandler(queries, stripeClient)
+	memoryHandler := handler.NewMemoryHandler(queries)
 	if loopCoord != nil {
 		h.SetLoopCoordinator(loopCoord)
 	}
@@ -231,7 +232,22 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 					r.Get("/invoices", billingHandler.ListInvoices)
 					r.Get("/usage", billingHandler.GetUsage)
 				})
+
+				// Memories (workspace-scoped, member access). Team memories are
+				// shared across the workspace; the workspace id comes from {id}.
+				r.Route("/memories", func(r chi.Router) {
+					r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
+					r.Get("/", memoryHandler.ListTeamMemories)
+					r.Post("/", memoryHandler.CreateTeamMemory)
+					r.Delete("/{memoryId}", memoryHandler.DeleteTeamMemory)
+				})
 			})
+
+			// Agent memories — workspace membership is resolved inside the
+			// handler via the agent id URL param. Registered at the
+			// /api/workspaces level (outside the {id} group) since these
+			// target agents, not workspaces.
+			memoryHandler.RegisterAgentRoutes(r)
 
 			// Projects (workspace-scoped)
 			r.Route("/api/workspaces/{id}/projects", func(r chi.Router) {

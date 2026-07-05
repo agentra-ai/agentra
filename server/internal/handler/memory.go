@@ -1,0 +1,272 @@
+// Issue #32 — workspace & agent memory CRUD.
+//
+// Routes (all authenticated; workspace membership enforced):
+//   GET    /api/workspaces/{id}/memories            — list team memories
+//   POST   /api/workspaces/{id}/memories            — create team memory
+//   DELETE /api/workspaces/{id}/memories/{memoryId} — delete team memory
+//   GET    /api/agents/{agentId}/memories            — list agent memories
+//   POST   /api/agents/{agentId}/memories            — create agent memory
+//   DELETE /api/agents/{agentId}/memories/{memoryId} — delete agent memory
+//
+// Agent-memory routes resolve the agent's workspace in the handler and
+// require its own workspace membership check inline (via the same
+// GetMemberByUserAndWorkspace query the URL-based middleware uses).
+
+package handler
+
+import (
+	"encoding/json"
+	"log/slog"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/pgvector/pgvector-go"
+
+	"github.com/agentra-ai/agentra/server/internal/handlerutil"
+	"github.com/agentra-ai/agentra/server/internal/util"
+	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
+)
+
+type MemoryHandler struct {
+	Queries *db.Queries
+}
+
+func NewMemoryHandler(q *db.Queries) *MemoryHandler {
+	return &MemoryHandler{Queries: q}
+}
+
+// RegisterRoutes is kept for test/composition callers. Router wiring in
+// cmd/server/router.go registers team + agent routes separately so each
+// can live at the right nesting level (team under /{id}, agent at root).
+func (h *MemoryHandler) RegisterRoutes(r chi.Router) {
+	h.RegisterTeamRoutes(r)
+	h.RegisterAgentRoutes(r)
+}
+
+// RegisterTeamRoutes wires workspace-scoped memory endpoints onto the
+// caller's router (typically already nested under /api/workspaces/{id}).
+func (h *MemoryHandler) RegisterTeamRoutes(r chi.Router) {
+	r.Get("/", h.ListTeamMemories)
+	r.Post("/", h.CreateTeamMemory)
+	r.Delete("/{memoryId}", h.DeleteTeamMemory)
+}
+
+// RegisterAgentRoutes wires agent-scoped memory endpoints onto the
+// caller's router. Each handler resolves the agent's workspace inline and
+// enforces membership there.
+func (h *MemoryHandler) RegisterAgentRoutes(r chi.Router) {
+	r.Get("/api/agents/{agentId}/memories", h.ListAgentMemories)
+	r.Post("/api/agents/{agentId}/memories", h.CreateAgentMemory)
+	r.Delete("/api/agents/{agentId}/memories/{memoryId}", h.DeleteAgentMemory)
+}
+
+// workspaceID extracts + validates the workspace id from the URL param.
+func (h *MemoryHandler) workspaceID(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {
+	id := chi.URLParam(r, "id")
+	uid := util.ParseUUID(id)
+	if !uid.Valid {
+		writeError(w, http.StatusBadRequest, "invalid workspace id")
+		return pgtype.UUID{}, false
+	}
+	return uid, true
+}
+
+// requireAgentWorkspaceMember resolves the agent from the URL param and
+// confirms the caller is a member of that agent's workspace. On success it
+// returns the agent ID, the workspace ID, and true.
+func (h *MemoryHandler) requireAgentWorkspaceMember(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, bool) {
+	agentID := chi.URLParam(r, "agentId")
+	aid := util.ParseUUID(agentID)
+	if !aid.Valid {
+		writeError(w, http.StatusBadRequest, "invalid agent id")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+
+	agent, err := h.Queries.GetAgent(r.Context(), aid)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "user not authenticated")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+
+	if _, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
+		UserID:      util.ParseUUID(userID),
+		WorkspaceID: agent.WorkspaceID,
+	}); err != nil {
+		writeError(w, http.StatusForbidden, "not a member of this workspace")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+
+	return aid, agent.WorkspaceID, true
+}
+
+// nullVector is a zero-valued pgvector.Vector (NULL in the DB). Frontends
+// currently don't send embeddings; a backfill job can populate them later.
+var nullVector = pgvector.Vector{}
+
+// --- Team memories -----------------------------------------------------------
+
+func (h *MemoryHandler) ListTeamMemories(w http.ResponseWriter, r *http.Request) {
+	wsID, ok := h.workspaceID(w, r)
+	if !ok {
+		return
+	}
+
+	items, err := h.Queries.ListTeamMemories(r.Context(), wsID)
+	if err != nil {
+		slog.Error("ListTeamMemories query failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to list memories")
+		return
+	}
+	if items == nil {
+		items = []db.TeamMemory{}
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+type teamMemoryBody struct {
+	MemoryType string `json:"memory_type"`
+	Content    string `json:"content"`
+}
+
+func (h *MemoryHandler) CreateTeamMemory(w http.ResponseWriter, r *http.Request) {
+	wsID, ok := h.workspaceID(w, r)
+	if !ok {
+		return
+	}
+
+	var body teamMemoryBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Content == "" {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.MemoryType == "" {
+		body.MemoryType = "context"
+	}
+
+	row, err := h.Queries.CreateTeamMemory(r.Context(), db.CreateTeamMemoryParams{
+		WorkspaceID: wsID,
+		MemoryType:  body.MemoryType,
+		Content:     body.Content,
+		CreatedBy:   util.ParseUUID(handlerutil.RequestUserID(r)),
+		Embedding:   nullVector,
+	})
+	if err != nil {
+		slog.Error("CreateTeamMemory query failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to create memory")
+		return
+	}
+	writeJSON(w, http.StatusCreated, row)
+}
+
+func (h *MemoryHandler) DeleteTeamMemory(w http.ResponseWriter, r *http.Request) {
+	wsID, ok := h.workspaceID(w, r)
+	if !ok {
+		return
+	}
+
+	uid := util.ParseUUID(chi.URLParam(r, "memoryId"))
+	if !uid.Valid {
+		writeError(w, http.StatusBadRequest, "invalid memory id")
+		return
+	}
+
+	if _, err := h.Queries.DeleteTeamMemory(r.Context(), db.DeleteTeamMemoryParams{
+		ID:          uid,
+		WorkspaceID: wsID,
+	}); err != nil {
+		writeError(w, http.StatusNotFound, "memory not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// --- Agent memories ----------------------------------------------------------
+
+func (h *MemoryHandler) ListAgentMemories(w http.ResponseWriter, r *http.Request) {
+	aid, _, ok := h.requireAgentWorkspaceMember(w, r)
+	if !ok {
+		return
+	}
+
+	items, err := h.Queries.ListAgentMemories(r.Context(), aid)
+	if err != nil {
+		slog.Error("ListAgentMemories query failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to list memories")
+		return
+	}
+	if items == nil {
+		items = []db.AgentMemory{}
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+type agentMemoryBody struct {
+	MemoryType string `json:"memory_type"`
+	Content    string `json:"content"`
+	IsPrivate  *bool  `json:"is_private,omitempty"`
+}
+
+func (h *MemoryHandler) CreateAgentMemory(w http.ResponseWriter, r *http.Request) {
+	aid, wsID, ok := h.requireAgentWorkspaceMember(w, r)
+	if !ok {
+		return
+	}
+
+	var body agentMemoryBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Content == "" {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.MemoryType == "" {
+		body.MemoryType = "context"
+	}
+
+	isPrivate := pgtype.Bool{Valid: true, Bool: false}
+	if body.IsPrivate != nil {
+		isPrivate.Bool = *body.IsPrivate
+	}
+
+	row, err := h.Queries.CreateAgentMemory(r.Context(), db.CreateAgentMemoryParams{
+		AgentID:     aid,
+		WorkspaceID: wsID,
+		MemoryType:  body.MemoryType,
+		Content:     body.Content,
+		IsPrivate:   isPrivate,
+		Embedding:   nullVector,
+	})
+	if err != nil {
+		slog.Error("CreateAgentMemory query failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to create memory")
+		return
+	}
+	writeJSON(w, http.StatusCreated, row)
+}
+
+func (h *MemoryHandler) DeleteAgentMemory(w http.ResponseWriter, r *http.Request) {
+	aid, _, ok := h.requireAgentWorkspaceMember(w, r)
+	if !ok {
+		return
+	}
+
+	uid := util.ParseUUID(chi.URLParam(r, "memoryId"))
+	if !uid.Valid {
+		writeError(w, http.StatusBadRequest, "invalid memory id")
+		return
+	}
+
+	if _, err := h.Queries.DeleteAgentMemory(r.Context(), db.DeleteAgentMemoryParams{
+		ID:      uid,
+		AgentID: aid,
+	}); err != nil {
+		writeError(w, http.StatusNotFound, "memory not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
