@@ -522,6 +522,7 @@
     "failedToArchiveAll": "Failed to archive all",
     "failedToArchiveRead": "Failed to archive read items",
     "failedToArchiveCompleted": "Failed to archive completed",
+    "archive": "Archive",
     "detail": {
       "setStatusTo": "Set status to",
       "setPriorityTo": "Set priority to",
@@ -550,6 +551,19 @@
   },
   "modals": {
     "createIssue": "Create Issue",
+    "createWorkspace": {
+      "back": "Back",
+      "title": "Create a new workspace",
+      "description": "Workspaces are shared environments where teams can work on projects and issues.",
+      "nameLabel": "Workspace Name",
+      "namePlaceholder": "My Workspace",
+      "slugLabel": "Workspace Slug",
+      "slugPlaceholder": "my-workspace",
+      "slugError": "Only lowercase letters, numbers, and hyphens",
+      "submitting": "Creating...",
+      "submit": "Create workspace",
+      "failed": "Failed to create workspace"
+    },
     "editIssue": "Edit Issue",
     "deleteIssue": "Delete Issue",
     "deleteConfirm": "Are you sure you want to delete this issue?",
@@ -574,6 +588,9 @@
     "minutesAgo": "{count, plural, =1 {1 minute ago} other {# minutes ago}}",
     "hoursAgo": "{count, plural, =1 {1 hour ago} other {# hours ago}}",
     "daysAgo": "{count, plural, =1 {1 day ago} other {# days ago}}",
+    "shortMinutes": "{count}m",
+    "shortHours": "{count}h",
+    "shortDays": "{count}d",
     "today": "Today",
     "yesterday": "Yesterday"
   },

@@ -1046,7 +1046,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
               </PropRow>
 
               {/* Assignee */}
-              <PropRow label="Assignee">
+              <PropRow label={t("assignee")}>
                 <AssigneePicker
                   assigneeType={issue.assignee_type}
                   assigneeId={issue.assignee_id}

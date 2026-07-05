@@ -18,7 +18,7 @@ import {
   BookCheck,
   ListChecks,
 } from "lucide-react";
-import type { InboxItem, InboxItemType, IssueStatus, IssuePriority } from "@/shared/types";
+import type { InboxItem, IssueStatus, IssuePriority } from "@/shared/types";
 import { Button } from "@/components/ui/button";
 import {
   ResizablePanelGroup,
@@ -39,32 +39,15 @@ import { api } from "@/shared/api";
 // Helpers
 // ---------------------------------------------------------------------------
 
-const typeLabels: Record<InboxItemType, string> = {
-  issue_assigned: "Assigned",
-  unassigned: "Unassigned",
-  assignee_changed: "Assignee changed",
-  status_changed: "Status changed",
-  priority_changed: "Priority changed",
-  due_date_changed: "Due date changed",
-  new_comment: "New comment",
-  mentioned: "Mentioned",
-  review_requested: "Review requested",
-  task_completed: "Task completed",
-  task_failed: "Task failed",
-  agent_blocked: "Agent blocked",
-  agent_completed: "Agent completed",
-  reaction_added: "Reacted",
-};
-
-function timeAgo(dateStr: string): string {
+function timeAgo(dateStr: string, tTime: ReturnType<typeof useTranslations>): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 1) return tTime("justNow");
+  if (minutes < 60) return tTime("shortMinutes", { count: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
+  if (hours < 24) return tTime("shortHours", { count: hours });
   const days = Math.floor(hours / 24);
-  return `${days}d`;
+  return tTime("shortDays", { count: days });
 }
 
 type Formatter = ReturnType<typeof useFormatter>;
@@ -85,26 +68,29 @@ function InboxDetailLabel({ item }: { item: InboxItem }) {
   const { getActorName } = useActorName();
   const f = useFormatter();
   const tIssues = useTranslations("issues");
+  const t = useTranslations("inbox");
   const details = item.details ?? {};
+
+  const typeLabel = t(`types.${item.type}`);
 
   switch (item.type) {
     case "status_changed": {
-      if (!details.to) return <span>{typeLabels[item.type]}</span>;
+      if (!details.to) return <span>{typeLabel}</span>;
       const label = tIssues(`status.${details.to}`);
       return (
         <span className="inline-flex items-center gap-1">
-          Set status to
+          {t("detail.setStatusTo")}
           <StatusIcon status={details.to as IssueStatus} className="h-3 w-3" />
           {label}
         </span>
       );
     }
     case "priority_changed": {
-      if (!details.to) return <span>{typeLabels[item.type]}</span>;
+      if (!details.to) return <span>{typeLabel}</span>;
       const label = tIssues(`priority.${details.to}`);
       return (
         <span className="inline-flex items-center gap-1">
-          Set priority to
+          {t("detail.setPriorityTo")}
           <PriorityIcon priority={details.to as IssuePriority} className="h-3 w-3" />
           {label}
         </span>
@@ -112,33 +98,33 @@ function InboxDetailLabel({ item }: { item: InboxItem }) {
     }
     case "issue_assigned": {
       if (details.new_assignee_id) {
-        return <span>Assigned to {getActorName(details.new_assignee_type ?? "member", details.new_assignee_id)}</span>;
+        return <span>{t("detail.assignedTo", { name: getActorName(details.new_assignee_type ?? "member", details.new_assignee_id) })}</span>;
       }
-      return <span>{typeLabels[item.type]}</span>;
+      return <span>{typeLabel}</span>;
     }
     case "unassigned":
-      return <span>Removed assignee</span>;
+      return <span>{t("detail.removedAssignee")}</span>;
     case "assignee_changed": {
       if (details.new_assignee_id) {
-        return <span>Assigned to {getActorName(details.new_assignee_type ?? "member", details.new_assignee_id)}</span>;
+        return <span>{t("detail.assignedTo", { name: getActorName(details.new_assignee_type ?? "member", details.new_assignee_id) })}</span>;
       }
-      return <span>{typeLabels[item.type]}</span>;
+      return <span>{typeLabel}</span>;
     }
     case "due_date_changed": {
-      if (details.to) return <span>Set due date to {shortDate(details.to, f)}</span>;
-      return <span>Removed due date</span>;
+      if (details.to) return <span>{t("detail.setDueDateTo", { date: shortDate(details.to, f) })}</span>;
+      return <span>{t("detail.removedDueDate")}</span>;
     }
     case "new_comment": {
       if (item.body) return <span>{item.body}</span>;
-      return <span>{typeLabels[item.type]}</span>;
+      return <span>{typeLabel}</span>;
     }
     case "reaction_added": {
       const emoji = details.emoji;
-      if (emoji) return <span>Reacted {emoji} to your comment</span>;
-      return <span>{typeLabels[item.type]}</span>;
+      if (emoji) return <span>{t("detail.reactedToYourComment", { emoji })}</span>;
+      return <span>{typeLabel}</span>;
     }
     default:
-      return <span>{typeLabels[item.type] ?? item.type}</span>;
+      return <span>{typeLabel}</span>;
   }
 }
 
@@ -157,6 +143,8 @@ function InboxListItem({
   onClick: () => void;
   onArchive: () => void;
 }) {
+  const t = useTranslations("inbox");
+  const tTime = useTranslations("time");
   return (
     <button
       onClick={onClick}
@@ -185,7 +173,7 @@ function InboxListItem({
             <span
               role="button"
               tabIndex={-1}
-              title="Archive"
+              title={t("archive")}
               onClick={(e) => {
                 e.stopPropagation();
                 onArchive();
@@ -210,7 +198,7 @@ function InboxListItem({
             <InboxDetailLabel item={item} />
           </p>
           <span className={`shrink-0 text-xs ${item.read ? "text-muted-foreground/60" : "text-muted-foreground"}`}>
-            {timeAgo(item.created_at)}
+            {timeAgo(item.created_at, tTime)}
           </span>
         </div>
       </div>
@@ -226,6 +214,7 @@ export default function InboxPage() {
   const searchParams = useSearchParams();
   const urlIssue = searchParams.get("issue") ?? "";
   const t = useTranslations("inbox");
+  const tTime = useTranslations("time");
 
   const [selectedKey, setSelectedKeyState] = useState(() => urlIssue);
 
@@ -441,7 +430,7 @@ export default function InboxPage() {
           <div className="p-6">
             <h2 className="text-lg font-semibold">{selected.title}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {typeLabels[selected.type]} · {timeAgo(selected.created_at)}
+              {t(`types.${selected.type}`)} · {timeAgo(selected.created_at, tTime)}
             </p>
             {selected.body && (
               <div className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">
@@ -455,7 +444,7 @@ export default function InboxPage() {
                 onClick={() => handleArchive(selected.id)}
               >
                 <Archive className="mr-1.5 h-3.5 w-3.5" />
-                Archive
+                {t("archive")}
               </Button>
             </div>
           </div>

@@ -300,7 +300,7 @@ export function IssuesHeader({ scopedIssues }: { scopedIssues: Issue[] }) {
     }) > 0;
 
   const sortLabel =
-    SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? "Manual";
+    SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? tUI("manual");
 
   const scopes: { value: IssuesScope; label: string; description: string }[] = [
     { value: "all", label: t("filter.all.label"), description: t("filter.all.description") },

@@ -522,6 +522,7 @@
     "failedToArchiveAll": "归档全部失败",
     "failedToArchiveRead": "归档已读失败",
     "failedToArchiveCompleted": "归档已完成失败",
+    "archive": "归档",
     "detail": {
       "setStatusTo": "设置状态为",
       "setPriorityTo": "设置优先级为",
@@ -550,6 +551,19 @@
   },
   "modals": {
     "createIssue": "创建问题",
+    "createWorkspace": {
+      "back": "返回",
+      "title": "创建工作空间",
+      "description": "工作空间是团队协同处理项目与问题的共享环境。",
+      "nameLabel": "工作空间名称",
+      "namePlaceholder": "我的工作空间",
+      "slugLabel": "工作空间标识",
+      "slugPlaceholder": "my-workspace",
+      "slugError": "仅允许小写字母、数字和连字符",
+      "submitting": "创建中...",
+      "submit": "创建工作空间",
+      "failed": "创建工作空间失败"
+    },
     "editIssue": "编辑问题",
     "deleteIssue": "删除问题",
     "deleteConfirm": "确定要删除这个问题吗？",
@@ -574,6 +588,9 @@
     "minutesAgo": "{count, plural, =1 {1 分钟前} other {# 分钟前}}",
     "hoursAgo": "{count, plural, =1 {1 小时前} other {# 小时前}}",
     "daysAgo": "{count, plural, =1 {1 天前} other {# 天前}}",
+    "shortMinutes": "{count}分钟",
+    "shortHours": "{count}小时",
+    "shortDays": "{count}天",
     "today": "今天",
     "yesterday": "昨天"
   },
