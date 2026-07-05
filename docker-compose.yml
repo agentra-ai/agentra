@@ -99,6 +99,7 @@ services:
       target: web-runtime
       args:
         REMOTE_API_URL: ${REMOTE_API_URL:-http://server:8080}
+        NEXT_PUBLIC_CLI_CALLBACK_HOSTS: ${NEXT_PUBLIC_CLI_CALLBACK_HOSTS:-localhost,127.0.0.1}
     environment:
       HOSTNAME: ${WEB_HOSTNAME}
       PORT: ${WEB_INTERNAL_PORT}

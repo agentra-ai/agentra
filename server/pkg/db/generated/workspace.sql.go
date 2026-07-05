@@ -11,10 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countActiveMembers = `-- name: CountActiveMembers :one
+SELECT count(*) FROM member
+WHERE workspace_id = $1 AND invitation_status IN ('invited', 'active')
+`
+
+func (q *Queries) CountActiveMembers(ctx context.Context, workspaceID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveMembers, workspaceID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createWorkspace = `-- name: CreateWorkspace :one
 INSERT INTO workspace (name, slug, description, context, issue_prefix)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, plan, max_seats
 `
 
 type CreateWorkspaceParams struct {
@@ -46,6 +58,8 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		&i.Repos,
 		&i.IssuePrefix,
 		&i.IssueCounter,
+		&i.Plan,
+		&i.MaxSeats,
 	)
 	return i, err
 }
@@ -60,7 +74,7 @@ func (q *Queries) DeleteWorkspace(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getWorkspace = `-- name: GetWorkspace :one
-SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter FROM workspace
+SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, plan, max_seats FROM workspace
 WHERE id = $1
 `
 
@@ -79,12 +93,14 @@ func (q *Queries) GetWorkspace(ctx context.Context, id pgtype.UUID) (Workspace, 
 		&i.Repos,
 		&i.IssuePrefix,
 		&i.IssueCounter,
+		&i.Plan,
+		&i.MaxSeats,
 	)
 	return i, err
 }
 
 const getWorkspaceBySlug = `-- name: GetWorkspaceBySlug :one
-SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter FROM workspace
+SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, plan, max_seats FROM workspace
 WHERE slug = $1
 `
 
@@ -103,7 +119,28 @@ func (q *Queries) GetWorkspaceBySlug(ctx context.Context, slug string) (Workspac
 		&i.Repos,
 		&i.IssuePrefix,
 		&i.IssueCounter,
+		&i.Plan,
+		&i.MaxSeats,
 	)
+	return i, err
+}
+
+const getWorkspacePlan = `-- name: GetWorkspacePlan :one
+SELECT id, plan, max_seats
+FROM workspace
+WHERE id = $1
+`
+
+type GetWorkspacePlanRow struct {
+	ID       pgtype.UUID `json:"id"`
+	Plan     string      `json:"plan"`
+	MaxSeats int32       `json:"max_seats"`
+}
+
+func (q *Queries) GetWorkspacePlan(ctx context.Context, id pgtype.UUID) (GetWorkspacePlanRow, error) {
+	row := q.db.QueryRow(ctx, getWorkspacePlan, id)
+	var i GetWorkspacePlanRow
+	err := row.Scan(&i.ID, &i.Plan, &i.MaxSeats)
 	return i, err
 }
 
@@ -121,7 +158,7 @@ func (q *Queries) IncrementIssueCounter(ctx context.Context, id pgtype.UUID) (in
 }
 
 const listWorkspaces = `-- name: ListWorkspaces :many
-SELECT w.id, w.name, w.slug, w.description, w.settings, w.created_at, w.updated_at, w.context, w.repos, w.issue_prefix, w.issue_counter FROM workspace w
+SELECT w.id, w.name, w.slug, w.description, w.settings, w.created_at, w.updated_at, w.context, w.repos, w.issue_prefix, w.issue_counter, w.plan, w.max_seats FROM workspace w
 JOIN member m ON m.workspace_id = w.id
 WHERE m.user_id = $1
 ORDER BY w.created_at ASC
@@ -148,6 +185,8 @@ func (q *Queries) ListWorkspaces(ctx context.Context, userID pgtype.UUID) ([]Wor
 			&i.Repos,
 			&i.IssuePrefix,
 			&i.IssueCounter,
+			&i.Plan,
+			&i.MaxSeats,
 		); err != nil {
 			return nil, err
 		}
@@ -169,7 +208,7 @@ UPDATE workspace SET
     issue_prefix = COALESCE($7, issue_prefix),
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, plan, max_seats
 `
 
 type UpdateWorkspaceParams struct {
@@ -205,6 +244,36 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.Repos,
 		&i.IssuePrefix,
 		&i.IssueCounter,
+		&i.Plan,
+		&i.MaxSeats,
 	)
+	return i, err
+}
+
+const updateWorkspacePlan = `-- name: UpdateWorkspacePlan :one
+UPDATE workspace SET
+    plan = COALESCE($2, plan),
+    max_seats = COALESCE($3, max_seats),
+    updated_at = now()
+WHERE id = $1
+RETURNING id, plan, max_seats
+`
+
+type UpdateWorkspacePlanParams struct {
+	ID       pgtype.UUID `json:"id"`
+	Plan     pgtype.Text `json:"plan"`
+	MaxSeats pgtype.Int4 `json:"max_seats"`
+}
+
+type UpdateWorkspacePlanRow struct {
+	ID       pgtype.UUID `json:"id"`
+	Plan     string      `json:"plan"`
+	MaxSeats int32       `json:"max_seats"`
+}
+
+func (q *Queries) UpdateWorkspacePlan(ctx context.Context, arg UpdateWorkspacePlanParams) (UpdateWorkspacePlanRow, error) {
+	row := q.db.QueryRow(ctx, updateWorkspacePlan, arg.ID, arg.Plan, arg.MaxSeats)
+	var i UpdateWorkspacePlanRow
+	err := row.Scan(&i.ID, &i.Plan, &i.MaxSeats)
 	return i, err
 }

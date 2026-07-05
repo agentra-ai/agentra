@@ -218,6 +218,34 @@ type DaemonToken struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type EvalGoldenIssue struct {
+	ID            pgtype.UUID        `json:"id"`
+	Slug          string             `json:"slug"`
+	Category      string             `json:"category"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	IssueID       pgtype.UUID        `json:"issue_id"`
+	Title         string             `json:"title"`
+	Description   string             `json:"description"`
+	ExpectedTest  pgtype.Text        `json:"expected_test"`
+	MaxDurationMs pgtype.Int8        `json:"max_duration_ms"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+type EvalRun struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	StartedAt   pgtype.Timestamptz `json:"started_at"`
+	FinishedAt  pgtype.Timestamptz `json:"finished_at"`
+	Status      string             `json:"status"`
+	TotalCases  int32              `json:"total_cases"`
+	Passed      int32              `json:"passed"`
+	Failed      int32              `json:"failed"`
+	Score       pgtype.Numeric     `json:"score"`
+	PrevScore   pgtype.Numeric     `json:"prev_score"`
+	Regression  bool               `json:"regression"`
+	Summary     []byte             `json:"summary"`
+}
+
 type ExecutionTrace struct {
 	ID        pgtype.UUID        `json:"id"`
 	TaskID    pgtype.UUID        `json:"task_id"`
@@ -268,6 +296,19 @@ type InboxItem struct {
 	Details       []byte             `json:"details"`
 }
 
+type Invoice struct {
+	ID               pgtype.UUID        `json:"id"`
+	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
+	StripeInvoiceID  pgtype.Text        `json:"stripe_invoice_id"`
+	AmountCents      int32              `json:"amount_cents"`
+	Currency         string             `json:"currency"`
+	Status           string             `json:"status"`
+	PeriodStart      pgtype.Timestamptz `json:"period_start"`
+	PeriodEnd        pgtype.Timestamptz `json:"period_end"`
+	HostedInvoiceUrl pgtype.Text        `json:"hosted_invoice_url"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
 type Issue struct {
 	ID                 pgtype.UUID        `json:"id"`
 	WorkspaceID        pgtype.UUID        `json:"workspace_id"`
@@ -287,6 +328,7 @@ type Issue struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	Number             int32              `json:"number"`
+	ProjectID          pgtype.UUID        `json:"project_id"`
 }
 
 type IssueDependency struct {
@@ -365,11 +407,26 @@ type Loop struct {
 }
 
 type Member struct {
-	ID          pgtype.UUID        `json:"id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	UserID      pgtype.UUID        `json:"user_id"`
-	Role        string             `json:"role"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ID               pgtype.UUID        `json:"id"`
+	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
+	UserID           pgtype.UUID        `json:"user_id"`
+	Role             string             `json:"role"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	InvitationStatus string             `json:"invitation_status"`
+	InvitedBy        pgtype.UUID        `json:"invited_by"`
+	InvitedAt        pgtype.Timestamptz `json:"invited_at"`
+	AcceptedAt       pgtype.Timestamptz `json:"accepted_at"`
+	DeclinedAt       pgtype.Timestamptz `json:"declined_at"`
+}
+
+type Milestone struct {
+	ID        pgtype.UUID        `json:"id"`
+	ProjectID pgtype.UUID        `json:"project_id"`
+	Title     string             `json:"title"`
+	Deadline  pgtype.Timestamptz `json:"deadline"`
+	Status    string             `json:"status"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 type PersonalAccessToken struct {
@@ -382,6 +439,17 @@ type PersonalAccessToken struct {
 	LastUsedAt  pgtype.Timestamptz `json:"last_used_at"`
 	Revoked     bool               `json:"revoked"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type Project struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Title       string             `json:"title"`
+	Slug        string             `json:"slug"`
+	OwnerID     pgtype.UUID        `json:"owner_id"`
+	Deadline    pgtype.Timestamptz `json:"deadline"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type RuntimeUsage struct {
@@ -417,6 +485,20 @@ type SkillFile struct {
 	Content   string             `json:"content"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Subscription struct {
+	ID                   pgtype.UUID        `json:"id"`
+	WorkspaceID          pgtype.UUID        `json:"workspace_id"`
+	StripeSubscriptionID pgtype.Text        `json:"stripe_subscription_id"`
+	StripeCustomerID     pgtype.Text        `json:"stripe_customer_id"`
+	Plan                 string             `json:"plan"`
+	Status               string             `json:"status"`
+	Seats                int32              `json:"seats"`
+	CurrentPeriodStart   pgtype.Timestamptz `json:"current_period_start"`
+	CurrentPeriodEnd     pgtype.Timestamptz `json:"current_period_end"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
 
 type TaskGraphEdge struct {
@@ -500,6 +582,14 @@ type TraceStep struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
+type UsageRecord struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Metric      string             `json:"metric"`
+	Quantity    pgtype.Numeric     `json:"quantity"`
+	RecordedAt  pgtype.Timestamptz `json:"recorded_at"`
+}
+
 type User struct {
 	ID        pgtype.UUID        `json:"id"`
 	Name      string             `json:"name"`
@@ -531,4 +621,6 @@ type Workspace struct {
 	Repos        []byte             `json:"repos"`
 	IssuePrefix  string             `json:"issue_prefix"`
 	IssueCounter int32              `json:"issue_counter"`
+	Plan         string             `json:"plan"`
+	MaxSeats     int32              `json:"max_seats"`
 }

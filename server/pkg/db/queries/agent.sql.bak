@@ -234,7 +234,7 @@ RETURNING *;
 -- name: GetLatestEvalRun :one
 SELECT id, workspace_id, started_at, finished_at, status, total_cases, passed, failed, score, prev_score, regression, summary
 FROM eval_runs
-WHERE eval_runs.workspace_id = $1
+WHERE workspace_id = $1
 ORDER BY started_at DESC
 LIMIT 1;
 
@@ -242,14 +242,14 @@ LIMIT 1;
 WITH latest AS (
     SELECT score
     FROM eval_runs
-    WHERE eval_runs.workspace_id = $1
+    WHERE workspace_id = $1
     ORDER BY started_at DESC
     LIMIT 1
 ),
 prev AS (
     SELECT score
     FROM eval_runs
-    WHERE eval_runs.workspace_id = $1
+    WHERE workspace_id = $1
     ORDER BY started_at DESC
     OFFSET 1 LIMIT 1
 )

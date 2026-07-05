@@ -268,6 +268,26 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 				metrics.RegisterRoutes(r)
 			})
 
+			// GitHub Integration (workspace-scoped, member-level)
+			r.Route("/api/workspaces/{id}/github", func(r chi.Router) {
+				r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
+				githubHandler := handler.NewGitHubHandler(queries)
+				githubHandler.RegisterRoutes(r)
+			})
+
+			// Projects (workspace-scoped, member-level reads, owner/admin writes)
+			r.Route("/api/workspaces/{id}/projects", func(r chi.Router) {
+				r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
+				projects := handler.NewProjectHandler(queries)
+				projects.RegisterRoutes(r)
+			})
+
+			// Billing (workspace-scoped, owner/admin only)
+			r.Route("/api/workspaces/{id}/billing", func(r chi.Router) {
+				billing := handler.NewBillingHandler(queries)
+				billing.RegisterRoutes(r)
+			})
+
 			// Git hooks API
 			r.Route("/api/git", func(r chi.Router) {
 				r.Post("/link-commit", h.LinkCommit)

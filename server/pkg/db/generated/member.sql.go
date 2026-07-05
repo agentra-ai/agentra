@@ -14,7 +14,7 @@ import (
 const createMember = `-- name: CreateMember :one
 INSERT INTO member (workspace_id, user_id, role)
 VALUES ($1, $2, $3)
-RETURNING id, workspace_id, user_id, role, created_at
+RETURNING id, workspace_id, user_id, role, created_at, invitation_status, invited_by, invited_at, accepted_at, declined_at
 `
 
 type CreateMemberParams struct {
@@ -32,6 +32,11 @@ func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Mem
 		&i.UserID,
 		&i.Role,
 		&i.CreatedAt,
+		&i.InvitationStatus,
+		&i.InvitedBy,
+		&i.InvitedAt,
+		&i.AcceptedAt,
+		&i.DeclinedAt,
 	)
 	return i, err
 }
@@ -46,7 +51,7 @@ func (q *Queries) DeleteMember(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getMember = `-- name: GetMember :one
-SELECT id, workspace_id, user_id, role, created_at FROM member
+SELECT id, workspace_id, user_id, role, created_at, invitation_status, invited_by, invited_at, accepted_at, declined_at FROM member
 WHERE id = $1
 `
 
@@ -59,12 +64,17 @@ func (q *Queries) GetMember(ctx context.Context, id pgtype.UUID) (Member, error)
 		&i.UserID,
 		&i.Role,
 		&i.CreatedAt,
+		&i.InvitationStatus,
+		&i.InvitedBy,
+		&i.InvitedAt,
+		&i.AcceptedAt,
+		&i.DeclinedAt,
 	)
 	return i, err
 }
 
 const getMemberByUserAndWorkspace = `-- name: GetMemberByUserAndWorkspace :one
-SELECT id, workspace_id, user_id, role, created_at FROM member
+SELECT id, workspace_id, user_id, role, created_at, invitation_status, invited_by, invited_at, accepted_at, declined_at FROM member
 WHERE user_id = $1 AND workspace_id = $2
 `
 
@@ -82,12 +92,17 @@ func (q *Queries) GetMemberByUserAndWorkspace(ctx context.Context, arg GetMember
 		&i.UserID,
 		&i.Role,
 		&i.CreatedAt,
+		&i.InvitationStatus,
+		&i.InvitedBy,
+		&i.InvitedAt,
+		&i.AcceptedAt,
+		&i.DeclinedAt,
 	)
 	return i, err
 }
 
 const listMembers = `-- name: ListMembers :many
-SELECT id, workspace_id, user_id, role, created_at FROM member
+SELECT id, workspace_id, user_id, role, created_at, invitation_status, invited_by, invited_at, accepted_at, declined_at FROM member
 WHERE workspace_id = $1
 ORDER BY created_at ASC
 `
@@ -107,6 +122,11 @@ func (q *Queries) ListMembers(ctx context.Context, workspaceID pgtype.UUID) ([]M
 			&i.UserID,
 			&i.Role,
 			&i.CreatedAt,
+			&i.InvitationStatus,
+			&i.InvitedBy,
+			&i.InvitedAt,
+			&i.AcceptedAt,
+			&i.DeclinedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -119,7 +139,8 @@ func (q *Queries) ListMembers(ctx context.Context, workspaceID pgtype.UUID) ([]M
 }
 
 const listMembersWithUser = `-- name: ListMembersWithUser :many
-SELECT m.id, m.workspace_id, m.user_id, m.role, m.created_at,
+SELECT m.id, m.workspace_id, m.user_id, m.role, m.invitation_status, m.invited_at,
+       m.created_at,
        u.name as user_name, u.email as user_email, u.avatar_url as user_avatar_url
 FROM member m
 JOIN "user" u ON u.id = m.user_id
@@ -128,14 +149,16 @@ ORDER BY m.created_at ASC
 `
 
 type ListMembersWithUserRow struct {
-	ID            pgtype.UUID        `json:"id"`
-	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
-	UserID        pgtype.UUID        `json:"user_id"`
-	Role          string             `json:"role"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UserName      string             `json:"user_name"`
-	UserEmail     string             `json:"user_email"`
-	UserAvatarUrl pgtype.Text        `json:"user_avatar_url"`
+	ID               pgtype.UUID        `json:"id"`
+	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
+	UserID           pgtype.UUID        `json:"user_id"`
+	Role             string             `json:"role"`
+	InvitationStatus string             `json:"invitation_status"`
+	InvitedAt        pgtype.Timestamptz `json:"invited_at"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UserName         string             `json:"user_name"`
+	UserEmail        string             `json:"user_email"`
+	UserAvatarUrl    pgtype.Text        `json:"user_avatar_url"`
 }
 
 func (q *Queries) ListMembersWithUser(ctx context.Context, workspaceID pgtype.UUID) ([]ListMembersWithUserRow, error) {
@@ -152,6 +175,8 @@ func (q *Queries) ListMembersWithUser(ctx context.Context, workspaceID pgtype.UU
 			&i.WorkspaceID,
 			&i.UserID,
 			&i.Role,
+			&i.InvitationStatus,
+			&i.InvitedAt,
 			&i.CreatedAt,
 			&i.UserName,
 			&i.UserEmail,
@@ -167,10 +192,42 @@ func (q *Queries) ListMembersWithUser(ctx context.Context, workspaceID pgtype.UU
 	return items, nil
 }
 
+const updateMemberInvitationStatus = `-- name: UpdateMemberInvitationStatus :one
+UPDATE member SET
+    invitation_status = $2,
+    accepted_at = CASE WHEN $2 = 'active' THEN now() ELSE accepted_at END,
+    declined_at = CASE WHEN $2 = 'declined' THEN now() ELSE NULL END
+WHERE id = $1
+RETURNING id, workspace_id, user_id, role, created_at, invitation_status, invited_by, invited_at, accepted_at, declined_at
+`
+
+type UpdateMemberInvitationStatusParams struct {
+	ID               pgtype.UUID `json:"id"`
+	InvitationStatus string      `json:"invitation_status"`
+}
+
+func (q *Queries) UpdateMemberInvitationStatus(ctx context.Context, arg UpdateMemberInvitationStatusParams) (Member, error) {
+	row := q.db.QueryRow(ctx, updateMemberInvitationStatus, arg.ID, arg.InvitationStatus)
+	var i Member
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Role,
+		&i.CreatedAt,
+		&i.InvitationStatus,
+		&i.InvitedBy,
+		&i.InvitedAt,
+		&i.AcceptedAt,
+		&i.DeclinedAt,
+	)
+	return i, err
+}
+
 const updateMemberRole = `-- name: UpdateMemberRole :one
 UPDATE member SET role = $2
 WHERE id = $1
-RETURNING id, workspace_id, user_id, role, created_at
+RETURNING id, workspace_id, user_id, role, created_at, invitation_status, invited_by, invited_at, accepted_at, declined_at
 `
 
 type UpdateMemberRoleParams struct {
@@ -187,6 +244,11 @@ func (q *Queries) UpdateMemberRole(ctx context.Context, arg UpdateMemberRolePara
 		&i.UserID,
 		&i.Role,
 		&i.CreatedAt,
+		&i.InvitationStatus,
+		&i.InvitedBy,
+		&i.InvitedAt,
+		&i.AcceptedAt,
+		&i.DeclinedAt,
 	)
 	return i, err
 }

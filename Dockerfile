@@ -1,7 +1,9 @@
 # --- Server build stage ---
 FROM golang:1.26-alpine AS server-builder
 
-RUN apk add --no-cache git
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/main" > /etc/apk/repositories && \
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories && \
+    apk add --no-cache git
 
 WORKDIR /src
 
@@ -19,7 +21,9 @@ RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/gateway ./cmd/ga
 # --- Frontend build stage ---
 FROM node:22-alpine AS web-builder
 
-RUN apk add --no-cache libc6-compat
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/main" > /etc/apk/repositories && \
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories && \
+    apk add --no-cache libc6-compat
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -44,14 +48,18 @@ COPY apps/web/ ./apps/web/
 COPY .env apps/web/.env
 
 ARG REMOTE_API_URL=http://server:8080
+ARG NEXT_PUBLIC_CLI_CALLBACK_HOSTS=localhost,127.0.0.1
 ENV REMOTE_API_URL=${REMOTE_API_URL}
+ENV NEXT_PUBLIC_CLI_CALLBACK_HOSTS=${NEXT_PUBLIC_CLI_CALLBACK_HOSTS}
 
 RUN pnpm --filter @agentra/web build
 
 # --- Server runtime stage ---
 FROM golang:1.26-alpine AS server-runtime
 
-RUN apk add --no-cache ca-certificates tzdata wget
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/main" > /etc/apk/repositories && \
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories && \
+    apk add --no-cache ca-certificates tzdata wget
 
 WORKDIR /app
 
@@ -80,7 +88,9 @@ ENTRYPOINT ["./gateway"]
 # --- Frontend runtime stage ---
 FROM node:22-alpine AS web-runtime
 
-RUN apk add --no-cache libc6-compat
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/main" > /etc/apk/repositories && \
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories && \
+    apk add --no-cache libc6-compat
 
 WORKDIR /app
 
