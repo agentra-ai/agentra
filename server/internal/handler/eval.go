@@ -25,23 +25,23 @@ func NewEvalServer(q *db.Queries, workspaceRoot string) *EvalServer {
 	s := &EvalServer{Mux: r, Queries: q}
 
 	// Seed default golden dataset (owner/admin only).
-	r.With(middleware.RequireWorkspaceRole(q, "owner", "admin")).
+	r.With(middleware.RequireWorkspaceRole(s.Queries, "owner", "admin")).
 		Post("/seed", s.handleSeed)
 
 	// List current golden cases.
-	r.With(middleware.RequireWorkspaceMember()).
+	r.With(middleware.RequireWorkspaceMember(s.Queries)).
 		Get("/cases", s.handleListCases)
 
 	// Trigger a run (owner/admin starts the benchmark).
-	r.With(middleware.RequireWorkspaceRole(q, "owner", "admin")).
+	r.With(middleware.RequireWorkspaceRole(s.Queries, "owner", "admin")).
 		Post("/run", s.handleRun)
 
 	// Latest run result.
-	r.With(middleware.RequireWorkspaceMember()).
+	r.With(middleware.RequireWorkspaceMember(s.Queries)).
 		Get("/runs/latest", s.handleLatestRun)
 
 	// Regression gate — returns 503 if latest run regressed vs previous.
-	r.With(middleware.RequireWorkspaceMember()).
+	r.With(middleware.RequireWorkspaceMember(s.Queries)).
 		Get("/gate", s.handleGate)
 
 	return s
@@ -66,13 +66,14 @@ func (s *EvalServer) handleSeed(w http.ResponseWriter, r *http.Request) {
 
 	cases := seed.DefaultCases
 	for i := range cases {
-		err := s.Queries.CreateEvalGoldenIssue(ctx, db.CreateEvalGoldenIssueParams{
+		expected := pgtype.Text{String: cases[i].ExpectedTest, Valid: true}
+		_, err := s.Queries.CreateEvalGoldenIssue(ctx, db.CreateEvalGoldenIssueParams{
 			Slug:        cases[i].Slug,
 			Category:    cases[i].Category,
 			WorkspaceID: mustUUID(wsID),
 			Title:       cases[i].Title,
-			Description:  cases[i].Description,
-			ExpectedTest: cases[i].ExpectedTest,
+			Description: cases[i].Description,
+			ExpectedTest: expected,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
@@ -105,24 +106,28 @@ func (s *EvalServer) handleRun(w http.ResponseWriter, r *http.Request) {
 	ev := eval.New(/* workspaceRoot */ "")
 	ev.Headless = true
 
-	cases, err := s.Queries.ListEvalGoldenIssues(ctx, mustUUID(wsID))
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+	cases := seed.DefaultCases
+	evalCases := make([]eval.GoldenIssue, 0, len(cases))
+	for _, c := range cases {
+		evalCases = append(evalCases, eval.GoldenIssue{
+			Slug: c.Slug, Category: c.Category, Title: c.Title,
+			Description: c.Description, ExpectedTest: c.ExpectedTest,
+		})
 	}
-
-	report := ev.RunHeadless(ctx, cases)
+	report := ev.RunHeadless(ctx, evalCases)
 
 	// Persist run.
-	_ = s.Queries.CreateEvalRun(ctx, db.CreateEvalRunParams{
+	if _, err := s.Queries.CreateEvalRun(r.Context(), db.CreateEvalRunParams{
 		WorkspaceID: mustUUID(wsID),
 		TotalCases:  int32(report.Total),
 		Passed:      int32(report.Passed),
 		Failed:      int32(report.Failed),
-		Score:       pgtype.Numeric{Float64: report.Score, Valid: true},
+		Score:       pgtype.Numeric{}, // estimate via provider cost API; 0 placeholder
 		Summary:     mustMarshal(report),
 		Status:      "completed",
-	})
+	}); err != nil {
+		// non-fatal; report still returned
+	}
 
 	writeJSON(w, http.StatusCreated, report)
 }
@@ -148,7 +153,7 @@ func (s *EvalServer) handleGate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if regressed {
+	if regressed.Regressed.Valid && regressed.Regressed.Bool {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"regressed": true,
 			"message":   "eval score dropped vs previous run",

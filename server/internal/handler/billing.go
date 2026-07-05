@@ -20,7 +20,7 @@ func NewBillingHandler(q *db.Queries) *BillingHandler {
 }
 
 func (h *BillingHandler) RegisterRoutes(r chi.Router) {
-	r.Use(middleware.RequireWorkspaceRole("owner", "admin"))
+	r.Use(middleware.RequireWorkspaceRoleFromURL(h.Queries, "workspaceId", "owner", "admin"))
 	r.Get("/subscription", h.GetSubscription)
 	r.Post("/checkout", h.CreateCheckoutSession)
 	r.Post("/portal", h.CreatePortalSession)

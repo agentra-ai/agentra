@@ -7,7 +7,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/agentra-ai/agentra/server/internal/middleware"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
 

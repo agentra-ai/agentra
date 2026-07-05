@@ -216,76 +216,6 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 		// --- Workspace-scoped routes (all require workspace membership) ---
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireWorkspaceMember(queries))
-
-			// GitHub Integration (workspace-scoped, member-level)
-			r.Route("/api/workspaces/{id}/github", func(r chi.Router) {
-				r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
-				githubHandler := handler.NewGitHubHandler(queries)
-				githubHandler.RegisterRoutes(r)
-			})
-
-			// Issues
-			r.Route("/api/issues", func(r chi.Router) {
-				r.Get("/", h.ListIssues)
-				r.Post("/", h.CreateIssue)
-				r.Post("/batch-update", h.BatchUpdateIssues)
-				r.Post("/batch-delete", h.BatchDeleteIssues)
-				r.Route("/{id}", func(r chi.Router) {
-					r.Get("/", h.GetIssue)
-					r.Put("/", h.UpdateIssue)
-					r.Delete("/", h.DeleteIssue)
-					r.Post("/comments", h.CreateComment)
-					r.Get("/comments", h.ListComments)
-					r.Get("/timeline", h.ListTimeline)
-					r.Get("/subscribers", h.ListIssueSubscribers)
-					r.Post("/subscribe", h.SubscribeToIssue)
-					r.Post("/unsubscribe", h.UnsubscribeFromIssue)
-					r.Get("/active-task", h.GetActiveTaskForIssue)
-					r.Post("/tasks/{taskId}/cancel", h.CancelTask)
-					r.Get("/task-runs", h.ListTasksByIssue)
-						r.Get("/traces", h.ListTracesByIssue)
-					r.Post("/reactions", h.AddIssueReaction)
-					r.Delete("/reactions", h.RemoveIssueReaction)
-					r.Get("/attachments", h.ListAttachments)
-					r.Post("/auto-decompose", h.AutoDecomposeIssue)
-				})
-			})
-
-			// Attachments
-			r.Get("/api/attachments/{id}", h.GetAttachmentByID)
-			r.Delete("/api/attachments/{id}", h.DeleteAttachment)
-
-			// Task-level human-in-the-loop (Issue #16)
-			r.Route("/api/tasks/{taskId}", func(r chi.Router) {
-				r.Use(middleware.RequireWorkspaceMember(queries))
-				approval := handler.NewTaskApprovalHandler(queries, hub, bus)
-				approval.RegisterRoutes(r)
-			})
-
-			// Admin metrics (Issue #17) — restricted to owners/admins via workspace_id query param
-			r.Route("/api/admin/metrics", func(r chi.Router) {
-				metrics := handler.NewMetricsHandler(queries)
-				metrics.RegisterRoutes(r)
-			})
-
-			// GitHub Integration (workspace-scoped, member-level)
-			r.Route("/api/workspaces/{id}/github", func(r chi.Router) {
-				r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
-				githubHandler := handler.NewGitHubHandler(queries)
-				githubHandler.RegisterRoutes(r)
-			})
-
-			// Projects (workspace-scoped, member-level reads, owner/admin writes)
-			r.Route("/api/workspaces/{id}/projects", func(r chi.Router) {
-				r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
-				projects := handler.NewProjectHandler(queries)
-				projects.RegisterRoutes(r)
-			})
-
-			// Billing (workspace-scoped, owner/admin only)
-			r.Route("/api/workspaces/{id}/billing", func(r chi.Router) {
-				billing := handler.NewBillingHandler(queries)
-				billing.RegisterRoutes(r)
 			})
 
 			// Git hooks API
@@ -353,10 +283,10 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 				r.Get("/", h.GetCloudRuntime)
 				r.Delete("/", h.DeleteCloudRuntime)
 				r.Post("/validate", h.ValidateAPIKey)
-			})
+		})
 
-				// Traces
-				r.Get("/api/traces/{taskId}", h.GetTraceByTask)
+		// Traces
+		r.Get("/api/traces/{taskId}", h.GetTraceByTask)
 			// Inbox
 			r.Route("/api/inbox", func(r chi.Router) {
 				r.Get("/", h.ListInbox)
@@ -380,7 +310,6 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 					r.Post("/cancel", h.CancelLoop)
 				})
 			})
-		})
 	})
 
 	return r

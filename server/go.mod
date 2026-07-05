@@ -19,7 +19,6 @@ require (
 	github.com/minio/minio-go/v7 v7.0.100
 	github.com/resend/resend-go/v2 v2.28.0
 	github.com/spf13/cobra v1.10.2
-	github.com/stripe/stripe-go/v76 v76.25.0
 	golang.org/x/crypto v0.49.0
 )
 
