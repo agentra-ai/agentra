@@ -217,6 +217,13 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireWorkspaceMember(queries))
 
+			// GitHub Integration (workspace-scoped, member-level)
+			r.Route("/api/workspaces/{id}/github", func(r chi.Router) {
+				r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
+				githubHandler := handler.NewGitHubHandler(queries)
+				githubHandler.RegisterRoutes(r)
+			})
+
 			// Issues
 			r.Route("/api/issues", func(r chi.Router) {
 				r.Get("/", h.ListIssues)
