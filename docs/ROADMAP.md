@@ -85,7 +85,7 @@ Today, Agentra v0.2 ships a working end-to-end loop: create an issue, assign it 
 
 ---
 
-## Current State (v0.2)
+## Current State (v0.5)
 
 ### What's Shipped
 
@@ -274,47 +274,53 @@ Expand beyond Claude/Codex/OpenCode to match swarmclaw's 23+ providers.
 
 ---
 
-## Phase 3 — 2026 Q3 (IN PROGRESS via Council Route B)
+## Phase 3 — 2026 Q3 (✅ DONE)
 
-**Team Scale — STARTED**
+**Team Scale — COMPLETED via Council Route B — tag v0.5.0**
 
-Per Council of High Intelligence verdict (Jul 2026): **Billing-first sequence.**
-Build seats layer first, then Stripe billing, then projects hierarchy.
-Free ≤5 seats · $6/seat/mo base · $10/seat/mo with agent runtime.
+### Delivered (v0.5.0, Jul 2026)
 
-### Active Issues
-
-| # | Title | Depends | Status |
+| # | Feature | Status | Commit |
 |---|---|---|---|
-| #21 | Seat Management (members + invitations + seats enforcement) | — | 🚧 |
-| #22 | Stripe Billing Integration (subscription + metering + invoices) | #21 | ⏳ |
-| #23 | Projects Hierarchy (issue grouping + milestones) | #22 | ⏳ |
+| #25 | Seat Management — members, invitations, role-bits, seat cap | ✅ Done | b5a6e61 |
+| #28 | Stripe Billing — Checkout + Customer Portal + webhook + worker | ✅ Done | 7bd8f88 |
+| #27 | Projects Hierarchy — issue grouping, milestones, board scope filter | ✅ Done | fbf33bf |
 
-### Milestones
+### What shipped
 
-#### 3.1 Seat Management (NEW — replaces old 3.1)
+**Free tier ≤5 seats · $6/seat/mo base · $10/seat/mo with agent runtime.**
 
-Build multi-user workspace foundation:
+Backend:- `internal/handler/members.go` — MemberHandler with 5 REST endpoints
+- `internal/handler/billing.go` — BillingHandler + StripeWebhook + CLI worker- `internal/handler/projects.go` — ProjectHandler with 12 REST endpoints
+- `pkg/stripe/client.go` — Stripe SDK wrapper (Checkout, Portal, signature verification)
+- Migrations: 042 (members), 043 (subscriptions/invoices/usage), 044 (projects/milestones)
 
-- Workspace members with roles (owner/admin/member/guest)
-- Email-based invitation flow (pending → active lifecycle)
-- Soft cap enforcement (`max_seats` from plan)
-- Roles determine billing access (only owner/admin manage subscription)
+Frontend:- `features/projects/components/project-picker.tsx` + project-detail.tsx- `features/issues/components/board-column.tsx` projectFilter wiring
+- `app/(dashboard)/_components/billing-tab.tsx` — subscription + invoices + portal
 
-Issue: [#21](https://github.com/agentra-ai/agentra/issues/21)
+Operations:
+- `agentra billing sync` CLI worker — daily usage aggregation
+- `agentra billing status` — display current plan + seats
+- `/api/webhooks/stripe` — PUBLIC endpoint with signature verification
 
-#### 3.2 Stripe Billing Integration
+---
 
-Seat-based subscription with two tiers:
+### Remaining feature-work (deferred, low priority, no blocker)
 
-- **Pro Base** $6/seat/mo — issue management, comment, agents on self-hosted daemon
-- **Pro Agent Runtime** $10/seat/mo — includes cloud runtime agents + per-task metrics
+**Mostly "investigation / ecosystem" items, not engineering:** | # | Title | Type | Trigger to start |
+|---|---|---|---|
+| #30 | Dogfood verification | validation | Run agent on 5 real issues locally |
+| #12 | Repo-DNA dynamic injection | enhancement | After dogfood confirms value |
+| #13 | Agentra-Eval live benchmark | enhancement | After v0.5.0 deployed for 30 days |
+| #24 | Enterprise SSO / compliance | feature | Once ARR > $5k MRR |
 
-Implementation: Stripe Checkout + Customer Portal + webhook sync worker.
+### Milestones (historical context)
 
-Issue: [#22](https://github.com/agentra-ai/agentra/issues/22)
+#### 3.1 Seat Management — ✅ COMPLETE
 
-#### 3.3 Project Hierarchy & Sprint Planning (DEFERRED)
+#### 3.2 Stripe Billing Integration — ✅ COMPLETE
+
+#### 3.3 Project Hierarchy & Sprint Planning — ✅ COMPLETE
 
 Introduce Projects above Issues.
 
