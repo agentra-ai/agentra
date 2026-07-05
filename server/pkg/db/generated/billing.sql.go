@@ -8,7 +8,6 @@ package db
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -281,6 +280,21 @@ func (q *Queries) ListInvoices(ctx context.Context, workspaceID pgtype.UUID) ([]
 	return items, nil
 }
 
+const setStripeCustomerBySubscription = `-- name: SetStripeCustomerBySubscription :exec
+UPDATE subscriptions SET stripe_customer_id = $1, updated_at = now()
+WHERE stripe_subscription_id = $2
+`
+
+type SetStripeCustomerBySubscriptionParams struct {
+	StripeCustomerID     pgtype.Text `json:"stripe_customer_id"`
+	StripeSubscriptionID pgtype.Text `json:"stripe_subscription_id"`
+}
+
+func (q *Queries) SetStripeCustomerBySubscription(ctx context.Context, arg SetStripeCustomerBySubscriptionParams) error {
+	_, err := q.db.Exec(ctx, setStripeCustomerBySubscription, arg.StripeCustomerID, arg.StripeSubscriptionID)
+	return err
+}
+
 const updateInvoiceStatus = `-- name: UpdateInvoiceStatus :one
 UPDATE invoices SET status = $2 WHERE stripe_invoice_id = $1 RETURNING id, workspace_id, stripe_invoice_id, amount_cents, currency, status, period_start, period_end, hosted_invoice_url, created_at
 `
@@ -376,13 +390,4 @@ func (q *Queries) UpdateSubscriptionStatus(ctx context.Context, arg UpdateSubscr
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const setStripeCustomerBySubscription = `-- name: SetStripeCustomerBySubscription :exec
-UPDATE subscriptions SET stripe_customer_id = $1, updated_at = now()
-WHERE stripe_subscription_id = $2;
-`
-
-func (q *Queries) SetStripeCustomerBySubscription(ctx context.Context, stripeCustomerID pgtype.Text, stripeSubscriptionID pgtype.Text) (pgconn.CommandTag, error) {
-	return q.db.Exec(ctx, setStripeCustomerBySubscription, stripeCustomerID, stripeSubscriptionID)
 }

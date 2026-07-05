@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/agentra-ai/agentra/server/internal/logger"
+	"github.com/agentra-ai/agentra/server/internal/util"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/agentra-ai/agentra/server/pkg/protocol"
 )
@@ -278,6 +279,71 @@ func (h *Handler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// SSOConfig defines the workspace-level SSO policy.
+type SSOConfig struct {
+	SSOPolicy     string `json:"sso_policy"`      // "open" (default), "domain_claim"
+	ClaimedDomain string `json:"claimed_domain"`   // e.g. "acme.com"
+}
+
+// SetSSOConfig lets workspace owner claim an email domain for JIT provisioning.
+func (h *Handler) SetSSOConfig(w http.ResponseWriter, r *http.Request) {
+	wsID := chi.URLParam(r, "id")
+	if _, ok := h.requireWorkspaceRole(w, r, wsID, "owner", "admin"); !ok {
+		return
+	}
+
+	var req SSOConfig
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	req.ClaimedDomain = strings.ToLower(strings.TrimSpace(req.ClaimedDomain))
+	switch req.SSOPolicy {
+	case "open", "domain_claim":
+		// ok
+	default:
+		writeError(w, http.StatusBadRequest, "invalid sso_policy; expected 'open' or 'domain_claim'")
+		return
+	}
+	if req.SSOPolicy == "domain_claim" && req.ClaimedDomain == "" {
+		writeError(w, http.StatusBadRequest, "claimed_domain required when sso_policy = 'domain_claim'")
+		return
+	}
+
+	ws, err := h.Queries.ClaimWorkspaceDomain(r.Context(), db.ClaimWorkspaceDomainParams{
+		ID:            parseUUID(wsID),
+		ClaimedDomain: req.ClaimedDomain,
+	})
+	if err != nil {
+		slog.Error("ClaimWorkspaceDomain failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to set sso config")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, workspaceToResponse(ws))
+}
+
+// GetSSOConfig returns the current workspace SSO settings.
+func (h *Handler) GetSSOConfig(w http.ResponseWriter, r *http.Request) {
+	wsID := chi.URLParam(r, "id")
+	if _, ok := h.requireWorkspaceMember(w, r, wsID, "workspace not found"); !ok {
+		return
+	}
+
+	ws, err := h.Queries.GetSSOConfig(r.Context(), parseUUID(wsID))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get sso config")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":             util.UUIDToString(ws.ID),
+		"sso_policy":     ws.SsoPolicy,
+		"claimed_domain": ws.ClaimedDomain,
+	})
 }
 
 type MemberWithUserResponse struct {

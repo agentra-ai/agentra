@@ -11,6 +11,41 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimWorkspaceDomain = `-- name: ClaimWorkspaceDomain :one
+UPDATE workspace
+SET claimed_domain = $2, sso_policy = 'domain_claim', updated_at = now()
+WHERE id = $1
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, plan, max_seats, claimed_domain, sso_policy
+`
+
+type ClaimWorkspaceDomainParams struct {
+	ID            pgtype.UUID `json:"id"`
+	ClaimedDomain string      `json:"claimed_domain"`
+}
+
+func (q *Queries) ClaimWorkspaceDomain(ctx context.Context, arg ClaimWorkspaceDomainParams) (Workspace, error) {
+	row := q.db.QueryRow(ctx, claimWorkspaceDomain, arg.ID, arg.ClaimedDomain)
+	var i Workspace
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.Settings,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Context,
+		&i.Repos,
+		&i.IssuePrefix,
+		&i.IssueCounter,
+		&i.Plan,
+		&i.MaxSeats,
+		&i.ClaimedDomain,
+		&i.SsoPolicy,
+	)
+	return i, err
+}
+
 const countActiveMembers = `-- name: CountActiveMembers :one
 SELECT count(*) FROM member
 WHERE workspace_id = $1 AND invitation_status IN ('invited', 'active')
@@ -26,7 +61,7 @@ func (q *Queries) CountActiveMembers(ctx context.Context, workspaceID pgtype.UUI
 const createWorkspace = `-- name: CreateWorkspace :one
 INSERT INTO workspace (name, slug, description, context, issue_prefix)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, plan, max_seats
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, plan, max_seats, claimed_domain, sso_policy
 `
 
 type CreateWorkspaceParams struct {
@@ -60,6 +95,8 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		&i.IssueCounter,
 		&i.Plan,
 		&i.MaxSeats,
+		&i.ClaimedDomain,
+		&i.SsoPolicy,
 	)
 	return i, err
 }
@@ -73,8 +110,55 @@ func (q *Queries) DeleteWorkspace(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const findWorkspaceByEmailDomain = `-- name: FindWorkspaceByEmailDomain :one
+SELECT id, name, slug, claimed_domain, sso_policy
+FROM workspace
+WHERE claimed_domain = $1
+LIMIT 1
+`
+
+type FindWorkspaceByEmailDomainRow struct {
+	ID            pgtype.UUID `json:"id"`
+	Name          string      `json:"name"`
+	Slug          string      `json:"slug"`
+	ClaimedDomain string      `json:"claimed_domain"`
+	SsoPolicy     string      `json:"sso_policy"`
+}
+
+func (q *Queries) FindWorkspaceByEmailDomain(ctx context.Context, claimedDomain string) (FindWorkspaceByEmailDomainRow, error) {
+	row := q.db.QueryRow(ctx, findWorkspaceByEmailDomain, claimedDomain)
+	var i FindWorkspaceByEmailDomainRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.ClaimedDomain,
+		&i.SsoPolicy,
+	)
+	return i, err
+}
+
+const getSSOConfig = `-- name: GetSSOConfig :one
+SELECT id, claimed_domain, sso_policy
+FROM workspace
+WHERE id = $1
+`
+
+type GetSSOConfigRow struct {
+	ID            pgtype.UUID `json:"id"`
+	ClaimedDomain string      `json:"claimed_domain"`
+	SsoPolicy     string      `json:"sso_policy"`
+}
+
+func (q *Queries) GetSSOConfig(ctx context.Context, id pgtype.UUID) (GetSSOConfigRow, error) {
+	row := q.db.QueryRow(ctx, getSSOConfig, id)
+	var i GetSSOConfigRow
+	err := row.Scan(&i.ID, &i.ClaimedDomain, &i.SsoPolicy)
+	return i, err
+}
+
 const getWorkspace = `-- name: GetWorkspace :one
-SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, plan, max_seats FROM workspace
+SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, plan, max_seats, claimed_domain, sso_policy FROM workspace
 WHERE id = $1
 `
 
@@ -95,12 +179,14 @@ func (q *Queries) GetWorkspace(ctx context.Context, id pgtype.UUID) (Workspace, 
 		&i.IssueCounter,
 		&i.Plan,
 		&i.MaxSeats,
+		&i.ClaimedDomain,
+		&i.SsoPolicy,
 	)
 	return i, err
 }
 
 const getWorkspaceBySlug = `-- name: GetWorkspaceBySlug :one
-SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, plan, max_seats FROM workspace
+SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, plan, max_seats, claimed_domain, sso_policy FROM workspace
 WHERE slug = $1
 `
 
@@ -121,6 +207,8 @@ func (q *Queries) GetWorkspaceBySlug(ctx context.Context, slug string) (Workspac
 		&i.IssueCounter,
 		&i.Plan,
 		&i.MaxSeats,
+		&i.ClaimedDomain,
+		&i.SsoPolicy,
 	)
 	return i, err
 }
@@ -158,7 +246,7 @@ func (q *Queries) IncrementIssueCounter(ctx context.Context, id pgtype.UUID) (in
 }
 
 const listWorkspaces = `-- name: ListWorkspaces :many
-SELECT w.id, w.name, w.slug, w.description, w.settings, w.created_at, w.updated_at, w.context, w.repos, w.issue_prefix, w.issue_counter, w.plan, w.max_seats FROM workspace w
+SELECT w.id, w.name, w.slug, w.description, w.settings, w.created_at, w.updated_at, w.context, w.repos, w.issue_prefix, w.issue_counter, w.plan, w.max_seats, w.claimed_domain, w.sso_policy FROM workspace w
 JOIN member m ON m.workspace_id = w.id
 WHERE m.user_id = $1
 ORDER BY w.created_at ASC
@@ -187,6 +275,8 @@ func (q *Queries) ListWorkspaces(ctx context.Context, userID pgtype.UUID) ([]Wor
 			&i.IssueCounter,
 			&i.Plan,
 			&i.MaxSeats,
+			&i.ClaimedDomain,
+			&i.SsoPolicy,
 		); err != nil {
 			return nil, err
 		}
@@ -208,7 +298,7 @@ UPDATE workspace SET
     issue_prefix = COALESCE($7, issue_prefix),
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, plan, max_seats
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, plan, max_seats, claimed_domain, sso_policy
 `
 
 type UpdateWorkspaceParams struct {
@@ -246,6 +336,8 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.IssueCounter,
 		&i.Plan,
 		&i.MaxSeats,
+		&i.ClaimedDomain,
+		&i.SsoPolicy,
 	)
 	return i, err
 }

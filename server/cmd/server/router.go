@@ -210,6 +210,12 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 				})
 				// Owner-only access
 				r.With(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner")).Delete("/", h.DeleteWorkspace)
+				// Owner/Admin manage SSO config (Issue #24)
+				r.Route("/sso", func(r chi.Router) {
+					r.Use(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner", "admin"))
+					r.Get("/", h.GetSSOConfig)
+					r.Put("/", h.SetSSOConfig)
+				})
 				// Goal-first execute endpoint
 				r.Post("/execute", h.ExecuteGoal)
 			})

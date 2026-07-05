@@ -53,3 +53,21 @@ RETURNING id, plan, max_seats;
 
 -- name: DeleteWorkspace :exec
 DELETE FROM workspace WHERE id = $1;
+
+-- name: ClaimWorkspaceDomain :one
+UPDATE workspace
+SET claimed_domain = $2, sso_policy = 'domain_claim', updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+
+-- name: GetSSOConfig :one
+SELECT id, claimed_domain, sso_policy
+FROM workspace
+WHERE id = $1;
+
+-- name: FindWorkspaceByEmailDomain :one
+SELECT id, name, slug, claimed_domain, sso_policy
+FROM workspace
+WHERE claimed_domain = $1
+LIMIT 1;

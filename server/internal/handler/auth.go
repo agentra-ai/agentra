@@ -13,6 +13,7 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/logger"
 	"github.com/agentra-ai/agentra/server/internal/otpcode"
+	"github.com/agentra-ai/agentra/server/internal/util"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -164,6 +165,15 @@ func (h *Handler) ensureUserWorkspace(ctx context.Context, user db.User) error {
 	return tx.Commit(ctx)
 }
 
+// emailDomain extracts the domain part of an email address (e.g. "alice@acme.com" -> "acme.com").
+func emailDomain(email string) string {
+	idx := strings.LastIndex(email, "@")
+	if idx < 0 || idx == len(email)-1 {
+		return ""
+	}
+	return strings.ToLower(email[idx+1:])
+}
+
 func generateCode() (string, error) {
 	return otpcode.Generate()
 }
@@ -293,6 +303,28 @@ func (h *Handler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 	if err := h.ensureUserWorkspace(r.Context(), user); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to provision workspace")
 		return
+	}
+
+	// JIT provisioning: if the user's email domain matches a claimed workspace,
+	// auto-add them as a member. Best-effort — never blocks login.
+	ctx := r.Context()
+	if domain := emailDomain(email); domain != "" {
+		if ws, qerr := h.Queries.FindWorkspaceByEmailDomain(ctx, domain); qerr == nil && ws.ID.Valid {
+			if _, merr := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
+				UserID:      user.ID,
+				WorkspaceID: ws.ID,
+			}); merr != nil {
+				// Not yet a member — auto-add.
+				if _, cerr := h.Queries.CreateMember(ctx, db.CreateMemberParams{
+					WorkspaceID: ws.ID,
+					UserID:      user.ID,
+					Role:        "member",
+				}); cerr == nil {
+					slog.Info("SSO: auto-provisioned user to workspace",
+						"user_id", util.UUIDToString(user.ID), "workspace_id", util.UUIDToString(ws.ID), "domain", domain)
+				}
+			}
+		}
 	}
 
 	tokenString, err := h.issueJWT(user)
