@@ -255,6 +255,13 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 			r.Get("/api/attachments/{id}", h.GetAttachmentByID)
 			r.Delete("/api/attachments/{id}", h.DeleteAttachment)
 
+			// Task-level human-in-the-loop (Issue #17)
+			r.Route("/api/tasks/{taskId}", func(r chi.Router) {
+				r.Use(middleware.RequireWorkspaceMember(queries))
+				approval := handler.NewTaskApprovalHandler(queries, hub, bus)
+				approval.RegisterRoutes(r)
+			})
+
 			// Git hooks API
 			r.Route("/api/git", func(r chi.Router) {
 				r.Post("/link-commit", h.LinkCommit)
