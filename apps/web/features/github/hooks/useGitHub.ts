@@ -27,8 +27,11 @@ export const useGitHubStore = create<GitHubState>((set) => ({
       const res = await fetch(`/api/workspaces/${workspaceId}/github/installations`)
       const data = await res.json()
       set({ installation: data || null, isLoading: false })
-    } catch (e: any) {
-      set({ error: e.message, isLoading: false })
+    } catch (error: unknown) {
+      set({
+        error: error instanceof Error ? error.message : "Unknown error",
+        isLoading: false,
+      })
     }
   },
 

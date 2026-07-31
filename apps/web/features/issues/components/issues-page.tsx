@@ -89,7 +89,7 @@ export function IssuesPage() {
         }).catch(console.error);
       });
     },
-    []
+    [t]
   );
 
   if (loading) {
@@ -125,7 +125,7 @@ export function IssuesPage() {
           {workspace?.name ?? t("page.workspaceFallback")}
         </span>
         <ChevronRight className="h-3 w-3 text-muted-foreground" />
-        <span className="text-sm font-medium">{t("title")}</span>
+        <h1 className="text-sm font-medium">{t("title")}</h1>
       </div>
 
       {/* Header 2: Scope tabs + filters */}

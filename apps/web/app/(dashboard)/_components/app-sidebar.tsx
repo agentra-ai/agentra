@@ -15,6 +15,7 @@ import {
   BookOpenText,
   SquarePen,
   CircleUser,
+  FolderKanban,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { WorkspaceAvatar } from "@/features/workspace";
@@ -55,6 +56,8 @@ function DraftDot() {
 export function AppSidebar() {
   const tNav = useTranslations("navigation");
   const tAuth = useTranslations("auth");
+  const tIssues = useTranslations("issues");
+  const tProjects = useTranslations("projects");
   const pathname = usePathname();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -72,6 +75,7 @@ export function AppSidebar() {
   ];
 
   const workspaceNav = [
+    { href: "/projects", label: tProjects("title"), icon: FolderKanban },
     { href: "/agents", label: tNav("agents"), icon: Bot },
     { href: "/runtimes", label: tNav("runtimes"), icon: Monitor },
     { href: "/skills", label: tNav("skills"), icon: BookOpenText },
@@ -94,7 +98,10 @@ export function AppSidebar() {
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
-                      <SidebarMenuButton>
+                      <SidebarMenuButton
+                        aria-label={workspace?.name ?? "Agentra"}
+                        data-testid="workspace-switcher"
+                      >
                         <WorkspaceAvatar name={workspace?.name ?? "M"} size="sm" />
                         <span className="flex-1 truncate font-medium">
                           {workspace?.name ?? "Agentra"}
@@ -160,13 +167,14 @@ export function AppSidebar() {
             </SidebarMenu>
             <Tooltip>
               <TooltipTrigger
+                aria-label={tIssues("newIssue")}
                 className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-background text-foreground shadow-sm hover:bg-accent"
                 onClick={() => useModalStore.getState().open("create-issue")}
               >
                 <SquarePen className="size-3.5" />
                 <DraftDot />
               </TooltipTrigger>
-              <TooltipContent side="bottom">{tNav("settings")}</TooltipContent>
+              <TooltipContent side="bottom">{tIssues("newIssue")}</TooltipContent>
             </Tooltip>
           </div>
         </SidebarHeader>

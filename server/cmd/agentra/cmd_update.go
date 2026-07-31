@@ -18,6 +18,10 @@ var updateCmd = &cobra.Command{
 
 func runUpdate(_ *cobra.Command, _ []string) error {
 	fmt.Fprintf(os.Stderr, "Current version: %s (commit: %s)\n", version, commit)
+	if cli.IsBrewInstall() {
+		fmt.Fprintln(os.Stderr, "This binary is managed by Homebrew. Run 'brew upgrade agentra' to update it.")
+		return nil
+	}
 
 	// Check latest version from GitHub.
 	latest, err := cli.FetchLatestRelease()

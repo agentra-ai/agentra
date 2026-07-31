@@ -1,23 +1,24 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import type { TaskGraphNode } from "../api/taskGraphApi";
 
 const TYPE_COLORS: Record<string, string> = {
-  root: "bg-gray-100 text-gray-800",
-  planner: "bg-blue-100 text-blue-800",
-  executor: "bg-green-100 text-green-800",
-  synthesis: "bg-yellow-100 text-yellow-800",
+  root: "bg-muted text-muted-foreground",
+  planner: "bg-secondary text-secondary-foreground",
+  executor: "bg-primary/10 text-primary",
+  synthesis: "bg-accent text-accent-foreground",
 };
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "text-muted-foreground",
-  running: "text-blue-600",
-  completed: "text-green-600",
+  running: "text-primary",
+  completed: "text-accent-foreground",
   failed: "text-destructive",
-  blocked: "text-yellow-600",
+  blocked: "text-secondary-foreground",
 };
 
-export function NodeCard({ node }: { node: any }) {
+export function NodeCard({ node }: { node: TaskGraphNode }) {
   const t = useTranslations("taskGraph");
   return (
     <div className="border rounded-lg p-3">

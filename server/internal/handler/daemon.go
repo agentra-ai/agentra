@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/agentra-ai/agentra/server/internal/agent/seed"
 	"github.com/agentra-ai/agentra/server/internal/service"
+	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/agentra-ai/agentra/server/pkg/protocol"
 	"github.com/agentra-ai/agentra/server/pkg/redact"
 	"github.com/go-chi/chi/v5"
@@ -529,18 +529,139 @@ type TaskMessageBatchRequest struct {
 	Messages []TaskMessageRequest `json:"messages"`
 }
 
+const (
+	maxTaskMessageBodyBytes  = 8 * 1024 * 1024
+	defaultTaskMessageLimit  = 500
+	maxTaskMessageLimit      = 5000
+)
+
+var taskMessageTypes = map[string]bool{
+	"text":        true,
+	"thinking":    true,
+	"tool_use":    true,
+	"tool_result": true,
+	"error":       true,
+}
+
+func validateTaskMessage(msg TaskMessageRequest) error {
+	if msg.Seq <= 0 {
+		return fmt.Errorf("seq must be positive")
+	}
+	if !taskMessageTypes[msg.Type] {
+		return fmt.Errorf("unsupported message type %q", msg.Type)
+	}
+	if len(msg.Tool) > protocol.TaskMessageFieldBytes || len(msg.Content) > protocol.TaskMessageFieldBytes || len(msg.Output) > protocol.TaskMessageFieldBytes {
+		return fmt.Errorf("message field exceeds %d bytes", protocol.TaskMessageFieldBytes)
+	}
+	if msg.Input != nil {
+		inputJSON, err := json.Marshal(msg.Input)
+		if err != nil {
+			return fmt.Errorf("invalid input: %w", err)
+		}
+		if len(inputJSON) > protocol.TaskMessageFieldBytes {
+			return fmt.Errorf("message input exceeds %d bytes", protocol.TaskMessageFieldBytes)
+		}
+	}
+	return nil
+}
+
+// persistTaskMessage is the single task-output ledger path for both local
+// daemons and cloud gateways. It publishes only after a successful insert;
+// duplicate cursors are accepted but never broadcast twice.
+func (h *Handler) persistTaskMessage(ctx context.Context, task db.AgentTaskQueue, workspaceID, traceID string, msg TaskMessageRequest) (bool, error) {
+	msg.Content = redact.Text(msg.Content)
+	msg.Output = redact.Text(msg.Output)
+	msg.Input = redact.InputMap(msg.Input)
+
+	var inputJSON []byte
+	if msg.Input != nil {
+		var err error
+		inputJSON, err = json.Marshal(msg.Input)
+		if err != nil {
+			return false, fmt.Errorf("marshal task message input: %w", err)
+		}
+	}
+
+	inserted, err := h.Queries.CreateTaskMessage(ctx, db.CreateTaskMessageParams{
+		TaskID:  task.ID,
+		Seq:     int32(msg.Seq),
+		Type:    msg.Type,
+		Tool:    pgtype.Text{String: msg.Tool, Valid: msg.Tool != ""},
+		Content: pgtype.Text{String: msg.Content, Valid: msg.Content != ""},
+		Input:   inputJSON,
+		Output:  pgtype.Text{String: msg.Output, Valid: msg.Output != ""},
+	})
+	if err != nil {
+		return false, fmt.Errorf("persist task message: %w", err)
+	}
+	if inserted == 0 {
+		return false, nil
+	}
+
+	if traceID != "" {
+		h.recordTraceMessage(ctx, traceID, msg)
+	}
+	h.publish(protocol.EventTaskMessage, workspaceID, "system", "", protocol.TaskMessagePayload{
+		TaskID:  uuidToString(task.ID),
+		IssueID: uuidToString(task.IssueID),
+		Seq:     msg.Seq,
+		Type:    msg.Type,
+		Tool:    msg.Tool,
+		Content: msg.Content,
+		Input:   msg.Input,
+		Output:  msg.Output,
+	})
+	return true, nil
+}
+
+// RecordGatewayTaskLog validates tenant ownership and normalizes a cloud
+// gateway stdout/stderr frame into the same persisted task_message stream used
+// by local daemons.
+func (h *Handler) RecordGatewayTaskLog(ctx context.Context, workspaceID, taskID string, seq int, stream, content string) error {
+	task, err := h.TaskService.ValidateCloudGatewayTask(ctx, workspaceID, taskID)
+	if err != nil {
+		return err
+	}
+	if task.Status != "dispatched" && task.Status != "running" {
+		return fmt.Errorf("cloud gateway task is not active")
+	}
+
+	messageType := "text"
+	if stream == protocol.GatewayStreamStderr {
+		messageType = "error"
+	} else if stream != protocol.GatewayStreamStdout {
+		return fmt.Errorf("unsupported gateway log stream %q", stream)
+	}
+	msg := TaskMessageRequest{Seq: seq, Type: messageType, Content: content}
+	if err := validateTaskMessage(msg); err != nil {
+		return err
+	}
+	_, err = h.persistTaskMessage(ctx, task, workspaceID, "", msg)
+	return err
+}
+
 // ReportTaskMessages receives a batch of agent execution messages from the daemon.
 func (h *Handler) ReportTaskMessages(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "taskId")
 
 	var req TaskMessageBatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxTaskMessageBodyBytes)).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if len(req.Messages) == 0 {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 		return
+	}
+	if len(req.Messages) > protocol.TaskMessageBatchSize {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("messages must contain at most %d entries", protocol.TaskMessageBatchSize))
+		return
+	}
+	for _, msg := range req.Messages {
+		if err := validateTaskMessage(msg); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 
 	task, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
@@ -549,51 +670,29 @@ func (h *Handler) ReportTaskMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workspaceID := ""
-		// Look up execution trace for recording steps (best-effort).
-		traceID := ""
-		if h.TraceService != nil && h.TraceService.TraceService != nil {
-			if trace, lookupErr := h.TraceService.GetTraceByTask(r.Context(), taskID); lookupErr == nil {
-				traceID = trace.ID
-			}
+	issue, err := h.Queries.GetIssue(r.Context(), task.IssueID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	workspaceID := uuidToString(issue.WorkspaceID)
+	if _, ok := h.requireWorkspaceMember(w, r, workspaceID, "task not found"); !ok {
+		return
+	}
+
+	// Look up execution trace for recording steps (best-effort).
+	traceID := ""
+	if h.TraceService != nil && h.TraceService.TraceService != nil {
+		if trace, lookupErr := h.TraceService.GetTraceByTask(r.Context(), taskID); lookupErr == nil {
+			traceID = trace.ID
 		}
-	if issue, err := h.Queries.GetIssue(r.Context(), task.IssueID); err == nil {
-		workspaceID = uuidToString(issue.WorkspaceID)
 	}
 
 	for _, msg := range req.Messages {
-		// Redact sensitive information before persisting or broadcasting.
-		msg.Content = redact.Text(msg.Content)
-		msg.Output = redact.Text(msg.Output)
-		msg.Input = redact.InputMap(msg.Input)
-
-		var inputJSON []byte
-		if msg.Input != nil {
-			inputJSON, _ = json.Marshal(msg.Input)
-		}
-		h.Queries.CreateTaskMessage(r.Context(), db.CreateTaskMessageParams{
-			TaskID:  parseUUID(taskID),
-			Seq:     int32(msg.Seq),
-			Type:    msg.Type,
-			Tool:    pgtype.Text{String: msg.Tool, Valid: msg.Tool != ""},
-			Content: pgtype.Text{String: msg.Content, Valid: msg.Content != ""},
-			Input:   inputJSON,
-			Output:  pgtype.Text{String: msg.Output, Valid: msg.Output != ""},
-		})
-			// Record message as trace step (best-effort).
-			h.recordTraceMessage(r.Context(), traceID, msg)
-
-		if workspaceID != "" {
-			h.publish(protocol.EventTaskMessage, workspaceID, "system", "", protocol.TaskMessagePayload{
-				TaskID:  taskID,
-				IssueID: uuidToString(task.IssueID),
-				Seq:     msg.Seq,
-				Type:    msg.Type,
-				Tool:    msg.Tool,
-				Content: msg.Content,
-				Input:   msg.Input,
-				Output:  msg.Output,
-			})
+		if _, err := h.persistTaskMessage(r.Context(), task, workspaceID, traceID, msg); err != nil {
+			slog.Error("report task messages: persist failed", "task_id", taskID, "error", err)
+			writeError(w, http.StatusInternalServerError, "failed to persist task messages")
+			return
 		}
 	}
 
@@ -609,20 +708,41 @@ func (h *Handler) ListTaskMessages(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "task not found")
 		return
 	}
+	issue, err := h.Queries.GetIssue(r.Context(), task.IssueID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	if _, ok := h.requireWorkspaceMember(w, r, uuidToString(issue.WorkspaceID), "task not found"); !ok {
+		return
+	}
+
+	limit := defaultTaskMessageLimit
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		limit, err = strconv.Atoi(limitStr)
+		if err != nil || limit < 1 || limit > maxTaskMessageLimit {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("limit must be between 1 and %d", maxTaskMessageLimit))
+			return
+		}
+	}
 
 	var messages []db.TaskMessage
 	if sinceStr := r.URL.Query().Get("since"); sinceStr != "" {
 		sinceSeq, parseErr := strconv.Atoi(sinceStr)
-		if parseErr != nil {
+		if parseErr != nil || sinceSeq < 0 {
 			writeError(w, http.StatusBadRequest, "invalid since parameter")
 			return
 		}
 		messages, err = h.Queries.ListTaskMessagesSince(r.Context(), db.ListTaskMessagesSinceParams{
 			TaskID: parseUUID(taskID),
 			Seq:    int32(sinceSeq),
+			Limit:  int32(limit),
 		})
 	} else {
-		messages, err = h.Queries.ListTaskMessages(r.Context(), parseUUID(taskID))
+		messages, err = h.Queries.ListTaskMessages(r.Context(), db.ListTaskMessagesParams{
+			TaskID: parseUUID(taskID),
+			Limit:  int32(limit),
+		})
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list task messages")

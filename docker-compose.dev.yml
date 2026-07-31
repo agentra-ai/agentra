@@ -1,0 +1,7 @@
+# Host-development override. The self-host Compose file keeps PostgreSQL off
+# the host network; Makefile database commands add this file explicitly so Go
+# processes running on the host can reach the shared development database.
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"

@@ -50,6 +50,26 @@ func newFakeStore() *fakePATStore {
 	}
 }
 
+func TestAuthenticateUserTokenPAT(t *testing.T) {
+	store := newFakeStore()
+	identity, err := AuthenticateUserToken(context.Background(), store, "mul_test_token")
+	if err != nil {
+		t.Fatalf("AuthenticateUserToken: %v", err)
+	}
+	if identity.UserID != "02000000-0000-0000-0000-000000000000" {
+		t.Fatalf("UserID = %q", identity.UserID)
+	}
+	if calls := store.updateCalls.Load(); calls != 1 {
+		t.Fatalf("last-used update calls = %d, want 1", calls)
+	}
+}
+
+func TestAuthenticateUserTokenRejectsPATWithoutStore(t *testing.T) {
+	if _, err := AuthenticateUserToken(context.Background(), nil, "mul_test_token"); err == nil {
+		t.Fatal("AuthenticateUserToken returned nil error")
+	}
+}
+
 // TestAuth_PATUpdateDoesNotLeakGoroutines is the regression test for the
 // goroutine leak: previously, Auth() called
 //

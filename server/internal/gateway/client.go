@@ -2,10 +2,13 @@ package gateway
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/agentra-ai/agentra/server/pkg/protocol"
 	"github.com/gorilla/websocket"
 )
 
@@ -28,16 +31,17 @@ type Client struct {
 
 // Hub manages all gateway connections
 type Hub struct {
-	mu       sync.RWMutex
-	clients  map[string]*Client  // gatewayID -> Client
+	mu        sync.RWMutex
+	clients   map[string]*Client // gatewayID -> Client
 	workspace map[string]string  // workspaceID -> gatewayID
 
 	// Task dispatch callbacks
-	OnTaskDispatch func(gatewayID, taskID string, config map[string]any)
-	OnTaskComplete func(gatewayID, taskID string, exitCode int, output string)
-	OnTaskFail     func(gatewayID, taskID string, error string, retryable bool)
-	OnTaskLogs     func(gatewayID, taskID string, logs string)
-	OnTaskCancel   func(gatewayID, taskID string)
+	OnTaskDispatch   func(gatewayID, workspaceID, taskID string, config map[string]any)
+	OnTaskDispatched func(gatewayID, workspaceID, taskID, containerID string)
+	OnTaskComplete   func(gatewayID, workspaceID, taskID string, exitCode int, output string)
+	OnTaskFail       func(gatewayID, workspaceID, taskID string, error string, retryable bool)
+	OnTaskLogs       func(gatewayID, workspaceID, taskID string, seq int, stream, content string)
+	OnTaskCancel     func(gatewayID, workspaceID, taskID string)
 }
 
 func NewHub() *Hub {
@@ -50,21 +54,43 @@ func NewHub() *Hub {
 // Register registers a gateway connection
 func (h *Hub) Register(client *Client) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
+
+	// Exactly one live socket may own a gateway ID or workspace. Close the old
+	// socket before publishing the replacement; Unregister uses client identity
+	// so a late cleanup from the old socket cannot remove the new connection.
+	var replaced []*Client
+	if existing := h.clients[client.ID]; existing != nil && existing != client {
+		replaced = append(replaced, existing)
+	}
+	if existingID := h.workspace[client.WorkspaceID]; existingID != "" && existingID != client.ID {
+		if existing := h.clients[existingID]; existing != nil {
+			replaced = append(replaced, existing)
+			delete(h.clients, existingID)
+		}
+	}
 	h.clients[client.ID] = client
 	h.workspace[client.WorkspaceID] = client.ID
+	h.mu.Unlock()
+
+	for _, existing := range replaced {
+		_ = existing.Conn.Close()
+	}
 }
 
 // Unregister removes a gateway connection
-func (h *Hub) Unregister(gatewayID string) {
+func (h *Hub) Unregister(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if client, ok := h.clients[gatewayID]; ok {
-		delete(h.workspace, client.WorkspaceID)
-		delete(h.clients, gatewayID)
-		close(client.Send)
+	current, ok := h.clients[client.ID]
+	if !ok || current != client {
+		return
 	}
+	if h.workspace[client.WorkspaceID] == client.ID {
+		delete(h.workspace, client.WorkspaceID)
+	}
+	delete(h.clients, client.ID)
+	close(client.Send)
 }
 
 // GetGatewayForWorkspace returns the gateway ID for a workspace
@@ -89,9 +115,7 @@ func (h *Hub) SendToGateway(gatewayID string, msg []byte) error {
 		return nil
 	default:
 		// Buffer full, gateway is unresponsive - remove it
-		go func() {
-			h.Unregister(gatewayID)
-		}()
+		go h.Unregister(client)
 		return ErrGatewaySendFailed
 	}
 }
@@ -109,7 +133,7 @@ func (e *gatewayError) Error() string { return e.msg }
 // ReadPump pumps messages from the WebSocket connection to the hub
 func (c *Client) ReadPump() {
 	defer func() {
-		c.Hub.Unregister(c.ID)
+		c.Hub.Unregister(c)
 		c.Conn.Close()
 	}()
 
@@ -129,55 +153,108 @@ func (c *Client) ReadPump() {
 			break
 		}
 
-		var event map[string]any
-		if err := json.Unmarshal(message, &event); err != nil {
+		if err := c.handleMessage(message); err != nil {
+			slog.Warn("gateway message rejected", "gateway_id", c.ID, "workspace_id", c.WorkspaceID, "error", err)
 			continue
 		}
-
-		c.handleEvent(event)
 	}
 }
 
-func (c *Client) handleEvent(event map[string]any) {
-	switch event["type"] {
-	case "gateway:heartbeat":
+func (c *Client) handleMessage(message []byte) error {
+	var envelope protocol.GatewayEnvelope
+	if err := json.Unmarshal(message, &envelope); err != nil {
+		return fmt.Errorf("decode envelope: %w", err)
+	}
+
+	switch envelope.Type {
+	case protocol.EventGatewayHeartbeat:
 		// Respond with heartbeat
-		msg, _ := json.Marshal(map[string]any{"type": "gateway:heartbeat"})
-		c.Send <- msg
+		msg, _ := json.Marshal(protocol.GatewayHeartbeatMessage{Type: protocol.EventGatewayHeartbeat})
+		select {
+		case c.Send <- msg:
+			return nil
+		default:
+			return ErrGatewaySendFailed
+		}
 
-	case "task:completed":
+	case protocol.EventTaskCompleted:
+		var event protocol.GatewayTaskCompletedMessage
+		if err := json.Unmarshal(message, &event); err != nil {
+			return fmt.Errorf("decode task completed: %w", err)
+		}
+		if strings.TrimSpace(event.TaskID) == "" {
+			return fmt.Errorf("task completed: task_id is required")
+		}
 		if c.Hub.OnTaskComplete != nil {
-			gatewayID := c.ID
-			taskID, _ := event["task_id"].(string)
-			exitCode, _ := event["exit_code"].(int)
-			output, _ := event["output"].(string)
-			c.Hub.OnTaskComplete(gatewayID, taskID, exitCode, output)
+			c.Hub.OnTaskComplete(c.ID, c.WorkspaceID, event.TaskID, event.ExitCode, event.Output)
 		}
+		return nil
 
-	case "task:failed":
+	case protocol.EventTaskDispatched:
+		var event protocol.GatewayTaskDispatchedMessage
+		if err := json.Unmarshal(message, &event); err != nil {
+			return fmt.Errorf("decode task dispatched: %w", err)
+		}
+		if strings.TrimSpace(event.TaskID) == "" || strings.TrimSpace(event.ContainerID) == "" {
+			return fmt.Errorf("task dispatched: task_id and container_id are required")
+		}
+		if c.Hub.OnTaskDispatched != nil {
+			c.Hub.OnTaskDispatched(c.ID, c.WorkspaceID, event.TaskID, event.ContainerID)
+		}
+		return nil
+
+	case protocol.EventTaskFailed:
+		var event protocol.GatewayTaskFailedMessage
+		if err := json.Unmarshal(message, &event); err != nil {
+			return fmt.Errorf("decode task failed: %w", err)
+		}
+		if strings.TrimSpace(event.TaskID) == "" {
+			return fmt.Errorf("task failed: task_id is required")
+		}
 		if c.Hub.OnTaskFail != nil {
-			gatewayID := c.ID
-			taskID, _ := event["task_id"].(string)
-			errStr, _ := event["error"].(string)
-			retryable, _ := event["retryable"].(bool)
-			c.Hub.OnTaskFail(gatewayID, taskID, errStr, retryable)
+			c.Hub.OnTaskFail(c.ID, c.WorkspaceID, event.TaskID, event.Error, event.Retryable)
 		}
+		return nil
 
-	case "task:logs":
+	case protocol.EventTaskLogs:
+		var event protocol.GatewayTaskLogsMessage
+		if err := json.Unmarshal(message, &event); err != nil {
+			return fmt.Errorf("decode task logs: %w", err)
+		}
+		if strings.TrimSpace(event.TaskID) == "" {
+			return fmt.Errorf("task logs: task_id is required")
+		}
+		if event.Seq <= 0 {
+			return fmt.Errorf("task logs: seq must be positive")
+		}
+		if event.Stream != protocol.GatewayStreamStdout && event.Stream != protocol.GatewayStreamStderr {
+			return fmt.Errorf("task logs: unsupported stream %q", event.Stream)
+		}
+		if event.Content == "" {
+			return fmt.Errorf("task logs: content is required")
+		}
+		if len(event.Content) > protocol.GatewayLogChunkBytes {
+			return fmt.Errorf("task logs: content exceeds %d bytes", protocol.GatewayLogChunkBytes)
+		}
 		if c.Hub.OnTaskLogs != nil {
-			gatewayID := c.ID
-			taskID, _ := event["task_id"].(string)
-			logs, _ := event["logs"].(string)
-			c.Hub.OnTaskLogs(gatewayID, taskID, logs)
+			c.Hub.OnTaskLogs(c.ID, c.WorkspaceID, event.TaskID, event.Seq, event.Stream, event.Content)
 		}
+		return nil
 
-	case "task:dispatch":
-		if c.Hub.OnTaskDispatch != nil {
-			gatewayID := c.ID
-			taskID, _ := event["task_id"].(string)
-			config, _ := event["config"].(map[string]any)
-			c.Hub.OnTaskDispatch(gatewayID, taskID, config)
+	case protocol.EventTaskDispatch:
+		var event protocol.GatewayTaskDispatchMessage
+		if err := json.Unmarshal(message, &event); err != nil {
+			return fmt.Errorf("decode task dispatch: %w", err)
 		}
+		if strings.TrimSpace(event.TaskID) == "" {
+			return fmt.Errorf("task dispatch: task_id is required")
+		}
+		if c.Hub.OnTaskDispatch != nil {
+			c.Hub.OnTaskDispatch(c.ID, c.WorkspaceID, event.TaskID, event.Config)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported event type %q", envelope.Type)
 	}
 }
 

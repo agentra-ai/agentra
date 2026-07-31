@@ -1,5 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
+const chromiumExecutablePath =
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+
 export default defineConfig({
   testDir: "./e2e",
   timeout: 30000,
@@ -16,7 +19,12 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { browserName: "chromium" },
+      use: {
+        browserName: "chromium",
+        launchOptions: chromiumExecutablePath
+          ? { executablePath: chromiumExecutablePath }
+          : undefined,
+      },
     },
   ],
   // Don't auto-start servers — they must be running already

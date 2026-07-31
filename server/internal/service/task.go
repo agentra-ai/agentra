@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -30,8 +31,40 @@ type TaskService struct {
 	TraceService *TraceService
 }
 
+// ErrGatewayTaskNotAuthorized intentionally hides whether a task exists in a
+// different workspace. Gateway callers must never be able to use task IDs as a
+// cross-tenant oracle.
+var ErrGatewayTaskNotAuthorized = errors.New("cloud gateway task not authorized")
+
 func NewTaskService(q *db.Queries, hub *realtime.Hub, bus *events.Bus, traceSvc *TraceService) *TaskService {
 	return &TaskService{Queries: q, Hub: hub, Bus: bus, TraceService: traceSvc}
+}
+
+// ValidateCloudGatewayTask binds a gateway event to the active cloud runtime
+// configured for its authenticated workspace.
+func (s *TaskService) ValidateCloudGatewayTask(ctx context.Context, workspaceID, taskID string) (db.AgentTaskQueue, error) {
+	workspaceID = strings.TrimSpace(workspaceID)
+	taskUUID := util.ParseUUID(taskID)
+	if workspaceID == "" || !taskUUID.Valid {
+		return db.AgentTaskQueue{}, ErrGatewayTaskNotAuthorized
+	}
+
+	task, err := s.Queries.GetAgentTask(ctx, taskUUID)
+	if err != nil || task.RuntimeType != "cloud" || !task.CloudRuntimeID.Valid {
+		return db.AgentTaskQueue{}, ErrGatewayTaskNotAuthorized
+	}
+
+	issue, err := s.Queries.GetIssue(ctx, task.IssueID)
+	if err != nil || util.UUIDToString(issue.WorkspaceID) != workspaceID {
+		return db.AgentTaskQueue{}, ErrGatewayTaskNotAuthorized
+	}
+
+	runtime, err := s.Queries.GetCloudRuntimeByWorkspace(ctx, issue.WorkspaceID)
+	if err != nil || !runtime.IsActive || runtime.ID != task.CloudRuntimeID {
+		return db.AgentTaskQueue{}, ErrGatewayTaskNotAuthorized
+	}
+
+	return task, nil
 }
 
 // EnqueueTaskForIssue creates a queued task for an agent-assigned issue.
@@ -315,10 +348,10 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 
 	slog.Info("task completed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
 
-		// Finalize trace recording for this task run (existing task_runs table).
+	// Finalize trace recording for this task run (existing task_runs table).
 	s.finalizeTrace(ctx, task.ID, task.AgentID, "completed", "", 0, 0, 0, string(result))
-		// End execution trace (new execution_traces table).
-		s.endExecutionTrace(ctx, task.ID, "completed")
+	// End execution trace (new execution_traces table).
+	s.endExecutionTrace(ctx, task.ID, "completed")
 
 	// Post agent output as a comment, but only for assignment-triggered tasks.
 	// Comment-triggered tasks: the agent replies via CLI with --parent, so
@@ -348,49 +381,62 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 // recordTaskMetric writes one row to agent_task_metrics in a detached
 // 2s-timeout context. Best-effort: log a warning on failure.
 func (s *TaskService) recordTaskMetric(ctx context.Context, task db.AgentTaskQueue, status string, durationMs, tokenIn, tokenOut int64, costUsd float64, errCategory string) {
- ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
- defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
- issuePriority := "medium"
- if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil && issue.Priority != "" {
-  issuePriority = issue.Priority
- }
+	issuePriority := "medium"
+	if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil && issue.Priority != "" {
+		issuePriority = issue.Priority
+	}
 
- var pgCost pgtype.Numeric
- if costUsd != 0 {
-  _ = pgCost.Scan(fmt.Sprintf("%.6f", costUsd))
-  pgCost.Valid = true
- }
+	var pgCost pgtype.Numeric
+	if costUsd != 0 {
+		_ = pgCost.Scan(fmt.Sprintf("%.6f", costUsd))
+		pgCost.Valid = true
+	}
 
- errMsg := pgtype.Text{String: errCategory, Valid: errCategory != ""}
+	errMsg := pgtype.Text{String: errCategory, Valid: errCategory != ""}
 
- // WorkspaceID is not on AgentTaskQueue; look up via issue.
- var workspaceID pgtype.UUID
- if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil {
-  workspaceID = issue.WorkspaceID
- } else {
-  slog.Warn("record metric: lookup workspace failed", "task_id", util.UUIDToString(task.ID), "error", err)
-  return
- }
+	// WorkspaceID is not on AgentTaskQueue; look up via issue.
+	var workspaceID pgtype.UUID
+	if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil {
+		workspaceID = issue.WorkspaceID
+	} else {
+		slog.Warn("record metric: lookup workspace failed", "task_id", util.UUIDToString(task.ID), "error", err)
+		return
+	}
 
- if _, err := s.Queries.InsertAgentTaskMetric(ctx, db.InsertAgentTaskMetricParams{
-  WorkspaceID:   workspaceID,
-  TaskID:        task.ID,
-  IssueID:       task.IssueID,
-  Provider:      "", // resolved by join with runtime at query time
-  Model:         "",
-  RuntimeMode:   task.RuntimeType,
-  TaskType:      task.TaskType,
-  IssuePriority: issuePriority,
-  Status:        status,
-  ErrorCategory: errMsg,
-  DurationMs:    durationMs,
-  TokenInput:    int32(tokenIn),
-  TokenOutput:   int32(tokenOut),
-  CostUsd:       pgCost,
- }); err != nil {
-  slog.Warn("record metric failed", "task_id", util.UUIDToString(task.ID), "error", err)
- }
+	if _, err := s.Queries.InsertAgentTaskMetric(ctx, db.InsertAgentTaskMetricParams{
+		WorkspaceID:   workspaceID,
+		TaskID:        task.ID,
+		IssueID:       task.IssueID,
+		Provider:      "", // resolved by join with runtime at query time
+		Model:         "",
+		RuntimeMode:   task.RuntimeType,
+		TaskType:      normalizeMetricTaskType(task.TaskType),
+		IssuePriority: issuePriority,
+		Status:        status,
+		ErrorCategory: errMsg,
+		DurationMs:    durationMs,
+		TokenInput:    int32(tokenIn),
+		TokenOutput:   int32(tokenOut),
+		CostUsd:       pgCost,
+	}); err != nil {
+		slog.Warn("record metric failed", "task_id", util.UUIDToString(task.ID), "error", err)
+	}
+}
+
+// normalizeMetricTaskType separates queue execution stages (standard,
+// loop_plan, and so on) from the analytics work taxonomy. Until issues carry
+// an explicit work classification, execution-stage values must be recorded as
+// "other" instead of violating the metrics table constraint or inventing data.
+func normalizeMetricTaskType(taskType string) string {
+	switch taskType {
+	case "feature", "bug", "refactor", "test", "docs", "other":
+		return taskType
+	default:
+		return "other"
+	}
 }
 
 // RetryTask resets a failed task back to queued for automatic retry.
@@ -444,11 +490,11 @@ func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg s
 
 	slog.Warn("task failed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID), "error", errMsg)
 
-		// Finalize trace recording for this task run (existing task_runs table).
+	// Finalize trace recording for this task run (existing task_runs table).
 	s.finalizeTrace(ctx, task.ID, task.AgentID, "failed", errMsg, 0, 0, 0, "")
 
-		// End execution trace (new execution_traces table).
-		s.endExecutionTrace(ctx, task.ID, "failed")
+	// End execution trace (new execution_traces table).
+	s.endExecutionTrace(ctx, task.ID, "failed")
 	if errMsg != "" {
 		s.createAgentComment(ctx, task.IssueID, task.AgentID, redact.Text(errMsg), "system", task.TriggerCommentID)
 	}
@@ -483,9 +529,9 @@ type AgentStage string
 const (
 	AgentStageReading      AgentStage = "reading"
 	AgentStageImplementing AgentStage = "implementing"
-	AgentStageTesting     AgentStage = "testing"
-	AgentStageCommitting  AgentStage = "committing"
-	AgentStageDone        AgentStage = "done"
+	AgentStageTesting      AgentStage = "testing"
+	AgentStageCommitting   AgentStage = "committing"
+	AgentStageDone         AgentStage = "done"
 )
 
 // ReportAgentStage broadcasts an agent stage change via the event bus.
@@ -496,7 +542,7 @@ func (s *TaskService) ReportAgentStage(ctx context.Context, taskID string, agent
 		ActorType:   "system",
 		ActorID:     agentID,
 		Payload: map[string]any{
-			"task_id": taskID,
+			"task_id":  taskID,
 			"agent_id": agentID,
 			"stage":    stage,
 		},
@@ -678,10 +724,10 @@ func (s *TaskService) broadcastTaskDispatch(ctx context.Context, task db.AgentTa
 		}
 
 		// Send dispatch message to gateway
-		msg, err := json.Marshal(map[string]any{
-			"type":   "task:dispatch",
-			"task_id": taskIDStr,
-			"config": config,
+		msg, err := json.Marshal(protocol.GatewayTaskDispatchMessage{
+			Type:   protocol.EventTaskDispatch,
+			TaskID: taskIDStr,
+			Config: config,
 		})
 		if err != nil {
 			slog.Error("cloud dispatch: failed to marshal message", "error", err, "task_id", taskIDStr)

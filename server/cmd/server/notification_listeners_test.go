@@ -60,6 +60,8 @@ func newNotificationBus(t *testing.T, queries *db.Queries) *events.Bus {
 // created with an assignee different from the creator, the assignee receives an
 // "issue_assigned" inbox notification and the creator receives nothing.
 func TestNotification_IssueCreated_AssigneeNotified(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := newNotificationBus(t, queries)
 
@@ -127,6 +129,8 @@ func TestNotification_IssueCreated_AssigneeNotified(t *testing.T) {
 // TestNotification_IssueCreated_SelfAssign verifies that when the creator
 // assigns the issue to themselves, no notification is generated.
 func TestNotification_IssueCreated_SelfAssign(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := newNotificationBus(t, queries)
 
@@ -175,6 +179,8 @@ func TestNotification_IssueCreated_SelfAssign(t *testing.T) {
 // TestNotification_IssueCreated_NoAssignee verifies that when an issue is
 // created without an assignee, no notifications are generated.
 func TestNotification_IssueCreated_NoAssignee(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := newNotificationBus(t, queries)
 
@@ -219,6 +225,8 @@ func TestNotification_IssueCreated_NoAssignee(t *testing.T) {
 // TestNotification_StatusChanged verifies that all subscribers except the actor
 // receive a "status_changed" notification when an issue status changes.
 func TestNotification_StatusChanged(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := newNotificationBus(t, queries)
 
@@ -299,6 +307,8 @@ func TestNotification_StatusChanged(t *testing.T) {
 // TestNotification_CommentCreated verifies that all subscribers except the
 // commenter receive a "new_comment" notification.
 func TestNotification_CommentCreated(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := newNotificationBus(t, queries)
 
@@ -374,6 +384,8 @@ func TestNotification_CommentCreated(t *testing.T) {
 // - Other subscribers get "assignee_changed" (Subscriber), excluding actor + old + new
 // - Actor gets nothing
 func TestNotification_AssigneeChanged(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := newNotificationBus(t, queries)
 
@@ -419,8 +431,8 @@ func TestNotification_AssigneeChanged(t *testing.T) {
 				AssigneeType: &newAssigneeType,
 				AssigneeID:   &newAssigneeID,
 			},
-			"assignee_changed":  true,
-			"status_changed":    false,
+			"assignee_changed":   true,
+			"status_changed":     false,
 			"prev_assignee_type": &oldAssigneeType,
 			"prev_assignee_id":   &oldAssigneeID,
 		},
@@ -472,6 +484,8 @@ func TestNotification_AssigneeChanged(t *testing.T) {
 // TestNotification_TaskCompleted verifies that task:completed events do NOT
 // create inbox notifications (completion is visible from the status change).
 func TestNotification_TaskCompleted(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := newNotificationBus(t, queries)
 
@@ -511,6 +525,8 @@ func TestNotification_TaskCompleted(t *testing.T) {
 // TestNotification_TaskFailed verifies that subscribers get a "task_failed"
 // notification when a task fails, excluding the agent.
 func TestNotification_TaskFailed(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := newNotificationBus(t, queries)
 
@@ -553,6 +569,8 @@ func TestNotification_TaskFailed(t *testing.T) {
 // TestNotification_PriorityChanged verifies that all subscribers except the actor
 // receive a "priority_changed" notification when an issue priority changes.
 func TestNotification_PriorityChanged(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := newNotificationBus(t, queries)
 
@@ -618,6 +636,8 @@ func TestNotification_PriorityChanged(t *testing.T) {
 // TestNotification_DueDateChanged verifies that all subscribers except the actor
 // receive a "due_date_changed" notification when an issue due date changes.
 func TestNotification_DueDateChanged(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := newNotificationBus(t, queries)
 

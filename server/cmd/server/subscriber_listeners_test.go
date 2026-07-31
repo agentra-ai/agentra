@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/handler"
 	"github.com/agentra-ai/agentra/server/internal/util"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/agentra-ai/agentra/server/pkg/protocol"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // subscriberTest helpers — reuse the integration test fixtures from TestMain
@@ -80,6 +80,8 @@ func subscriberCount(t *testing.T, queries *db.Queries, issueID string) int {
 }
 
 func TestSubscriberIssueCreated_CreatorSubscribed(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := events.New()
 	registerSubscriberListeners(bus, queries)
@@ -115,6 +117,8 @@ func TestSubscriberIssueCreated_CreatorSubscribed(t *testing.T) {
 }
 
 func TestSubscriberIssueCreated_CreatorAndAssignee(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := events.New()
 	registerSubscriberListeners(bus, queries)
@@ -159,6 +163,8 @@ func TestSubscriberIssueCreated_CreatorAndAssignee(t *testing.T) {
 }
 
 func TestSubscriberIssueCreated_SelfAssign(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := events.New()
 	registerSubscriberListeners(bus, queries)
@@ -199,6 +205,8 @@ func TestSubscriberIssueCreated_SelfAssign(t *testing.T) {
 }
 
 func TestSubscriberIssueUpdated_AssigneeChanged(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := events.New()
 	registerSubscriberListeners(bus, queries)
@@ -238,6 +246,8 @@ func TestSubscriberIssueUpdated_AssigneeChanged(t *testing.T) {
 }
 
 func TestSubscriberIssueUpdated_NoAssigneeChange(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := events.New()
 	registerSubscriberListeners(bus, queries)
@@ -273,6 +283,8 @@ func TestSubscriberIssueUpdated_NoAssigneeChange(t *testing.T) {
 }
 
 func TestSubscriberCommentCreated_CommenterSubscribed(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := events.New()
 	registerSubscriberListeners(bus, queries)
@@ -307,6 +319,8 @@ func TestSubscriberCommentCreated_CommenterSubscribed(t *testing.T) {
 }
 
 func TestSubscriberAddedEventPublished(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := events.New()
 	registerSubscriberListeners(bus, queries)

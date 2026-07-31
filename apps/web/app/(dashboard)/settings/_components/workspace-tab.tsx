@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Save, LogOut } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,6 @@ import { api } from "@/shared/api";
 export function WorkspaceTab() {
   const t = useTranslations("workspaceSettings");
   const tc = useTranslations("common");
-  const tws = useTranslations("workspaceSettings");
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.workspace);
   const members = useWorkspaceStore((s) => s.members);
@@ -49,12 +48,6 @@ export function WorkspaceTab() {
   const currentMember = members.find((m) => m.user_id === user?.id) ?? null;
   const canManageWorkspace = currentMember?.role === "owner" || currentMember?.role === "admin";
   const isOwner = currentMember?.role === "owner";
-
-  useEffect(() => {
-    setName(workspace?.name ?? "");
-    setDescription(workspace?.description ?? "");
-    setContext(workspace?.context ?? "");
-  }, [workspace]);
 
   const handleSave = async () => {
     if (!workspace) return;
@@ -123,8 +116,11 @@ export function WorkspaceTab() {
         <Card>
           <CardContent className="space-y-3">
             <div>
-              <Label className="text-xs text-muted-foreground">{t("workspaceName")}</Label>
+              <Label htmlFor="workspace-name" className="text-xs text-muted-foreground">
+                {t("workspaceName")}
+              </Label>
               <Input
+                id="workspace-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}

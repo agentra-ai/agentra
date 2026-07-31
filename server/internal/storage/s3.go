@@ -104,6 +104,17 @@ func (s *S3Storage) KeyFromURL(rawURL string) string {
 	return rawURL
 }
 
+// HealthCheck verifies that the configured bucket is reachable.
+func (s *S3Storage) HealthCheck(ctx context.Context) error {
+	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(s.bucket),
+	})
+	if err != nil {
+		return fmt.Errorf("check S3 bucket: %w", err)
+	}
+	return nil
+}
+
 // Delete removes an object from S3. Errors are logged but not fatal.
 func (s *S3Storage) Delete(ctx context.Context, key string) {
 	if key == "" {

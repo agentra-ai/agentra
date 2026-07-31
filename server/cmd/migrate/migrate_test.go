@@ -45,12 +45,15 @@ func TestMigrationsApplyCleanlyAgainstFreshSchema(t *testing.T) {
 		_, _ = pool.Exec(context.Background(), fmt.Sprintf(`DROP SCHEMA IF EXISTS %q CASCADE`, schema))
 	})
 
-	// Create the empty schema and switch the search_path so all DDL lands
-	// in it. schema_migrations lives there too.
+	// Create the empty schema and put it first in the search_path so all
+	// application DDL lands in it. Keep public as a fallback because shared
+	// extensions such as pgvector may already be installed there; in that
+	// case CREATE EXTENSION IF NOT EXISTS is a no-op and unqualified types
+	// such as vector must still resolve.
 	if _, err := pool.Exec(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS %q CASCADE; CREATE SCHEMA %q`, schema, schema)); err != nil {
 		t.Fatalf("create schema: %v", err)
 	}
-	if _, err := pool.Exec(ctx, fmt.Sprintf(`SET search_path TO %q`, schema)); err != nil {
+	if _, err := pool.Exec(ctx, fmt.Sprintf(`SET search_path TO %q, public`, schema)); err != nil {
 		t.Fatalf("set search_path: %v", err)
 	}
 

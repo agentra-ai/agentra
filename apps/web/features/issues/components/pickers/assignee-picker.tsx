@@ -48,7 +48,7 @@ export function AssigneePicker({
   const members = useWorkspaceStore((s) => s.members);
   const agents = useWorkspaceStore((s) => s.agents);
   const { getActorName } = useActorName();
-  const t = useTranslations("issues");
+  const tAssignee = useTranslations("issues.assigneeMenu");
 
   const currentMember = members.find((m) => m.user_id === user?.id);
   const memberRole = currentMember?.role;
@@ -67,7 +67,7 @@ export function AssigneePicker({
   const triggerLabel =
     assigneeType && assigneeId
       ? getActorName(assigneeType, assigneeId)
-      : t("assignee.unassigned");
+      : tAssignee("unassigned");
 
   return (
     <PropertyPicker
@@ -79,7 +79,7 @@ export function AssigneePicker({
       width="w-52"
       align={align}
       searchable
-      searchPlaceholder={t("assignee.assignToPlaceholder")}
+      searchPlaceholder={tAssignee("assignToPlaceholder")}
       onSearchChange={setFilter}
       triggerRender={triggerRender}
       trigger={
@@ -89,7 +89,7 @@ export function AssigneePicker({
             <span className="truncate">{triggerLabel}</span>
           </>
         ) : (
-          <span className="text-muted-foreground">{t("assignee.unassigned")}</span>
+          <span className="text-muted-foreground">{tAssignee("unassigned")}</span>
         )
       }
     >
@@ -102,12 +102,12 @@ export function AssigneePicker({
         }}
       >
         <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="text-muted-foreground">{t("assignee.unassigned")}</span>
+        <span className="text-muted-foreground">{tAssignee("unassigned")}</span>
       </PickerItem>
 
       {/* Members */}
       {filteredMembers.length > 0 && (
-        <PickerSection label={t("assignee.membersSection")}>
+        <PickerSection label={tAssignee("membersSection")}>
           {filteredMembers.map((m) => (
             <PickerItem
               key={m.user_id}
@@ -129,7 +129,7 @@ export function AssigneePicker({
 
       {/* Agents */}
       {filteredAgents.length > 0 && (
-        <PickerSection label={t("assignee.agentsSection")}>
+        <PickerSection label={tAssignee("agentsSection")}>
           {filteredAgents.map((a) => {
             const allowed = canAssignAgent(a, user?.id, memberRole);
             return (

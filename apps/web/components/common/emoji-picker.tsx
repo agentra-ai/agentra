@@ -11,7 +11,10 @@ interface EmojiPickerProps {
 export function EmojiPicker({ onSelect }: EmojiPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
 
   const handleSelect = useCallback((emoji: { native: string }) => {
     onSelectRef.current(emoji.native);

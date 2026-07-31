@@ -32,6 +32,8 @@ func cleanupActivities(t *testing.T, issueID string) {
 }
 
 func TestActivityIssueCreated(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := events.New()
 	registerActivityListeners(bus, queries)
@@ -73,6 +75,8 @@ func TestActivityIssueCreated(t *testing.T) {
 }
 
 func TestActivityIssueUpdated_StatusChanged(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := events.New()
 	registerActivityListeners(bus, queries)
@@ -124,6 +128,8 @@ func TestActivityIssueUpdated_StatusChanged(t *testing.T) {
 }
 
 func TestActivityIssueUpdated_AssigneeChanged(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := events.New()
 	registerActivityListeners(bus, queries)
@@ -156,7 +162,7 @@ func TestActivityIssueUpdated_AssigneeChanged(t *testing.T) {
 				AssigneeType: &assigneeType,
 				AssigneeID:   &assigneeID,
 			},
-			"assignee_changed":  true,
+			"assignee_changed":   true,
 			"prev_assignee_type": (*string)(nil),
 			"prev_assignee_id":   (*string)(nil),
 		},
@@ -183,6 +189,8 @@ func TestActivityIssueUpdated_AssigneeChanged(t *testing.T) {
 }
 
 func TestActivityIssueUpdated_NoChangeFlags(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := events.New()
 	registerActivityListeners(bus, queries)
@@ -222,6 +230,8 @@ func TestActivityIssueUpdated_NoChangeFlags(t *testing.T) {
 }
 
 func TestActivityIssueUpdated_TitleChanged(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := events.New()
 	registerActivityListeners(bus, queries)
@@ -273,6 +283,8 @@ func TestActivityIssueUpdated_TitleChanged(t *testing.T) {
 }
 
 func TestActivityTaskCompleted(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := events.New()
 	registerActivityListeners(bus, queries)
@@ -311,6 +323,8 @@ func TestActivityTaskCompleted(t *testing.T) {
 }
 
 func TestActivityTaskFailed(t *testing.T) {
+	requireIntegrationDB(t)
+
 	queries := db.New(testPool)
 	bus := events.New()
 	registerActivityListeners(bus, queries)

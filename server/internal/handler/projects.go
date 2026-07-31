@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/agentra-ai/agentra/server/internal/logger"
@@ -70,6 +73,30 @@ type ProjectHandler struct {
 // NewProjectHandler creates a new ProjectHandler.
 func NewProjectHandler(queries *db.Queries) *ProjectHandler {
 	return &ProjectHandler{Queries: queries}
+}
+
+func (h *ProjectHandler) projectInWorkspace(ctx context.Context, workspaceID, projectID string) (db.Project, error) {
+	project, err := h.Queries.GetProject(ctx, parseUUID(projectID))
+	if err != nil {
+		return db.Project{}, err
+	}
+	if project.WorkspaceID != parseUUID(workspaceID) {
+		return db.Project{}, pgx.ErrNoRows
+	}
+	return project, nil
+}
+
+func (h *ProjectHandler) requireProject(w http.ResponseWriter, r *http.Request) (db.Project, bool) {
+	project, err := h.projectInWorkspace(r.Context(), chi.URLParam(r, "id"), chi.URLParam(r, "projectId"))
+	if err == nil {
+		return project, true
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "project not found")
+	} else {
+		writeError(w, http.StatusInternalServerError, "failed to load project")
+	}
+	return db.Project{}, false
 }
 
 // RegisterRoutes registers project routes. Caller is responsible for mounting
@@ -161,10 +188,8 @@ func (h *ProjectHandler) ListProjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProjectHandler) GetProject(w http.ResponseWriter, r *http.Request) {
-	projectId := chi.URLParam(r, "projectId")
-	project, err := h.Queries.GetProject(r.Context(), parseUUID(projectId))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "project not found")
+	project, ok := h.requireProject(w, r)
+	if !ok {
 		return
 	}
 	writeJSON(w, http.StatusOK, projectToResponse(project))
@@ -178,6 +203,9 @@ type UpdateProjectRequest struct {
 
 func (h *ProjectHandler) UpdateProject(w http.ResponseWriter, r *http.Request) {
 	projectId := chi.URLParam(r, "projectId")
+	if _, ok := h.requireProject(w, r); !ok {
+		return
+	}
 
 	var req UpdateProjectRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -221,6 +249,9 @@ func (h *ProjectHandler) UpdateProject(w http.ResponseWriter, r *http.Request) {
 
 func (h *ProjectHandler) DeleteProject(w http.ResponseWriter, r *http.Request) {
 	projectId := chi.URLParam(r, "projectId")
+	if _, ok := h.requireProject(w, r); !ok {
+		return
+	}
 	err := h.Queries.DeleteProject(r.Context(), parseUUID(projectId))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete project")
@@ -247,6 +278,9 @@ func (h *ProjectHandler) ListUnassignedIssues(w http.ResponseWriter, r *http.Req
 
 func (h *ProjectHandler) ListProjectIssues(w http.ResponseWriter, r *http.Request) {
 	projectId := chi.URLParam(r, "projectId")
+	if _, ok := h.requireProject(w, r); !ok {
+		return
+	}
 	issues, err := h.Queries.ListIssuesByProject(r.Context(), parseUUID(projectId))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list project issues")
@@ -268,6 +302,9 @@ func (h *ProjectHandler) AssignOrRemoveIssue(w http.ResponseWriter, r *http.Requ
 	projectId := chi.URLParam(r, "projectId")
 	issueId := chi.URLParam(r, "issueId")
 	workspaceID := chi.URLParam(r, "id")
+	if _, ok := h.requireProject(w, r); !ok {
+		return
+	}
 
 	var req AssignIssueRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -288,7 +325,15 @@ func (h *ProjectHandler) AssignOrRemoveIssue(w http.ResponseWriter, r *http.Requ
 		}
 		writeJSON(w, http.StatusOK, issueToResponse(issue, ""))
 	case "remove":
-		issue, err := h.Queries.RemoveIssueFromProject(r.Context(), db.RemoveIssueFromProjectParams{
+		issue, err := h.Queries.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{
+			ID:          parseUUID(issueId),
+			WorkspaceID: parseUUID(workspaceID),
+		})
+		if err != nil || !issue.ProjectID.Valid || issue.ProjectID != parseUUID(projectId) {
+			writeError(w, http.StatusNotFound, "issue not found in project")
+			return
+		}
+		issue, err = h.Queries.RemoveIssueFromProject(r.Context(), db.RemoveIssueFromProjectParams{
 			ID:          parseUUID(issueId),
 			WorkspaceID: parseUUID(workspaceID),
 		})
@@ -309,6 +354,9 @@ type CreateMilestoneRequest struct {
 
 func (h *ProjectHandler) CreateMilestone(w http.ResponseWriter, r *http.Request) {
 	projectId := chi.URLParam(r, "projectId")
+	if _, ok := h.requireProject(w, r); !ok {
+		return
+	}
 
 	var req CreateMilestoneRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -345,6 +393,9 @@ func (h *ProjectHandler) CreateMilestone(w http.ResponseWriter, r *http.Request)
 
 func (h *ProjectHandler) ListMilestones(w http.ResponseWriter, r *http.Request) {
 	projectId := chi.URLParam(r, "projectId")
+	if _, ok := h.requireProject(w, r); !ok {
+		return
+	}
 	milestones, err := h.Queries.ListMilestonesByProject(r.Context(), parseUUID(projectId))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list milestones")
@@ -364,7 +415,27 @@ type UpdateMilestoneRequest struct {
 }
 
 func (h *ProjectHandler) UpdateMilestone(w http.ResponseWriter, r *http.Request) {
+	projectId := chi.URLParam(r, "projectId")
 	milestoneId := chi.URLParam(r, "milestoneId")
+	if _, ok := h.requireProject(w, r); !ok {
+		return
+	}
+	milestones, err := h.Queries.ListMilestonesByProject(r.Context(), parseUUID(projectId))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load milestones")
+		return
+	}
+	found := false
+	for _, milestone := range milestones {
+		if milestone.ID == parseUUID(milestoneId) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "milestone not found")
+		return
+	}
 
 	var req UpdateMilestoneRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

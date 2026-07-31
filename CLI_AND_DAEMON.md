@@ -4,7 +4,43 @@ The `agentra` CLI connects your local machine to Agentra. It handles authenticat
 
 ## Installation
 
-### Build from Source
+### Homebrew (macOS)
+
+```bash
+brew install --cask agentra-ai/tap/agentra
+```
+
+The release workflow publishes the cask to the official tap. If an older formula installation is present, remove it once before installing the cask.
+
+### macOS and Linux installer
+
+Download the script so it can be reviewed before execution:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/agentra-ai/agentra/main/scripts/install.sh
+sh install.sh
+rm install.sh
+```
+
+Override the version or destination when needed:
+
+```bash
+AGENTRA_VERSION=0.6.0 AGENTRA_INSTALL_DIR="$HOME/.local/bin" sh install.sh
+```
+
+### Windows PowerShell installer
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/agentra-ai/agentra/main/scripts/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+Remove-Item .\install.ps1
+```
+
+The PowerShell installer defaults to `%LOCALAPPDATA%\Programs\Agentra`, updates the user PATH, and supports `-Version`, `-InstallDir`, `-Architecture`, and `-NoPathUpdate`.
+
+Both installers verify the selected archive against the release's `checksums.txt`, use a staged replacement, and execute `agentra version` before reporting success. Tagged releases also publish a Cosign keyless bundle for `checksums.txt`, signed SPDX SBOMs, and GitHub provenance. The [deployment guide](docs/DEPLOYMENT.md#verify-a-cli-release) shows how to pin the expected workflow identity; installer checksum validation alone protects against corruption but does not replace that independent verification.
+
+### Build from source
 
 ```bash
 git clone https://github.com/agentra-ai/agentra.git
@@ -19,21 +55,26 @@ cp server/bin/agentra /usr/local/bin/agentra
 agentra update
 ```
 
-This downloads the latest GitHub release and replaces the current binary in place.
+Direct installs download `checksums.txt`, verify the matching archive, and replace the current binary atomically. Homebrew-managed installs print the appropriate `brew upgrade` instruction. Windows users rerun `install.ps1` after stopping the daemon because Windows does not allow an executing `.exe` to replace itself safely.
 
 ## Quick Start
 
 ```bash
-# 1. Authenticate (opens browser for login)
-agentra login
-
-# 2. Start the agent daemon
-agentra daemon start
-
-# 3. Done — agents in your watched workspaces can now execute tasks on your machine
+# Self-hosted Compose defaults: preflight, login, workspace discovery, daemon
+agentra setup --deployment self-host
 ```
 
-`agentra login` automatically discovers all workspaces you belong to and adds them to the daemon watch list.
+`agentra setup` verifies API readiness and the Web app, detects a supported coding-agent CLI, authenticates, adds all available workspaces to the daemon watch list, and starts the daemon. It is safe to rerun: a valid token and matching daemon are reused. If an endpoint changes, credentials and workspace selections belonging to the previous server are cleared before authentication.
+
+For another deployment, pass explicit HTTPS endpoints:
+
+```bash
+agentra setup --deployment cloud \
+  --server-url https://api.example.com \
+  --app-url https://app.example.com
+```
+
+There is no hardcoded public Agentra Cloud endpoint until that service is released. Use `--token` for headless PAT authentication, `--no-daemon` for a management-only machine, and `--profile <name>` to isolate multiple deployments.
 
 ## Authentication
 
@@ -118,6 +159,7 @@ The daemon auto-detects these AI CLIs on your PATH:
 |-----|---------|-------------|
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `claude` | Anthropic's coding agent |
 | [Codex](https://github.com/openai/codex) | `codex` | OpenAI's coding agent |
+| [OpenCode](https://opencode.ai/) | `opencode` | Open-source coding agent |
 
 You need at least one installed. The daemon registers each detected CLI as an available runtime.
 
@@ -152,6 +194,8 @@ Agent-specific overrides:
 | `AGENTRA_CLAUDE_MODEL` | Override the Claude model used |
 | `AGENTRA_CODEX_PATH` | Custom path to the `codex` binary |
 | `AGENTRA_CODEX_MODEL` | Override the Codex model used |
+| `AGENTRA_OPENCODE_PATH` | Custom path to the `opencode` binary |
+| `AGENTRA_OPENCODE_MODEL` | Override the OpenCode model used |
 
 ### Self-Hosted Server
 

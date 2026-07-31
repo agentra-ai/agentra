@@ -1,0 +1,333 @@
+{
+  "schema_version": 1,
+  "status_definitions": {
+    "stable": "End-to-end product surface with automated regression evidence and supported upgrade semantics.",
+    "beta": "Usable end-to-end surface with known limitations; API or behavior may still change.",
+    "experimental": "Partial or opt-in implementation that is not part of the supported product contract.",
+    "planned": "Accepted direction without a supported implementation."
+  },
+  "capabilities": [
+    {
+      "id": "issue-management",
+      "name": "Issue management",
+      "status": "stable",
+      "surfaces": ["api", "web", "cli"],
+      "summary": "Workspace-scoped issue CRUD, assignment, comments, timeline, reactions, and subscribers.",
+      "evidence": {
+        "files": ["server/internal/handler/issue.go", "apps/web/features/issues"],
+        "tests": ["e2e/issues.spec.ts", "server/cmd/agentra/cmd_issue_test.go"]
+      }
+    },
+    {
+      "id": "local-agent-runtime",
+      "name": "Local agent runtime",
+      "status": "beta",
+      "surfaces": ["api", "cli", "daemon"],
+      "summary": "Local daemon claims tasks and runs supported coding-agent CLIs.",
+      "limitations": ["Provider capability conformance and deeper Windows process-tree cancellation tests are not yet release gates."],
+      "evidence": {
+        "files": ["server/internal/daemon", "server/pkg/agent"]
+      }
+    },
+    {
+      "id": "realtime-sync",
+      "name": "Realtime workspace sync",
+      "status": "beta",
+      "surfaces": ["api", "web"],
+      "summary": "WebSocket broadcasts synchronize workspace entities and task lifecycle events.",
+      "limitations": ["Gateway task log streaming to Web clients is not implemented."],
+      "evidence": {
+        "files": ["server/internal/realtime", "apps/web/features/realtime"]
+      }
+    },
+    {
+      "id": "task-graph",
+      "name": "Task graph",
+      "status": "beta",
+      "surfaces": ["api", "web"],
+      "summary": "Issue-scoped DAG visualization, persisted nodes and edges, and node mutation APIs.",
+      "limitations": ["Scheduler recovery, graph mutation integration tests, and execution idempotency need deeper coverage."],
+      "evidence": {
+        "files": ["server/pkg/taskgraph", "server/internal/handler/task_graph.go", "apps/web/features/taskgraph"],
+        "tests": ["server/cmd/server/router_contract_test.go", "apps/web/features/taskgraph/hooks/useTaskGraph.test.ts"]
+      }
+    },
+    {
+      "id": "goal-auto-decomposition",
+      "name": "Goal to DAG auto-decomposition",
+      "status": "beta",
+      "surfaces": ["api", "web"],
+      "summary": "A planner decomposes an issue description into a persisted task graph.",
+      "limitations": ["Golden-repository outcome evaluation is not yet enforced."],
+      "evidence": {
+        "files": ["server/internal/handler/auto_decompose.go", "server/internal/service/planner.go"],
+        "tests": ["server/internal/service/planner_test.go"]
+      }
+    },
+    {
+      "id": "engineering-loop",
+      "name": "Engineering loop",
+      "status": "beta",
+      "surfaces": ["api", "web", "cli"],
+      "summary": "Plan, develop, review, fix, and verify stages coordinate iterative engineering work.",
+      "limitations": ["Loop and task-graph lifecycle models are not yet unified."],
+      "evidence": {
+        "files": ["server/internal/loop", "apps/web/features/loops"],
+        "tests": ["server/internal/loop/coordinator_test.go", "apps/web/features/loops/store.test.ts"]
+      }
+    },
+    {
+      "id": "agent-memory",
+      "name": "Agent and team memory",
+      "status": "experimental",
+      "surfaces": ["api", "web"],
+      "summary": "pgvector-backed agent and team memories with multi-strategy retrieval.",
+      "limitations": ["Embedding generation/backfill is incomplete.", "Provenance, TTL, confidence, and prompt-injection policy are incomplete."],
+      "evidence": {
+        "files": ["server/internal/handler/memory.go", "server/pkg/memory", "apps/web/features/memory"],
+        "tests": ["apps/web/features/memory/api/memoryApi.test.ts", "server/cmd/server/integration_test.go"]
+      }
+    },
+    {
+      "id": "execution-traces",
+      "name": "Execution traces",
+      "status": "experimental",
+      "surfaces": ["api"],
+      "summary": "Task execution trace records are persisted and retrievable through backend APIs.",
+      "limitations": ["There is no supported Web trace viewer; the disconnected legacy UI was removed rather than preserving an incompatible API path."],
+      "evidence": {
+        "files": ["server/internal/handler/trace.go", "server/pkg/traces"]
+      }
+    },
+    {
+      "id": "agent-metrics",
+      "name": "Agent task metrics",
+      "status": "experimental",
+      "surfaces": ["api", "web"],
+      "summary": "Owner/admin-only workspace aggregates expose provider and task performance metrics.",
+      "limitations": ["The route is mounted, but end-to-end authorization and dashboard regression coverage are incomplete."],
+      "evidence": {
+        "files": ["server/internal/handler/metrics.go", "apps/web/app/(dashboard)/admin/metrics/page.tsx"]
+      }
+    },
+    {
+      "id": "projects",
+      "name": "Projects and milestones",
+      "status": "beta",
+      "surfaces": ["api", "web"],
+      "summary": "Workspace-scoped project and milestone management with a routed Web experience for project creation, issue assignment, status updates, and deletion.",
+      "limitations": [
+        "Project lead, progress, resources, and richer planning fields are not yet implemented.",
+        "Project mutations are limited to workspace owners and admins."
+      ],
+      "evidence": {
+        "files": [
+          "server/internal/handler/projects.go",
+          "apps/web/features/projects",
+          "apps/web/app/(dashboard)/projects/page.tsx"
+        ],
+        "tests": [
+          "server/cmd/server/projects_integration_test.go",
+          "e2e/projects.spec.ts"
+        ]
+      }
+    },
+    {
+      "id": "mcp-server",
+      "name": "MCP server",
+      "status": "beta",
+      "surfaces": ["cli", "mcp"],
+      "summary": "MCP tools expose Agentra work operations to compatible agent clients.",
+      "limitations": ["Remote deployment, scoped tool policy, and complete audit attribution are not stable."],
+      "evidence": {
+        "files": ["server/pkg/mcp"],
+        "tests": ["server/pkg/mcp/integration_test.go", "server/pkg/mcp/auth_test.go"]
+      }
+    },
+    {
+      "id": "cloud-runtime",
+      "name": "Cloud runtime",
+      "status": "experimental",
+      "surfaces": ["api", "web", "gateway"],
+      "summary": "A gateway can execute dispatched tasks in managed containers.",
+      "limitations": ["Live log delivery, recovery semantics, and production isolation are incomplete."],
+      "evidence": {
+        "files": ["server/internal/handler/cloud_runtime.go", "server/cmd/gateway"]
+      }
+    },
+    {
+      "id": "eval-harness",
+      "name": "Agentra Eval harness",
+      "status": "experimental",
+      "surfaces": ["cli"],
+      "summary": "CLI scaffolding manages eval suites and runs.",
+      "limitations": ["Current handler scoring contains placeholder and headless canned behavior; it is not a release quality gate."],
+      "evidence": {
+        "files": ["server/cmd/agentra/cmd_eval.go", "server/internal/handler/eval.go"]
+      }
+    },
+    {
+      "id": "runtime-conformance",
+      "name": "Runtime adapter conformance",
+      "status": "planned",
+      "surfaces": ["cli", "daemon"],
+      "summary": "A versioned fixture suite will certify provider capabilities and platform behavior.",
+      "evidence": {
+        "files": []
+      }
+    },
+    {
+      "id": "self-host-health",
+      "name": "Self-host health probes",
+      "status": "beta",
+      "surfaces": ["api"],
+      "summary": "Separate liveness and readiness endpoints report database, migration, configured object storage, and scheduler health for self-hosted deployments.",
+      "limitations": [
+        "Readiness does not yet cover realtime fanout, outbound email, or cloud gateway capacity.",
+        "N-1 migration rehearsal and Kubernetes packaging are not release gates yet."
+      ],
+      "evidence": {
+        "files": [
+          "server/cmd/server/health.go",
+          "server/migrations/embed.go",
+          "server/internal/storage/storage.go"
+        ],
+        "tests": [
+          "server/cmd/server/health_test.go",
+          "server/migrations/embed_test.go"
+        ]
+      }
+    },
+    {
+      "id": "self-host-doctor",
+      "name": "Self-host installation diagnostics",
+      "status": "beta",
+      "surfaces": ["cli"],
+      "summary": "A bounded diagnostic command checks configuration security, Web/API readiness, storage, authentication, workspace access, runtime CLIs, filesystem and Git permissions, local daemon health, and authenticated WebSocket ping/pong.",
+      "limitations": [
+        "The storage diagnosis uses server readiness rather than performing an object write/delete smoke.",
+        "Repository access validates origin HEAD and local write permissions but does not test push authorization."
+      ],
+      "evidence": {
+        "files": [
+          "server/cmd/agentra/cmd_doctor.go",
+          "server/internal/doctor/doctor.go",
+          "server/internal/realtime/hub.go"
+        ],
+        "tests": [
+          "server/internal/doctor/doctor_test.go",
+          "server/cmd/server/integration_test.go",
+          "server/internal/realtime/hub_test.go"
+        ]
+      }
+    },
+    {
+      "id": "guided-machine-setup",
+      "name": "Guided machine setup",
+      "status": "beta",
+      "surfaces": ["cli", "daemon"],
+      "summary": "A single idempotent command preflights cloud or self-hosted readiness, Web access, and local coding-agent CLIs, authenticates, discovers workspaces, and starts the profile-isolated daemon.",
+      "limitations": [
+        "A public Agentra Cloud endpoint is not released, so cloud setup requires explicit HTTPS URLs.",
+        "The command assumes the CLI is already installed; the first public release with verifiable macOS/Linux/Windows artifacts requires the next tag."
+      ],
+      "evidence": {
+        "files": [
+          "server/cmd/agentra/cmd_setup.go",
+          "server/cmd/agentra/cmd_login.go",
+          "server/cmd/agentra/cmd_daemon.go"
+        ],
+        "tests": [
+          "server/cmd/agentra/cmd_setup_test.go"
+        ]
+      }
+    },
+    {
+      "id": "cross-platform-cli-installers",
+      "name": "Cross-platform CLI installers",
+      "status": "beta",
+      "surfaces": ["cli", "daemon", "deployment"],
+      "summary": "Homebrew, checksum-verifying macOS/Linux shell installation, and Windows PowerShell installation are generated from one GoReleaser contract with native CI fixtures.",
+      "limitations": [
+        "The Homebrew cask and Windows archive become publicly available only after the next tagged release runs the updated pipeline.",
+        "The installers enforce SHA-256 locally; independent Cosign and GitHub provenance verification remains an explicit user step.",
+        "An obsolete formula remains in the external tap until the cask migration is completed during release."
+      ],
+      "evidence": {
+        "files": [
+          ".goreleaser.yml",
+          "scripts/install.sh",
+          "scripts/install.ps1",
+          "server/cmd/agentra/process_windows.go",
+          "server/internal/cli/update.go"
+        ],
+        "tests": [
+          "scripts/test-installers.sh",
+          "scripts/test-installers.ps1",
+          "scripts/test_release_contract.mjs",
+          "server/internal/cli/update_test.go",
+          "server/cmd/agentra/cmd_daemon_test.go"
+        ]
+      }
+    },
+    {
+      "id": "verifiable-release-supply-chain",
+      "name": "Verifiable release supply chain",
+      "status": "beta",
+      "surfaces": ["cli", "deployment"],
+      "summary": "Tagged CLI releases and multi-architecture GHCR images are built with SPDX SBOMs, identity-bound Cosign keyless signatures, and GitHub artifact provenance from pinned workflows.",
+      "limitations": [
+        "The first public assets satisfying this contract require the next v* tag; older GitHub Releases and Docker Hub images are outside it.",
+        "Installers enforce SHA-256 but require users to invoke Cosign or GitHub CLI explicitly for workflow-identity verification.",
+        "macOS code signing/notarization and Windows Authenticode are not yet implemented."
+      ],
+      "evidence": {
+        "files": [
+          ".goreleaser.yml",
+          ".github/workflows/release.yml",
+          ".github/workflows/docker.yml",
+          "scripts/verify_release_artifacts.mjs",
+          "scripts/verify-release-signatures.sh",
+          "docs/DEPLOYMENT.md"
+        ],
+        "tests": [
+          "scripts/test_release_contract.mjs",
+          "scripts/verify_release_artifacts.mjs"
+        ]
+      }
+    },
+    {
+      "id": "secure-self-host-bootstrap",
+      "name": "Secure self-host bootstrap",
+      "status": "beta",
+      "surfaces": ["cli", "deployment"],
+      "summary": "A non-overwriting bootstrap generates independent PostgreSQL, JWT, and MinIO credentials with owner-only permissions; Compose fails closed on missing secrets and hides data/admin surfaces by default.",
+      "limitations": [
+        "Secure environment bootstrap currently targets bash on macOS/Linux; an equivalent PowerShell bootstrap remains planned.",
+        "Kubernetes/Helm secret references and external secret-manager integrations are not yet packaged."
+      ],
+      "evidence": {
+        "files": [
+          "scripts/bootstrap-env.sh",
+          "scripts/lib/secrets.sh",
+          "docker-compose.yml",
+          "docker-compose.dev.yml"
+        ],
+        "tests": [
+          "scripts/test-bootstrap-env.sh",
+          "scripts/test_compose_security.mjs"
+        ]
+      }
+    },
+    {
+      "id": "durable-automations",
+      "name": "Durable automations",
+      "status": "planned",
+      "surfaces": ["api", "web"],
+      "summary": "Cron, webhook, manual, and VCS triggers will share an idempotent admission and run model.",
+      "evidence": {
+        "files": []
+      }
+    }
+  ]
+}

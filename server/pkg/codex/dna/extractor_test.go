@@ -1,99 +1,82 @@
 package dna
 
 import (
+	"context"
 	"encoding/json"
 	"os"
-	"strings"
+	"os/exec"
+	"path/filepath"
 	"testing"
 )
 
-func TestExtract_Agentra(t *testing.T) {
-	repoRoot := findRepoRoot(t)
-	if repoRoot == "" {
-		t.Skip("repo root not found (running outside git repo)")
-	}
+func TestExtract(t *testing.T) {
+	repoRoot := t.TempDir()
+	writeFixtureFile(t, repoRoot, "package.json", `{"devDependencies":{"vitest":"latest"}}`)
+	writeFixtureFile(t, repoRoot, "tsconfig.json", `{"compilerOptions":{"paths":{"@/*":["src/*"]}}}`)
+	writeFixtureFile(t, repoRoot, "src/store.ts", `
+import { create } from "zustand";
+import { api } from "@/shared/api";
+export const useStore = create<{ ready: boolean }>(() => ({ ready: true }));
+void api;
+`)
+	writeFixtureFile(t, repoRoot, "src/store.test.ts", `import "./store";`)
+	initFixtureRepository(t, repoRoot)
 
-	dna := Extract(repoRoot)
+	result := Extract(context.Background(), repoRoot)
 
-	if dna == nil {
+	if result == nil {
 		t.Fatal("Extract returned nil")
 	}
-
-	// --- required signals ---
-	if dna.Stack.LanguagePrimary != "Go" {
-		t.Errorf("LanguagePrimary = %q, want Go", dna.Stack.LanguagePrimary)
+	if result.RepoRoot != repoRoot {
+		t.Fatalf("RepoRoot = %q, want %q", result.RepoRoot, repoRoot)
 	}
-	if dna.Stack.LanguageSecondary != "TypeScript" {
-		t.Errorf("LanguageSecondary = %q, want TypeScript", dna.Stack.LanguageSecondary)
+	if result.GeneratedAt == "" || result.HeadSHA == "" {
+		t.Fatalf("expected generated timestamp and head SHA, got %#v", result)
 	}
-
-	if dna.CommitStyle.PrefixDistribution == nil {
-		t.Fatal("CommitStyle.PrefixDistribution is nil")
+	if result.CommitStyle.Types["feat"] != 1 {
+		t.Fatalf("commit types = %#v, want one feat commit", result.CommitStyle.Types)
 	}
-
-	// Conventional commits (feat+fix+...) should dominate.
-	conventional := float64(0)
-	for _, k := range []string{"feat", "fix", "refactor", "test", "docs", "chore"} {
-		conventional += dna.CommitStyle.PrefixDistribution[k]
+	if !result.CommitStyle.WithScope {
+		t.Fatal("expected scoped commit style")
 	}
-	if conventional < 0.5 {
-		t.Errorf("conventional prefix share = %.2f, want >= 0.5 (dist=%v)",
-			conventional, dna.CommitStyle.PrefixDistribution)
+	if result.Imports.Aliases["@/*"] != "src/*" {
+		t.Fatalf("path aliases = %#v, want @/* -> src/*", result.Imports.Aliases)
 	}
-
-	if len(dna.CommitStyle.ScopesActive) == 0 {
-		t.Error("ScopesActive is empty")
+	if result.StateManagement != "zustand" {
+		t.Fatalf("StateManagement = %q, want zustand", result.StateManagement)
 	}
-
-	// Directory layout
-	if dna.DirLayout.Style != "feature-first" {
-		t.Errorf("DirLayout.Style = %q, want feature-first", dna.DirLayout.Style)
+	if result.Testing.Framework != "vitest" || result.Testing.Pattern != "*.test.{ts,tsx}" {
+		t.Fatalf("testing conventions = %#v, want vitest", result.Testing)
 	}
-	if len(dna.DirLayout.FeatureDirs) == 0 {
-		t.Error("FeatureDirs is empty")
-	}
-
-	// Tests
-	if !dna.TestCoverage.Backend.Present {
-		t.Error("Backend tests should be present")
-	}
-	if !dna.TestCoverage.Frontend.Present {
-		t.Error("Frontend tests should be present")
-	}
-
-	// Conventions list should include the hard rule.
-	found := false
-	for _, c := range dna.Conventions {
-		if strings.Contains(c, "兼容性层") {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("Conventions should mention '兼容性层' rule; got: %v", dna.Conventions)
-	}
-
-	// JSON serialises cleanly.
-	b, err := json.MarshalIndent(dna, "", "  ")
-	if err != nil {
+	if _, err := json.Marshal(result); err != nil {
 		t.Fatalf("json.Marshal: %v", err)
-	}
-	if len(b) < 100 {
-		t.Errorf("JSON suspiciously short: %s", string(b))
 	}
 }
 
-// findRepoRoot walks up from CWD until it finds .git.
-func findRepoRoot(t *testing.T) string {
+func writeFixtureFile(t *testing.T, root, relativePath, contents string) {
 	t.Helper()
-	dir, _ := os.Getwd()
-	for {
-		if _, err := os.Stat(dir + "/.git"); err == nil {
-			return dir
+	path := filepath.Join(root, relativePath)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("create fixture directory: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		t.Fatalf("write fixture %s: %v", relativePath, err)
+	}
+}
+
+func initFixtureRepository(t *testing.T, root string) {
+	t.Helper()
+	commands := [][]string{
+		{"init"},
+		{"config", "user.email", "repo-dna-test@agentra.ai"},
+		{"config", "user.name", "Repo DNA Test"},
+		{"add", "."},
+		{"commit", "-m", "feat(web): add fixture store"},
+	}
+	for _, args := range commands {
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, output)
 		}
-		parent := dir[:strings.LastIndex(dir, "/")]
-		if parent == dir {
-			return ""
-		}
-		dir = parent
 	}
 }

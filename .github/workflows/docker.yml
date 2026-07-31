@@ -1,4 +1,4 @@
-name: Docker Hub
+name: Container Release
 
 on:
   push:
@@ -10,19 +10,24 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  REGISTRY: docker.io
-  IMAGE: dougzeng/agentra
+  REGISTRY: ghcr.io
+  IMAGE: ghcr.io/${{ github.repository_owner }}/agentra
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         target: [server-runtime, gateway-runtime, web-runtime]
         include:
           - target: server-runtime
             component: server
-            build-args: VERSION=${{ github.ref_name }}
+            build-args: ""
           - target: gateway-runtime
             component: gateway
             build-args: VERSION=${{ github.ref_name }}
@@ -40,27 +45,50 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      - name: Setup Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=raw,value=${{ matrix.component }}-{{version}}
-            type=raw,value=${{ matrix.component }}-{{major}}.{{minor}}
+            type=semver,pattern=${{ matrix.component }}-v{{version}}
+            type=semver,pattern=${{ matrix.component }}-v{{major}}.{{minor}}
+            type=raw,value=${{ matrix.component }}-latest,enable=${{ !contains(github.ref_name, '-') }}
 
-      - uses: docker/build-push-action@v6
+      - id: build
+        uses: docker/build-push-action@v6
         with:
           context: .
           target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: ${{ matrix.build-args }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
+            ${{ matrix.build-args }}
+          provenance: mode=max
+          sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Sign image digest
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${IMAGE_DIGEST}"
+
+      - name: Attest image provenance
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

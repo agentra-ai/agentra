@@ -1,9 +1,9 @@
 ---
 title: Contributing
-description: Contribute to Agenttra development
+description: Contribute to Agentra development
 ---
 
-# Contributing to Agenttra
+# Contributing to Agentra
 
 Thank you for your interest in contributing!
 
@@ -20,8 +20,7 @@ Thank you for your interest in contributing!
 
 ```bash
 pnpm install
-cp .env.example .env
-make setup
+make setup  # securely creates .env when missing
 make start
 ```
 

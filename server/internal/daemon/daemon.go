@@ -971,27 +971,27 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		var pendingThinking strings.Builder
 		var batch []TaskMessageData
 		callIDToTool := map[string]string{} // track callID → tool name for tool_result
+		appendContentLocked := func(messageType, content string) {
+			for _, chunk := range splitTaskMessageContent(content) {
+				s := seq.Add(1)
+				batch = append(batch, TaskMessageData{
+					Seq:     int(s),
+					Type:    messageType,
+					Content: chunk,
+				})
+			}
+		}
 
 		flush := func() {
 			mu.Lock()
 			// Flush any accumulated thinking as a single message.
 			if pendingThinking.Len() > 0 {
-				s := seq.Add(1)
-				batch = append(batch, TaskMessageData{
-					Seq:     int(s),
-					Type:    "thinking",
-					Content: pendingThinking.String(),
-				})
+				appendContentLocked("thinking", pendingThinking.String())
 				pendingThinking.Reset()
 			}
 			// Flush any accumulated text as a single message.
 			if pendingText.Len() > 0 {
-				s := seq.Add(1)
-				batch = append(batch, TaskMessageData{
-					Seq:     int(s),
-					Type:    "text",
-					Content: pendingText.String(),
-				})
+				appendContentLocked("text", pendingText.String())
 				pendingText.Reset()
 			}
 			toSend := batch
@@ -1078,13 +1078,8 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 				}
 			case agent.MessageError:
 				taskLog.Error("agent error", "content", msg.Content)
-				s := seq.Add(1)
 				mu.Lock()
-				batch = append(batch, TaskMessageData{
-					Seq:     int(s),
-					Type:    "error",
-					Content: msg.Content,
-				})
+				appendContentLocked("error", msg.Content)
 				mu.Unlock()
 			}
 		}

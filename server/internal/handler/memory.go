@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -48,8 +50,66 @@ func (h *MemoryHandler) RegisterRoutes(r chi.Router) {
 // caller's router (typically already nested under /api/workspaces/{id}).
 func (h *MemoryHandler) RegisterTeamRoutes(r chi.Router) {
 	r.Get("/", h.ListTeamMemories)
+	r.Get("/search", h.SearchMemories)
 	r.Post("/", h.CreateTeamMemory)
 	r.Delete("/{memoryId}", h.DeleteTeamMemory)
+}
+
+type memorySearchItem struct {
+	ID          string  `json:"id"`
+	WorkspaceID string  `json:"workspace_id"`
+	AgentID     string  `json:"agent_id,omitempty"`
+	MemoryType  string  `json:"memory_type"`
+	Content     string  `json:"content"`
+	CreatedAt   string  `json:"created_at"`
+	Score       float32 `json:"score"`
+}
+
+// SearchMemories performs workspace-scoped BM25 search across team memories
+// and non-private agent memories. The workspace route middleware establishes
+// the membership boundary before this handler runs.
+func (h *MemoryHandler) SearchMemories(w http.ResponseWriter, r *http.Request) {
+	wsID, ok := h.workspaceID(w, r)
+	if !ok {
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if query == "" {
+		writeError(w, http.StatusBadRequest, "q query parameter is required")
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	rows, err := h.Queries.SearchAllMemoriesBM25(r.Context(), db.SearchAllMemoriesBM25Params{
+		WorkspaceID:    wsID,
+		PlaintoTsquery: query,
+		Limit:          int32(limit),
+	})
+	if err != nil {
+		slog.Error("SearchMemories query failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to search memories")
+		return
+	}
+
+	items := make([]memorySearchItem, len(rows))
+	for i, row := range rows {
+		items[i] = memorySearchItem{
+			ID:          uuidToString(row.ID),
+			WorkspaceID: uuidToString(wsID),
+			AgentID:     uuidToString(row.AgentID),
+			MemoryType:  row.MemoryType,
+			Content:     row.Content,
+			CreatedAt:   timestampToString(row.CreatedAt),
+			Score:       row.Score,
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"memories": items})
 }
 
 // RegisterAgentRoutes wires agent-scoped memory endpoints onto the
@@ -147,13 +207,18 @@ func (h *MemoryHandler) CreateTeamMemory(w http.ResponseWriter, r *http.Request)
 	}
 
 	var body teamMemoryBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Content == "" {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Content) == "" {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if body.MemoryType == "" {
 		body.MemoryType = "context"
 	}
+	if !validMemoryType(body.MemoryType) {
+		writeError(w, http.StatusBadRequest, "invalid memory type")
+		return
+	}
+	body.Content = strings.TrimSpace(body.Content)
 
 	row, err := h.Queries.CreateTeamMemory(r.Context(), db.CreateTeamMemoryParams{
 		WorkspaceID: wsID,
@@ -225,13 +290,18 @@ func (h *MemoryHandler) CreateAgentMemory(w http.ResponseWriter, r *http.Request
 	}
 
 	var body agentMemoryBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Content == "" {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Content) == "" {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if body.MemoryType == "" {
 		body.MemoryType = "context"
 	}
+	if !validMemoryType(body.MemoryType) {
+		writeError(w, http.StatusBadRequest, "invalid memory type")
+		return
+	}
+	body.Content = strings.TrimSpace(body.Content)
 
 	isPrivate := pgtype.Bool{Valid: true, Bool: false}
 	if body.IsPrivate != nil {
@@ -274,4 +344,13 @@ func (h *MemoryHandler) DeleteAgentMemory(w http.ResponseWriter, r *http.Request
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func validMemoryType(memoryType string) bool {
+	switch memoryType {
+	case "learning", "task_result", "context", "pattern":
+		return true
+	default:
+		return false
+	}
 }

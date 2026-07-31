@@ -1,38 +1,30 @@
 import { create } from "zustand";
-import { taskGraphApi } from "../api/taskGraphApi";
+import {
+  taskGraphApi,
+  type TaskGraphEdge,
+  type TaskGraphNode,
+} from "../api/taskGraphApi";
 
-interface GraphNode {
-  id: string;
-  workspace_id: string;
-  issue_id: string;
-  agent_id?: string;
-  node_type: string;
-  status: string;
-  context: Record<string, any>;
-  result?: Record<string, any>;
-  position_x?: number;
-  position_y?: number;
-  depth: number;
-  created_at: string;
-}
-
-interface GraphEdge {
-  id: string;
-  from_node_id: string;
-  to_node_id: string;
-  edge_type: string;
-  metadata?: Record<string, any>;
+interface AutoDecomposeOptions {
+  provider?: string;
+  model?: string;
+  maxNodes?: number;
+  additionalContext?: string;
 }
 
 interface TaskGraphState {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
+  nodes: TaskGraphNode[];
+  edges: TaskGraphEdge[];
   isLoading: boolean;
   error: string | null;
   fetchGraph: (issueId: string) => Promise<void>;
-  updateNode: (id: string, data: Partial<GraphNode>) => Promise<void>;
+  updateNode: (id: string, data: Partial<TaskGraphNode>) => Promise<void>;
   deleteNode: (id: string) => Promise<void>;
-  decomposeGraph: (issueId: string, opts?: { provider?: string; model?: string; maxNodes?: number; additionalContext?: string }) => Promise<any>;
+  decomposeGraph: (issueId: string, options?: AutoDecomposeOptions) => Promise<void>;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown task graph error";
 }
 
 export const useTaskGraph = create<TaskGraphState>((set) => ({
@@ -41,55 +33,51 @@ export const useTaskGraph = create<TaskGraphState>((set) => ({
   isLoading: false,
   error: null,
 
-  fetchGraph: async (issueId: string) => {
+  fetchGraph: async (issueId) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await fetch(`/api/issues/${issueId}/graph`);
-      const data = await res.json();
-      set({ nodes: data.nodes || [], edges: data.edges || [], isLoading: false });
-    } catch (e: any) {
-      set({ error: e.message, isLoading: false });
+      const graph = await taskGraphApi.getGraph(issueId);
+      set({ nodes: graph.nodes ?? [], edges: graph.edges ?? [], isLoading: false });
+    } catch (error) {
+      set({ error: errorMessage(error), isLoading: false });
     }
   },
 
-  updateNode: async (id: string, data: Partial<GraphNode>) => {
+  updateNode: async (id, data) => {
     try {
-      await fetch(`/api/graph/nodes/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+      const updated = await taskGraphApi.updateNode(id, data);
       set((state) => ({
-        nodes: state.nodes.map((n) => (n.id === id ? { ...n, ...data } : n)),
+        nodes: state.nodes.map((node) => node.id === id ? updated : node),
+        error: null,
       }));
-    } catch (e: any) {
-      set({ error: e.message });
+    } catch (error) {
+      set({ error: errorMessage(error) });
+      throw error;
     }
   },
 
-  deleteNode: async (id: string) => {
+  deleteNode: async (id) => {
     try {
-      await fetch(`/api/graph/nodes/${id}`, { method: "DELETE" });
-      set((state) => ({ nodes: state.nodes.filter((n) => n.id !== id) }));
-    } catch (e: any) {
-      set({ error: e.message });
+      await taskGraphApi.deleteNode(id);
+      set((state) => ({
+        nodes: state.nodes.filter((node) => node.id !== id),
+        edges: state.edges.filter((edge) => edge.from_node_id !== id && edge.to_node_id !== id),
+        error: null,
+      }));
+    } catch (error) {
+      set({ error: errorMessage(error) });
+      throw error;
     }
   },
 
-  decomposeGraph: async (issueId: string, opts?: { provider?: string; model?: string; maxNodes?: number; additionalContext?: string }) => {
+  decomposeGraph: async (issueId, options) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await taskGraphApi.autoDecompose(issueId, opts);
-      if (res.error) throw new Error(res.error);
-      set((state) => ({
-        nodes: res.nodes || state.nodes,
-        edges: res.edges || state.edges,
-        isLoading: false,
-      }));
-      return res;
-    } catch (e: any) {
-      set({ error: e.message, isLoading: false });
-      throw e;
+      const graph = await taskGraphApi.autoDecompose(issueId, options);
+      set({ nodes: graph.nodes ?? [], edges: graph.edges ?? [], isLoading: false });
+    } catch (error) {
+      set({ error: errorMessage(error), isLoading: false });
+      throw error;
     }
   },
 }));

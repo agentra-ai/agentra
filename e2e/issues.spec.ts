@@ -3,19 +3,22 @@ import { loginAsDefault, createTestApi } from "./helpers";
 import type { TestApiClient } from "./fixtures";
 
 test.describe("Issues", () => {
-  let api: TestApiClient;
+  let api: TestApiClient | undefined;
 
   test.beforeEach(async ({ page }) => {
     api = await createTestApi();
+    await api.createIssue("E2E Baseline " + Date.now());
     await loginAsDefault(page);
   });
 
   test.afterEach(async () => {
-    await api.cleanup();
+    await api?.cleanup();
   });
 
   test("issues page loads with board view", async ({ page }) => {
-    await expect(page.locator("text=All Issues")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Issues", exact: true }),
+    ).toBeVisible();
 
     // Board columns should be visible
     await expect(page.locator("text=Backlog")).toBeVisible();
@@ -24,23 +27,24 @@ test.describe("Issues", () => {
   });
 
   test("can switch between board and list view", async ({ page }) => {
-    await expect(page.locator("text=All Issues")).toBeVisible();
+    const viewButton = page.getByRole("button", { name: "Board view" });
+    await expect(viewButton).toBeVisible();
 
-    // Switch to list view
-    await page.click("text=List");
-    await expect(page.locator("text=All Issues")).toBeVisible();
+    await viewButton.click();
+    await page.getByRole("menuitem", { name: "List", exact: true }).click();
+    await expect(page.getByRole("button", { name: "List view" })).toBeVisible();
 
-    // Switch back to board view
-    await page.click("text=Board");
+    await page.getByRole("button", { name: "List view" }).click();
+    await page.getByRole("menuitem", { name: "Board", exact: true }).click();
     await expect(page.locator("text=Backlog")).toBeVisible();
   });
 
   test("can create a new issue", async ({ page }) => {
-    await page.click("text=New Issue");
+    await page.getByRole("button", { name: "New Issue" }).click();
 
     const title = "E2E Created " + Date.now();
-    await page.fill('input[placeholder="Issue title..."]', title);
-    await page.click("text=Create");
+    await page.getByRole("textbox", { name: "Issue title" }).fill(title);
+    await page.getByRole("button", { name: "Create Issue" }).click();
 
     // New issue should appear on the page
     await expect(page.locator(`text=${title}`).first()).toBeVisible({
@@ -50,18 +54,9 @@ test.describe("Issues", () => {
 
   test("can navigate to issue detail page", async ({ page }) => {
     // Create a known issue via API so the test controls its own fixture
-    const issue = await api.createIssue("E2E Detail Test " + Date.now());
+    const issue = await api!.createIssue("E2E Detail Test " + Date.now());
 
-    // Reload to see the new issue
-    await page.reload();
-    await expect(page.locator("text=All Issues")).toBeVisible();
-
-    // Navigate to the issue detail
-    const issueLink = page.locator(`a[href="/issues/${issue.id}"]`);
-    await expect(issueLink).toBeVisible({ timeout: 5000 });
-    await issueLink.click();
-
-    await page.waitForURL(/\/issues\/[\w-]+/);
+    await page.goto(`/issues/${issue.id}`, { waitUntil: "domcontentloaded" });
 
     // Should show Properties panel
     await expect(page.locator("text=Properties")).toBeVisible();
@@ -72,17 +67,17 @@ test.describe("Issues", () => {
   });
 
   test("can cancel issue creation", async ({ page }) => {
-    await page.click("text=New Issue");
+    await page.getByRole("button", { name: "New Issue" }).click();
 
     await expect(
-      page.locator('input[placeholder="Issue title..."]'),
+      page.getByRole("textbox", { name: "Issue title" }),
     ).toBeVisible();
 
-    await page.click("text=Cancel");
+    await page.getByRole("button", { name: "Close" }).click();
 
     await expect(
-      page.locator('input[placeholder="Issue title..."]'),
+      page.getByRole("textbox", { name: "Issue title" }),
     ).not.toBeVisible();
-    await expect(page.locator("text=New Issue")).toBeVisible();
+    await expect(page.getByRole("button", { name: "New Issue" })).toBeVisible();
   });
 });

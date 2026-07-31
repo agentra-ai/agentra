@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
@@ -46,7 +48,7 @@ func (h *MetricsHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"days":   days,
+		"days":      days,
 		"providers": rows,
 	})
 }
@@ -58,6 +60,21 @@ func (h *MetricsHandler) PerIssue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid issue id")
 		return
 	}
+	workspaceID, ok := h.workspaceID(w, r)
+	if !ok {
+		return
+	}
+	if _, err := h.Queries.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{
+		ID:          issueID,
+		WorkspaceID: workspaceID,
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "issue not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load issue")
+		return
+	}
 	rows, err := h.Queries.GetMetricsByIssue(r.Context(), issueID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -67,10 +84,10 @@ func (h *MetricsHandler) PerIssue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MetricsHandler) workspaceID(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {
-	ws := r.URL.Query().Get("workspace_id")
+	ws := ctxWorkspaceID(r.Context())
 	uid := parseUUID(ws)
 	if !uid.Valid {
-		writeError(w, http.StatusBadRequest, "workspace_id query param required")
+		writeError(w, http.StatusBadRequest, "workspace_id is required")
 		return pgtype.UUID{}, false
 	}
 	return uid, true

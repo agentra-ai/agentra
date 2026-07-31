@@ -13,7 +13,7 @@ import (
 func RequestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip noisy endpoints.
-		if r.URL.Path == "/health" {
+		if r.URL.Path == "/health" || r.URL.Path == "/livez" || r.URL.Path == "/readyz" {
 			next.ServeHTTP(w, r)
 			return
 		}

@@ -1,11 +1,11 @@
 ---
 title: 贡献指南
-description: 为 Agenttra 开发做贡献
+description: 为 Agentra 开发做贡献
 ---
 
-# 为 Agenttra 做贡献
+# 为 Agentra 做贡献
 
-感谢你对贡献 Agenttra 的兴趣！
+感谢你对贡献 Agentra 的兴趣！
 
 ## 开发环境配置
 
@@ -20,8 +20,7 @@ description: 为 Agenttra 开发做贡献
 
 ```bash
 pnpm install
-cp .env.example .env
-make setup
+make setup  # 缺少 .env 时安全生成
 make start
 ```
 

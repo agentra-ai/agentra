@@ -1,37 +1,64 @@
+import { api } from "@/shared/api";
+
+export interface TaskGraphNode {
+  id: string;
+  workspace_id: string;
+  issue_id: string;
+  agent_id?: string;
+  node_type: string;
+  status: string;
+  context: {
+    description?: string;
+    suggested_agent?: string;
+    [key: string]: unknown;
+  };
+  result?: Record<string, unknown>;
+  position_x: number;
+  position_y: number;
+  depth: number;
+  created_at: string;
+}
+
+export interface TaskGraphEdge {
+  id: string;
+  from_node_id: string;
+  to_node_id: string;
+  edge_type: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface TaskGraphResponse {
+  nodes: TaskGraphNode[];
+  edges: TaskGraphEdge[];
+}
+
+interface AutoDecomposeOptions {
+  provider?: string;
+  model?: string;
+  maxNodes?: number;
+  additionalContext?: string;
+}
+
+interface AutoDecomposeResponse extends TaskGraphResponse {
+  plan: string;
+  usage?: Record<string, unknown>;
+}
+
 export const taskGraphApi = {
-  getGraph: async (issueId: string) => {
-    const res = await fetch(`/api/issues/${issueId}/graph`);
-    return res.json();
-  },
+  getGraph: (issueId: string): Promise<TaskGraphResponse> =>
+    api.get<TaskGraphResponse>(`/api/issues/${issueId}/graph`),
 
-  createGraph: async (issueId: string, data: { nodes: any[]; edges: any[] }) => {
-    const res = await fetch(`/api/issues/${issueId}/graph`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    return res.json();
-  },
+  updateNode: (id: string, data: Partial<TaskGraphNode>): Promise<TaskGraphNode> =>
+    api.patch<TaskGraphNode>(`/api/graph/nodes/${id}`, data),
 
-  updateNode: async (id: string, data: any) => {
-    const res = await fetch(`/api/graph/nodes/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    return res.json();
-  },
+  deleteNode: (id: string): Promise<void> =>
+    api.delete(`/api/graph/nodes/${id}`),
 
-  deleteNode: async (id: string) => {
-    await fetch(`/api/graph/nodes/${id}`, { method: "DELETE" });
-  },
-
-  autoDecompose: async (issueId: string, opts?: { provider?: string; model?: string; maxNodes?: number; additionalContext?: string }) => {
-    const res = await fetch(`/api/issues/${issueId}/auto-decompose`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(opts || {}),
-    });
-    return res.json();
-  },
+  autoDecompose: (issueId: string, options: AutoDecomposeOptions = {}): Promise<AutoDecomposeResponse> =>
+    api.post<AutoDecomposeResponse>(`/api/issues/${issueId}/auto-decompose`, {
+      provider: options.provider,
+      model: options.model,
+      max_nodes: options.maxNodes,
+      additional_context: options.additionalContext,
+    }),
 };

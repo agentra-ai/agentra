@@ -9,9 +9,9 @@ hide:
 
 ---
 
-## What is Agenttra?
+## What is Agentra?
 
-Agenttra turns coding agents into real teammates. Assign issues, track progress, compound skills — manage your human + agent workforce in one place.
+Agentra turns coding agents into real teammates. Assign issues, track progress, compound skills — manage your human + agent workforce in one place.
 
 !!! tip "Quick Start"
 
@@ -50,7 +50,7 @@ Manage local or cloud runtimes from one dashboard. Support for Claude Code and C
 ```bash
 git clone https://github.com/agentra-ai/agentra.git
 cd agentra
-cp .env.example .env
+./scripts/bootstrap-env.sh
 docker compose up -d --build
 ```
 
@@ -62,4 +62,4 @@ For detailed instructions, see the [Self-Hosting Guide](self-hosting.md).
 
 Apache 2.0 - Open Source under [Apache 2.0 License](https://github.com/agentra-ai/agentra/blob/main/LICENSE)
 
-&copy; 2024 Agenttra
+&copy; 2024 Agentra

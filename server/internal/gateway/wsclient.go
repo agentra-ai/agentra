@@ -3,54 +3,70 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/agentra-ai/agentra/server/pkg/protocol"
 	"github.com/gorilla/websocket"
 )
 
 type WSClient struct {
-	serverURL string
-	gatewayID string
-	authToken string
-	conn      *websocket.Conn
-	mu        sync.Mutex
-	logger    *slog.Logger
+	serverURL   string
+	gatewayID   string
+	workspaceID string
+	authToken   string
+	conn        *websocket.Conn
+	mu          sync.Mutex
+	logger      *slog.Logger
 
 	// Callbacks set by Gateway
 	OnTaskDispatch func(taskID string, config map[string]any)
 	OnTaskCancel   func(taskID string)
 }
 
-func NewWSClient(serverURL, gatewayID, authToken string, logger *slog.Logger) *WSClient {
+func NewWSClient(serverURL, gatewayID, workspaceID, authToken string, logger *slog.Logger) *WSClient {
 	return &WSClient{
-		serverURL: serverURL,
-		gatewayID: gatewayID,
-		authToken: authToken,
-		logger:    logger,
+		serverURL:   serverURL,
+		gatewayID:   gatewayID,
+		workspaceID: workspaceID,
+		authToken:   authToken,
+		logger:      logger,
 	}
 }
 
 func (c *WSClient) Connect(ctx context.Context) error {
-	// Strip /ws suffix if present - AGENTRA_SERVER_URL may include it for daemon use
-	baseURL := strings.TrimSuffix(c.serverURL, "/ws")
-	url := baseURL + "/api/gateway/connect?gateway_id=" + c.gatewayID
-	if c.authToken != "" {
-		url += "&token=" + c.authToken
+	if strings.TrimSpace(c.gatewayID) == "" {
+		return fmt.Errorf("gateway ID is required")
+	}
+	if strings.TrimSpace(c.workspaceID) == "" {
+		return fmt.Errorf("gateway workspace ID is required")
+	}
+	if strings.TrimSpace(c.authToken) == "" {
+		return fmt.Errorf("gateway auth token is required")
 	}
 
-	conn, _, err := websocket.DefaultDialer.DialContext(ctx, url, nil)
+	// Strip /ws suffix if present - AGENTRA_SERVER_URL may include it for daemon use
+	baseURL := strings.TrimSuffix(c.serverURL, "/ws")
+	endpoint, err := url.Parse(baseURL + "/api/gateway/connect")
+	if err != nil {
+		return fmt.Errorf("parse gateway server URL: %w", err)
+	}
+	query := endpoint.Query()
+	query.Set("gateway_id", c.gatewayID)
+	query.Set("workspace_id", c.workspaceID)
+	endpoint.RawQuery = query.Encode()
+	header := http.Header{"Authorization": []string{"Bearer " + c.authToken}}
+
+	conn, _, err := websocket.DefaultDialer.DialContext(ctx, endpoint.String(), header)
 	if err != nil {
 		return err
 	}
 	c.conn = conn
-
-	c.send(map[string]any{
-		"type":       "gateway:register",
-		"gatewayId":  c.gatewayID,
-	})
-
 	return nil
 }
 
@@ -68,56 +84,76 @@ func (c *WSClient) Run(ctx context.Context) error {
 				return err
 			}
 
-			var event map[string]any
-			if err := json.Unmarshal(msg, &event); err != nil {
+			if err := c.handleMessage(msg); err != nil {
+				c.logger.Warn("gateway server message rejected", "error", err)
 				continue
 			}
-
-			c.handleEvent(event)
 		}
 	}
 }
 
-func (c *WSClient) handleEvent(event map[string]any) {
-	switch event["type"] {
-	case "task:dispatch":
-		taskID, _ := event["task_id"].(string)
-		config, _ := event["config"].(map[string]any)
-		if c.OnTaskDispatch != nil && taskID != "" {
-			c.OnTaskDispatch(taskID, config)
+func (c *WSClient) handleMessage(message []byte) error {
+	var envelope protocol.GatewayEnvelope
+	if err := json.Unmarshal(message, &envelope); err != nil {
+		return fmt.Errorf("decode envelope: %w", err)
+	}
+
+	switch envelope.Type {
+	case protocol.EventTaskDispatch:
+		var event protocol.GatewayTaskDispatchMessage
+		if err := json.Unmarshal(message, &event); err != nil {
+			return fmt.Errorf("decode task dispatch: %w", err)
 		}
-	case "task:cancel":
-		taskID, _ := event["task_id"].(string)
-		if c.OnTaskCancel != nil && taskID != "" {
-			c.OnTaskCancel(taskID)
+		if strings.TrimSpace(event.TaskID) == "" {
+			return fmt.Errorf("task dispatch: task_id is required")
 		}
-	case "gateway:heartbeat":
-		c.send(map[string]any{"type": "gateway:heartbeat"})
+		if c.OnTaskDispatch != nil {
+			c.OnTaskDispatch(event.TaskID, event.Config)
+		}
+		return nil
+	case protocol.EventTaskCancel:
+		var event protocol.GatewayTaskCancelMessage
+		if err := json.Unmarshal(message, &event); err != nil {
+			return fmt.Errorf("decode task cancel: %w", err)
+		}
+		if strings.TrimSpace(event.TaskID) == "" {
+			return fmt.Errorf("task cancel: task_id is required")
+		}
+		if c.OnTaskCancel != nil {
+			c.OnTaskCancel(event.TaskID)
+		}
+		return nil
+	case protocol.EventGatewayHeartbeat:
+		return c.send(protocol.GatewayHeartbeatMessage{Type: protocol.EventGatewayHeartbeat})
+	default:
+		return fmt.Errorf("unsupported event type %q", envelope.Type)
 	}
 }
 
 func (c *WSClient) SendTaskDispatched(taskID, containerID string) error {
-	return c.send(map[string]any{
-		"type":        "task:dispatched",
-		"taskId":      taskID,
-		"containerId": containerID,
+	return c.send(protocol.GatewayTaskDispatchedMessage{
+		Type:        protocol.EventTaskDispatched,
+		TaskID:      taskID,
+		ContainerID: containerID,
 	})
 }
 
-func (c *WSClient) SendTaskLogs(taskID, logs string) error {
-	return c.send(map[string]any{
-		"type":   "task:logs",
-		"taskId": taskID,
-		"logs":   logs,
+func (c *WSClient) SendTaskLogs(taskID string, seq int, stream, content string) error {
+	return c.send(protocol.GatewayTaskLogsMessage{
+		Type:    protocol.EventTaskLogs,
+		TaskID:  taskID,
+		Seq:     seq,
+		Stream:  stream,
+		Content: content,
 	})
 }
 
 func (c *WSClient) SendTaskCompleted(taskID string, exitCode int, output string) error {
-	return c.send(map[string]any{
-		"type":     "task:completed",
-		"taskId":   taskID,
-		"exitCode": exitCode,
-		"output":   output,
+	return c.send(protocol.GatewayTaskCompletedMessage{
+		Type:     protocol.EventTaskCompleted,
+		TaskID:   taskID,
+		ExitCode: exitCode,
+		Output:   output,
 	})
 }
 
@@ -126,22 +162,28 @@ func (c *WSClient) SendTaskFailed(taskID, errorMsg string) error {
 }
 
 func (c *WSClient) SendTaskFailedWithRetry(taskID, errorMsg string, retryable bool) error {
-	return c.send(map[string]any{
-		"type":     "task:failed",
-		"taskId":   taskID,
-		"error":    errorMsg,
-		"retryable": retryable,
+	return c.send(protocol.GatewayTaskFailedMessage{
+		Type:      protocol.EventTaskFailed,
+		TaskID:    taskID,
+		Error:     errorMsg,
+		Retryable: retryable,
 	})
 }
 
-func (c *WSClient) send(msg map[string]any) error {
+func (c *WSClient) send(msg any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.conn == nil {
+		return fmt.Errorf("gateway websocket is not connected")
+	}
 
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
 
+	if err := c.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+		return err
+	}
 	return c.conn.WriteMessage(websocket.TextMessage, data)
 }

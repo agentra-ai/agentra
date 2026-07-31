@@ -32,8 +32,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Verify self-host security contracts
+        run: pnpm test:self-host && pnpm test:installers
+
       - name: Build, type check, and test
-        run: pnpm build && pnpm typecheck && pnpm test
+        run: pnpm test:capabilities && pnpm lint && pnpm build && pnpm typecheck && pnpm test
 
   backend:
     runs-on: ubuntu-latest
@@ -56,6 +59,7 @@ jobs:
       POSTGRES_PORT: 5432
       POSTGRES_DB: agentra
       DATABASE_URL: postgres://agentra:agentra@${{ env.POSTGRES_HOST }}:${{ env.POSTGRES_PORT }}/${{ env.POSTGRES_DB }}?sslmode=disable
+      TEST_DATABASE_URL: postgres://agentra:agentra@${{ env.POSTGRES_HOST }}:${{ env.POSTGRES_PORT }}/${{ env.POSTGRES_DB }}?sslmode=disable
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -74,3 +78,33 @@ jobs:
 
       - name: Test
         run: cd server && go test ./...
+
+  installers:
+    name: Installers (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Build native CLI
+        run: go build ./cmd/agentra
+        working-directory: server
+
+      - name: Test Unix installer
+        if: runner.os != 'Windows'
+        run: bash scripts/test-installers.sh
+
+      - name: Test Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/test-installers.ps1

@@ -11,10 +11,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createTaskMessage = `-- name: CreateTaskMessage :one
+const createTaskMessage = `-- name: CreateTaskMessage :execrows
 INSERT INTO task_message (task_id, seq, type, tool, content, input, output)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, task_id, seq, type, tool, content, input, output, created_at
+ON CONFLICT (task_id, seq) DO NOTHING
 `
 
 type CreateTaskMessageParams struct {
@@ -27,8 +27,8 @@ type CreateTaskMessageParams struct {
 	Output  pgtype.Text `json:"output"`
 }
 
-func (q *Queries) CreateTaskMessage(ctx context.Context, arg CreateTaskMessageParams) (TaskMessage, error) {
-	row := q.db.QueryRow(ctx, createTaskMessage,
+func (q *Queries) CreateTaskMessage(ctx context.Context, arg CreateTaskMessageParams) (int64, error) {
+	result, err := q.db.Exec(ctx, createTaskMessage,
 		arg.TaskID,
 		arg.Seq,
 		arg.Type,
@@ -37,19 +37,10 @@ func (q *Queries) CreateTaskMessage(ctx context.Context, arg CreateTaskMessagePa
 		arg.Input,
 		arg.Output,
 	)
-	var i TaskMessage
-	err := row.Scan(
-		&i.ID,
-		&i.TaskID,
-		&i.Seq,
-		&i.Type,
-		&i.Tool,
-		&i.Content,
-		&i.Input,
-		&i.Output,
-		&i.CreatedAt,
-	)
-	return i, err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteTaskMessages = `-- name: DeleteTaskMessages :exec
@@ -63,13 +54,23 @@ func (q *Queries) DeleteTaskMessages(ctx context.Context, taskID pgtype.UUID) er
 }
 
 const listTaskMessages = `-- name: ListTaskMessages :many
-SELECT id, task_id, seq, type, tool, content, input, output, created_at FROM task_message
-WHERE task_id = $1
+SELECT id, task_id, seq, type, tool, content, input, output, created_at
+FROM (
+    SELECT id, task_id, seq, type, tool, content, input, output, created_at FROM task_message
+    WHERE task_id = $1
+    ORDER BY seq DESC
+    LIMIT $2
+) AS recent
 ORDER BY seq ASC
 `
 
-func (q *Queries) ListTaskMessages(ctx context.Context, taskID pgtype.UUID) ([]TaskMessage, error) {
-	rows, err := q.db.Query(ctx, listTaskMessages, taskID)
+type ListTaskMessagesParams struct {
+	TaskID pgtype.UUID `json:"task_id"`
+	Limit  int32       `json:"limit"`
+}
+
+func (q *Queries) ListTaskMessages(ctx context.Context, arg ListTaskMessagesParams) ([]TaskMessage, error) {
+	rows, err := q.db.Query(ctx, listTaskMessages, arg.TaskID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -102,15 +103,17 @@ const listTaskMessagesSince = `-- name: ListTaskMessagesSince :many
 SELECT id, task_id, seq, type, tool, content, input, output, created_at FROM task_message
 WHERE task_id = $1 AND seq > $2
 ORDER BY seq ASC
+LIMIT $3
 `
 
 type ListTaskMessagesSinceParams struct {
 	TaskID pgtype.UUID `json:"task_id"`
 	Seq    int32       `json:"seq"`
+	Limit  int32       `json:"limit"`
 }
 
 func (q *Queries) ListTaskMessagesSince(ctx context.Context, arg ListTaskMessagesSinceParams) ([]TaskMessage, error) {
-	rows, err := q.db.Query(ctx, listTaskMessagesSince, arg.TaskID, arg.Seq)
+	rows, err := q.db.Query(ctx, listTaskMessagesSince, arg.TaskID, arg.Seq, arg.Limit)
 	if err != nil {
 		return nil, err
 	}

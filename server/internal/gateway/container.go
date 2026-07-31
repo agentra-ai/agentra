@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/fsouza/go-dockerclient"
@@ -56,8 +57,8 @@ func (cm *ContainerManager) CreateContainer(ctx context.Context, cfg *TaskConfig
 	}
 
 	resp, err := cm.docker.CreateContainer(docker.CreateContainerOptions{
-		Name: "",
-		Config: &containerCfg,
+		Name:       "",
+		Config:     &containerCfg,
 		HostConfig: &hostCfg,
 	})
 	if err != nil {
@@ -95,6 +96,7 @@ func (cm *ContainerManager) GetContainerLogs(ctx context.Context, containerID st
 	var stdout, stderr bytes.Buffer
 
 	err := cm.docker.Logs(docker.LogsOptions{
+		Context:      ctx,
 		Container:    containerID,
 		OutputStream: &stdout,
 		ErrorStream:  &stderr,
@@ -109,6 +111,20 @@ func (cm *ContainerManager) GetContainerLogs(ctx context.Context, containerID st
 	result := stdout.Bytes()
 	result = append(result, stderr.Bytes()...)
 	return result, nil
+}
+
+// StreamContainerLogs follows a container until it exits or ctx is cancelled.
+// Docker demultiplexes stdout and stderr into the supplied bounded writers.
+func (cm *ContainerManager) StreamContainerLogs(ctx context.Context, containerID string, stdout, stderr io.Writer) error {
+	return cm.docker.Logs(docker.LogsOptions{
+		Context:      ctx,
+		Container:    containerID,
+		OutputStream: stdout,
+		ErrorStream:  stderr,
+		Follow:       true,
+		Stdout:       true,
+		Stderr:       true,
+	})
 }
 
 func (cm *ContainerManager) DestroyContainer(ctx context.Context, containerID string) error {

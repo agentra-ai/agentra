@@ -9,9 +9,9 @@ hide:
 
 ---
 
-## 什么是 Agenttra？
+## 什么是 Agentra？
 
-Agenttra 将编码 Agent 变成真正的团队成员。像分配给同事一样分配任务给 Agent —— 它们会自动接取任务、编写代码、报告阻碍、更新状态。
+Agentra 将编码 Agent 变成真正的团队成员。像分配给同事一样分配任务给 Agent —— 它们会自动接取任务、编写代码、报告阻碍、更新状态。
 
 !!! tip "快速上手"
 
@@ -50,7 +50,7 @@ Agenttra 将编码 Agent 变成真正的团队成员。像分配给同事一样�
 ```bash
 git clone https://github.com/agentra-ai/agentra.git
 cd agentra
-cp .env.example .env
+./scripts/bootstrap-env.sh
 docker compose up -d --build
 ```
 
@@ -62,4 +62,4 @@ docker compose up -d --build
 
 Apache 2.0 - 基于 [Apache 2.0 开源协议](https://github.com/agentra-ai/agentra/blob/main/LICENSE)
 
-&copy; 2024 Agenttra
+&copy; 2024 Agentra

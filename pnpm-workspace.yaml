@@ -1,6 +1,13 @@
 packages:
   - "apps/*"
 
+onlyBuiltDependencies:
+  - "esbuild"
+
+overrides:
+  "@types/react": "catalog:"
+  "@types/react-dom": "catalog:"
+
 catalog:
   # Core React
   react: "19.2.3"

@@ -2,7 +2,11 @@ package cli
 
 import (
 	"archive/tar"
+	"bufio"
+	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +16,11 @@ import (
 	"runtime"
 	"strings"
 	"time"
+)
+
+const (
+	maxReleaseArchiveBytes  = 256 << 20
+	maxReleaseChecksumBytes = 1 << 20
 )
 
 // GitHubRelease is the subset of the GitHub releases API response we need.
@@ -68,6 +77,10 @@ func IsBrewInstall() bool {
 // UpdateViaDownload downloads the latest release binary from GitHub and replaces
 // the current executable in-place. Returns the combined output message and any error.
 func UpdateViaDownload(targetVersion string) (string, error) {
+	if runtime.GOOS == "windows" {
+		return "", fmt.Errorf("in-place self-update is not supported on Windows while agentra.exe is running; download install.ps1 from the release and run it after stopping the daemon")
+	}
+
 	// Determine current binary path.
 	exePath, err := os.Executable()
 	if err != nil {
@@ -84,22 +97,23 @@ func UpdateViaDownload(targetVersion string) (string, error) {
 		tag = "v" + tag
 	}
 	assetName := fmt.Sprintf("agentra_%s_%s.tar.gz", runtime.GOOS, runtime.GOARCH)
-	downloadURL := fmt.Sprintf("https://github.com/agentra-ai/agentra/releases/download/%s/%s", tag, assetName)
+	releaseURL := fmt.Sprintf("https://github.com/agentra-ai/agentra/releases/download/%s", tag)
 
-	// Download the tarball.
 	client := &http.Client{Timeout: 120 * time.Second}
-	resp, err := client.Get(downloadURL)
+	archiveData, err := downloadReleaseFile(client, releaseURL+"/"+assetName, maxReleaseArchiveBytes)
 	if err != nil {
-		return "", fmt.Errorf("download failed: %w", err)
+		return "", fmt.Errorf("download release archive: %w", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download failed: HTTP %d from %s", resp.StatusCode, downloadURL)
+	checksums, err := downloadReleaseFile(client, releaseURL+"/checksums.txt", maxReleaseChecksumBytes)
+	if err != nil {
+		return "", fmt.Errorf("download release checksums: %w", err)
+	}
+	if err := verifyReleaseChecksum(assetName, archiveData, checksums); err != nil {
+		return "", err
 	}
 
 	// Extract the "agentra" binary from the tarball.
-	binaryData, err := extractBinaryFromTarGz(resp.Body, "agentra")
+	binaryData, err := extractBinaryFromTarGz(bytes.NewReader(archiveData), "agentra")
 	if err != nil {
 		return "", fmt.Errorf("extract binary: %w", err)
 	}
@@ -139,6 +153,64 @@ func UpdateViaDownload(targetVersion string) (string, error) {
 	return fmt.Sprintf("Downloaded %s and replaced %s", assetName, exePath), nil
 }
 
+func downloadReleaseFile(client *http.Client, downloadURL string, maxBytes int64) ([]byte, error) {
+	resp, err := client.Get(downloadURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, downloadURL)
+	}
+	if resp.ContentLength > maxBytes {
+		return nil, fmt.Errorf("release file exceeds %d bytes", maxBytes)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("release file exceeds %d bytes", maxBytes)
+	}
+	return data, nil
+}
+
+func verifyReleaseChecksum(assetName string, archiveData, checksums []byte) error {
+	expected, err := checksumForReleaseAsset(assetName, checksums)
+	if err != nil {
+		return err
+	}
+	actual := sha256.Sum256(archiveData)
+	if !bytes.Equal(actual[:], expected) {
+		return fmt.Errorf("SHA-256 checksum mismatch for %s", assetName)
+	}
+	return nil
+}
+
+func checksumForReleaseAsset(assetName string, checksums []byte) ([]byte, error) {
+	var matched string
+	matches := 0
+	scanner := bufio.NewScanner(bytes.NewReader(checksums))
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) == 2 && fields[1] == assetName {
+			matched = fields[0]
+			matches++
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("read checksums: %w", err)
+	}
+	if matches != 1 {
+		return nil, fmt.Errorf("checksums.txt must contain exactly one entry for %s", assetName)
+	}
+	decoded, err := hex.DecodeString(matched)
+	if err != nil || len(decoded) != sha256.Size {
+		return nil, fmt.Errorf("invalid SHA-256 checksum for %s", assetName)
+	}
+	return decoded, nil
+}
+
 // extractBinaryFromTarGz reads a .tar.gz stream and returns the contents of the
 // named file entry.
 func extractBinaryFromTarGz(r io.Reader, name string) ([]byte, error) {
@@ -159,9 +231,15 @@ func extractBinaryFromTarGz(r io.Reader, name string) ([]byte, error) {
 		}
 		// Match the binary name (may be prefixed with a directory).
 		if filepath.Base(hdr.Name) == name && hdr.Typeflag == tar.TypeReg {
-			data, err := io.ReadAll(tr)
+			if hdr.Size < 0 || hdr.Size > maxReleaseArchiveBytes {
+				return nil, fmt.Errorf("binary %q exceeds size limit", name)
+			}
+			data, err := io.ReadAll(io.LimitReader(tr, hdr.Size+1))
 			if err != nil {
 				return nil, fmt.Errorf("read binary: %w", err)
+			}
+			if int64(len(data)) != hdr.Size {
+				return nil, fmt.Errorf("binary %q has an invalid size", name)
 			}
 			return data, nil
 		}

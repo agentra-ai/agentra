@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -23,6 +24,62 @@ func uuidToString(u pgtype.UUID) string { return util.UUIDToString(u) }
 type PATStore interface {
 	GetPersonalAccessTokenByHash(ctx context.Context, hash string) (db.PersonalAccessToken, error)
 	UpdatePersonalAccessTokenLastUsed(ctx context.Context, id pgtype.UUID) error
+}
+
+// UserIdentity is the authenticated user information shared by HTTP and
+// WebSocket entry points.
+type UserIdentity struct {
+	UserID string
+	Email  string
+}
+
+// AuthenticateUserToken validates either a personal access token or JWT.
+// PAT last-used attribution is updated inline with a bounded detached context,
+// matching the HTTP middleware's audit semantics without leaking goroutines.
+func AuthenticateUserToken(ctx context.Context, store PATStore, tokenString string) (UserIdentity, error) {
+	if strings.HasPrefix(tokenString, "mul_") {
+		if store == nil {
+			return UserIdentity{}, errors.New("invalid token")
+		}
+		pat, err := store.GetPersonalAccessTokenByHash(ctx, auth.HashToken(tokenString))
+		if err != nil {
+			return UserIdentity{}, errors.New("invalid token")
+		}
+
+		updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = store.UpdatePersonalAccessTokenLastUsed(updateCtx, pat.ID)
+
+		userID := uuidToString(pat.UserID)
+		if strings.TrimSpace(userID) == "" {
+			return UserIdentity{}, errors.New("invalid token")
+		}
+		return UserIdentity{UserID: userID}, nil
+	}
+
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return auth.JWTSecret(), nil
+	})
+	if err != nil || !token.Valid {
+		return UserIdentity{}, errors.New("invalid token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return UserIdentity{}, errors.New("invalid claims")
+	}
+	userID, ok := claims["sub"].(string)
+	if !ok || strings.TrimSpace(userID) == "" {
+		return UserIdentity{}, errors.New("invalid claims")
+	}
+	identity := UserIdentity{UserID: userID}
+	if email, ok := claims["email"].(string); ok {
+		identity.Email = email
+	}
+	return identity, nil
 }
 
 // Auth middleware validates JWT tokens or Personal Access Tokens from the Authorization header.
@@ -50,64 +107,15 @@ func AuthWithPATStore(store PATStore) func(http.Handler) http.Handler {
 				return
 			}
 
-			// PAT: tokens starting with "mul_"
-			if strings.HasPrefix(tokenString, "mul_") {
-				if store == nil {
-					http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
-					return
-				}
-				hash := auth.HashToken(tokenString)
-				pat, err := store.GetPersonalAccessTokenByHash(r.Context(), hash)
-				if err != nil {
-					slog.Warn("auth: invalid PAT", "path", r.URL.Path, "error", err)
-					http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
-					return
-				}
-
-				r.Header.Set("X-User-ID", uuidToString(pat.UserID))
-
-				// Update last_used_at in a short-lived detached context so
-				// request cancellation does not abandon the write, but with
-				// a hard timeout. Do NOT spawn an unbounded goroutine: a
-				// flood of PAT requests would otherwise grow the goroutine
-				// count without bound and starve the server.
-				updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				defer cancel()
-				_ = store.UpdatePersonalAccessTokenLastUsed(updateCtx, pat.ID)
-
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// JWT
-			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
-				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, jwt.ErrSignatureInvalid
-				}
-				return auth.JWTSecret(), nil
-			})
-			if err != nil || !token.Valid {
+			identity, err := AuthenticateUserToken(r.Context(), store, tokenString)
+			if err != nil {
 				slog.Warn("auth: invalid token", "path", r.URL.Path, "error", err)
 				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 				return
 			}
-
-			claims, ok := token.Claims.(jwt.MapClaims)
-			if !ok {
-				slog.Warn("auth: invalid claims", "path", r.URL.Path)
-				http.Error(w, `{"error":"invalid claims"}`, http.StatusUnauthorized)
-				return
-			}
-
-			sub, ok := claims["sub"].(string)
-			if !ok || strings.TrimSpace(sub) == "" {
-				slog.Warn("auth: invalid claims", "path", r.URL.Path)
-				http.Error(w, `{"error":"invalid claims"}`, http.StatusUnauthorized)
-				return
-			}
-			r.Header.Set("X-User-ID", sub)
-			if email, ok := claims["email"].(string); ok {
-				r.Header.Set("X-User-Email", email)
+			r.Header.Set("X-User-ID", identity.UserID)
+			if identity.Email != "" {
+				r.Header.Set("X-User-Email", identity.Email)
 			}
 
 			next.ServeHTTP(w, r)

@@ -95,6 +95,7 @@ export function BoardColumn({
                   variant="ghost"
                   size="icon-sm"
                   className="rounded-full text-muted-foreground"
+                  aria-label={t("addColumn.addIssue")}
                   onClick={() => useModalStore.getState().open("create-issue", { status })}
                 >
                   <Plus className="size-3.5" />

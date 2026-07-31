@@ -10,11 +10,13 @@ package loop
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/agentra-ai/agentra/server/internal/events"
@@ -39,6 +41,13 @@ const (
 // failed. Paused loops are never timed out — pausing is an explicit operator
 // action, not a stuck state.
 const loopRestoreTimeout = 30 * time.Minute
+
+var errInvalidLoopConfiguration = errors.New("invalid loop configuration")
+
+type resolvedStageAgent struct {
+	agentID   pgtype.UUID
+	runtimeID pgtype.UUID
+}
 
 // TaskResult is the parsed result of a completed agent task. Most fields
 // are stage-specific: PR info comes from develop/review output, review
@@ -279,11 +288,6 @@ func (c *Coordinator) RestoreOnStartup(ctx context.Context) {
 // restoreOne applies the RestoreOnStartup policy to a single loop. Pulled
 // out of the loop in RestoreOnStartup so per-loop error handling is uniform.
 func (c *Coordinator) restoreOne(ctx context.Context, l *Loop) error {
-	if l.CurrentStage == nil {
-		slog.Warn("loop coordinator: skipping active loop with no current stage",
-			"loop_id", l.ID, "status", l.Status)
-		return nil
-	}
 	if l.Status == StatusPaused {
 		// Paused loops are intentionally stopped; the operator will resume.
 		return nil
@@ -293,12 +297,14 @@ func (c *Coordinator) restoreOne(ctx context.Context, l *Loop) error {
 		// drift (e.g. a hook changed the status since the load).
 		return nil
 	}
+	if l.CurrentStage == nil {
+		return c.failInvalidConfiguration(ctx, l, "running loop has no current stage")
+	}
 
 	taskType := taskTypeForStage(*l.CurrentStage)
 	if taskType == "" {
-		slog.Warn("loop coordinator: unknown current stage, skipping",
-			"loop_id", l.ID, "stage", *l.CurrentStage)
-		return nil
+		return c.failInvalidConfiguration(ctx, l,
+			fmt.Sprintf("running loop has unknown current stage %q", *l.CurrentStage))
 	}
 
 	has, err := c.queries.HasInFlightTaskForLoopStage(ctx, dbpkg.HasInFlightTaskForLoopStageParams{
@@ -312,6 +318,14 @@ func (c *Coordinator) restoreOne(ctx context.Context, l *Loop) error {
 		// A task is already in flight; the daemon will report its outcome
 		// and the coordinator's normal handler will advance the loop.
 		return nil
+	}
+
+	resolvedAgent, err := c.resolveStageAgent(ctx, l, taskType)
+	if err != nil {
+		if errors.Is(err, errInvalidLoopConfiguration) {
+			return c.failInvalidConfiguration(ctx, l, err.Error())
+		}
+		return fmt.Errorf("resolve stage agent: %w", err)
 	}
 
 	// No work in flight. If the loop has been running for too long with no
@@ -336,10 +350,10 @@ func (c *Coordinator) restoreOne(ctx context.Context, l *Loop) error {
 	// Re-enqueue the current stage's task. createTaskForStage also writes
 	// the next stage back to the loop row, which is a no-op for a fresh
 	// stage re-arm (it sets current_stage to the same value).
-	if err := c.createTaskForStage(ctx, l, Decision{
+	if err := c.createTaskForStageWithAgent(ctx, l, Decision{
 		action:   actionCreateTask,
 		taskType: taskType,
-	}); err != nil {
+	}, resolvedAgent); err != nil {
 		return fmt.Errorf("re-enqueue stage task: %w", err)
 	}
 	slog.Info("loop coordinator: restored loop by re-enqueuing task",
@@ -377,7 +391,13 @@ func (c *Coordinator) processTaskCompleted(ctx context.Context, e events.Event) 
 func (c *Coordinator) applyDecision(ctx context.Context, l *Loop, d Decision) error {
 	switch d.action {
 	case actionCreateTask:
-		return c.createTaskForStage(ctx, l, d)
+		if err := c.createTaskForStage(ctx, l, d); err != nil {
+			if errors.Is(err, errInvalidLoopConfiguration) {
+				return c.failInvalidConfiguration(ctx, l, err.Error())
+			}
+			return err
+		}
+		return nil
 	case actionComplete:
 		now := nowUTC()
 		if _, err := c.store.SetPR(ctx, l.ID, d.prURL, d.prNumber, d.branchName); err != nil {
@@ -407,34 +427,53 @@ func (c *Coordinator) applyDecision(ctx context.Context, l *Loop, d Decision) er
 }
 
 func (c *Coordinator) createTaskForStage(ctx context.Context, l *Loop, d Decision) error {
-	// Resolve the agent for THIS stage: an override in loops.config.stage_agents
-	// wins; otherwise we fall back to loops.agent_id. The same id flows into
-	// both agent_id and runtime_id (via GetAgent), so review/develop can run
-	// on entirely different runtimes if the operator wired them up that way.
-	var stageOverride *string
-	if next := stageFromString(d.taskType); next != nil {
-		stageOverride = l.StageAgent(*next)
-	} else {
-		stageOverride = l.AgentID
+	resolvedAgent, err := c.resolveStageAgent(ctx, l, d.taskType)
+	if err != nil {
+		return fmt.Errorf("resolve stage agent: %w", err)
 	}
-	agentID := pgtype.UUID{}
-	if stageOverride != nil {
-		agentID = util.ParseUUID(*stageOverride)
+	return c.createTaskForStageWithAgent(ctx, l, d, resolvedAgent)
+}
+
+func (c *Coordinator) resolveStageAgent(ctx context.Context, l *Loop, taskType string) (resolvedStageAgent, error) {
+	stage := stageFromString(taskType)
+	if stage == nil {
+		return resolvedStageAgent{}, fmt.Errorf("%w: unknown task type %q", errInvalidLoopConfiguration, taskType)
 	}
-	// agent_task_queue.runtime_id is NOT NULL (added in migration 004). Look it
-	// up from the agent row when we have one; otherwise the loop was created
-	// without an agent and CreateAgentTask will fail with a NOT NULL violation.
-	var runtimeID pgtype.UUID
-	if stageOverride != nil {
-		agent, err := c.queries.GetAgent(ctx, agentID)
-		if err != nil {
-			return fmt.Errorf("lookup agent for runtime_id: %w", err)
+
+	configuredAgentID := l.StageAgent(*stage)
+	if configuredAgentID == nil || strings.TrimSpace(*configuredAgentID) == "" {
+		return resolvedStageAgent{}, fmt.Errorf("%w: no agent configured for stage %q", errInvalidLoopConfiguration, *stage)
+	}
+
+	agentID := util.ParseUUID(strings.TrimSpace(*configuredAgentID))
+	if !agentID.Valid {
+		return resolvedStageAgent{}, fmt.Errorf("%w: invalid agent id for stage %q", errInvalidLoopConfiguration, *stage)
+	}
+
+	agent, err := c.queries.GetAgent(ctx, agentID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return resolvedStageAgent{}, fmt.Errorf("%w: agent for stage %q does not exist", errInvalidLoopConfiguration, *stage)
 		}
-		runtimeID = agent.RuntimeID
+		return resolvedStageAgent{}, fmt.Errorf("lookup agent for stage %q: %w", *stage, err)
 	}
+	if util.UUIDToString(agent.WorkspaceID) != l.WorkspaceID {
+		return resolvedStageAgent{}, fmt.Errorf("%w: agent for stage %q belongs to another workspace", errInvalidLoopConfiguration, *stage)
+	}
+	if agent.ArchivedAt.Valid {
+		return resolvedStageAgent{}, fmt.Errorf("%w: agent for stage %q is archived", errInvalidLoopConfiguration, *stage)
+	}
+	if !agent.RuntimeID.Valid {
+		return resolvedStageAgent{}, fmt.Errorf("%w: agent for stage %q has no runtime", errInvalidLoopConfiguration, *stage)
+	}
+
+	return resolvedStageAgent{agentID: agentID, runtimeID: agent.RuntimeID}, nil
+}
+
+func (c *Coordinator) createTaskForStageWithAgent(ctx context.Context, l *Loop, d Decision, agent resolvedStageAgent) error {
 	if _, err := c.queries.CreateAgentTask(ctx, dbpkg.CreateAgentTaskParams{
-		AgentID:   agentID,
-		RuntimeID: runtimeID,
+		AgentID:   agent.agentID,
+		RuntimeID: agent.runtimeID,
 		IssueID:   util.ParseUUID(l.IssueID),
 		Priority:  1,
 		TaskType:  d.taskType,
@@ -452,6 +491,23 @@ func (c *Coordinator) createTaskForStage(ctx context.Context, l *Loop, d Decisio
 	}); err != nil {
 		return fmt.Errorf("update loop stage: %w", err)
 	}
+	return nil
+}
+
+func (c *Coordinator) failInvalidConfiguration(ctx context.Context, l *Loop, detail string) error {
+	now := nowUTC()
+	reason := string(FailureInvalidConfig)
+	if _, err := c.store.UpdateStatus(ctx, l.ID, UpdateStatusInput{
+		Status:        ptrStatus(StatusFailed),
+		CurrentStage:  l.CurrentStage,
+		Iteration:     &l.Iteration,
+		FailureReason: &reason,
+		CompletedAt:   &now,
+	}); err != nil {
+		return fmt.Errorf("mark invalid loop failed: %w", err)
+	}
+	slog.Warn("loop coordinator: failed loop with invalid configuration",
+		"loop_id", l.ID, "detail", detail)
 	return nil
 }
 

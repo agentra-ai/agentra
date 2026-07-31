@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import {
   ReactFlow,
@@ -13,108 +13,103 @@ import {
   Position,
   MarkerType,
 } from "@xyflow/react";
-import type { Node, Edge } from "@xyflow/react";
+import type { Edge, Node, NodeProps, NodeTypes } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import type { TaskGraphNode } from "../api/taskGraphApi";
 import { useTaskGraph } from "../hooks/useTaskGraph";
 
-interface DAGNode {
-  id: string;
-  node_type: string;
-  status: string;
-  context: Record<string, any>;
-  position_x?: number;
-  position_y?: number;
-  depth: number;
-}
+type TaskGraphFlowNode = Node<{ node: TaskGraphNode }, "taskNode">;
 
-interface DAGEdge {
-  id: string;
-  from_node_id: string;
-  to_node_id: string;
-  edge_type: string;
-}
-
-function TaskNode({ data }: { data: DAGNode }) {
+function TaskNode({ data }: NodeProps<TaskGraphFlowNode>) {
   const t = useTranslations("taskGraph");
+  const node = data.node;
   const typeColors: Record<string, string> = {
-    executor: "bg-blue-100 border-blue-300",
-    synthesis: "bg-purple-100 border-purple-300",
-    planner: "bg-amber-100 border-amber-300",
-    root: "bg-green-100 border-green-300",
+    executor: "bg-primary/10 border-primary/30",
+    synthesis: "bg-accent border-border",
+    planner: "bg-secondary border-border",
+    root: "bg-muted border-border",
   };
   const statusColors: Record<string, string> = {
-    pending: "bg-gray-100 text-gray-600",
-    running: "bg-blue-100 text-blue-700",
-    completed: "bg-green-100 text-green-700",
-    failed: "bg-red-100 text-red-700",
-    blocked: "bg-amber-100 text-amber-700",
+    pending: "bg-muted text-muted-foreground",
+    running: "bg-primary/10 text-primary",
+    completed: "bg-accent text-accent-foreground",
+    failed: "bg-destructive/10 text-destructive",
+    blocked: "bg-secondary text-secondary-foreground",
   };
 
   return (
-    <div className={`relative px-3 py-2 rounded-lg border-2 min-w-[160px] max-w-[200px] ${typeColors[data.node_type] || "bg-gray-100 border-gray-300"}`}>
-      <Handle type="target" position={Position.Top} className="!bg-gray-400 !w-2 !h-2" />
+    <div className={`relative px-3 py-2 rounded-lg border-2 min-w-[160px] max-w-[200px] ${typeColors[node.node_type] || "bg-muted border-border"}`}>
+      <Handle type="target" position={Position.Top} className="!bg-muted-foreground !w-2 !h-2" />
 
       <div className="flex items-center gap-2 mb-1">
-        <span className="text-xs font-medium uppercase">{data.node_type}</span>
-        <span className={`text-xs px-1.5 py-0.5 rounded ${statusColors[data.status] || "bg-gray-100 text-gray-600"}`}>
-          {data.status}
+        <span className="text-xs font-medium uppercase">{node.node_type}</span>
+        <span className={`text-xs px-1.5 py-0.5 rounded ${statusColors[node.status] || "bg-muted text-muted-foreground"}`}>
+          {node.status}
         </span>
       </div>
 
       <p className="text-sm font-medium line-clamp-2">
-        {data.context?.description || t("graph.noDescription")}
+        {node.context?.description || t("graph.noDescription")}
       </p>
 
-      {data.context?.suggested_agent && (
-        <p className="text-xs text-gray-500 mt-1">
-          {t("graph.agentLabel", { name: data.context.suggested_agent })}
+      {node.context?.suggested_agent && (
+        <p className="text-xs text-muted-foreground mt-1">
+          {t("graph.agentLabel", { name: node.context.suggested_agent })}
         </p>
       )}
 
-      <Handle type="source" position={Position.Bottom} className="!bg-gray-400 !w-2 !h-2" />
+      <Handle type="source" position={Position.Bottom} className="!bg-muted-foreground !w-2 !h-2" />
     </div>
   );
 }
 
-const nodeTypes = { taskNode: TaskNode };
+const nodeTypes = { taskNode: TaskNode } satisfies NodeTypes;
 
 export function GraphView({ issueId }: { issueId: string }) {
   const t = useTranslations("taskGraph");
   const { nodes: storeNodes, edges: storeEdges, fetchGraph, isLoading, error } = useTaskGraph();
 
   // Fetch graph when issueId changes
-  useMemo(() => {
+  useEffect(() => {
     if (issueId) fetchGraph(issueId);
   }, [issueId, fetchGraph]);
 
-  const initialNodes: Node[] = useMemo(() =>
-    storeNodes.map((n: any) => ({
-      id: n.id,
+  const graphNodes: TaskGraphFlowNode[] = useMemo(() =>
+    storeNodes.map((node) => ({
+      id: node.id,
       type: "taskNode",
-      position: { x: n.position_x || 0, y: n.position_y || 0 },
-      data: n,
+      position: { x: node.position_x || 0, y: node.position_y || 0 },
+      data: { node },
     })),
     [storeNodes]
   );
 
-  const initialEdges: Edge[] = useMemo(() =>
-    storeEdges.map((e: any) => ({
-      id: e.id,
-      source: e.from_node_id,
-      target: e.to_node_id,
+  const graphEdges: Edge[] = useMemo(() =>
+    storeEdges.map((edge) => ({
+      id: edge.id,
+      source: edge.from_node_id,
+      target: edge.to_node_id,
       type: "smoothstep",
-      animated: e.edge_type === "depends_on",
+      animated: edge.edge_type === "depends_on",
       markerEnd: { type: MarkerType.ArrowClosed },
-      label: e.edge_type === "depends_on" ? undefined : e.edge_type,
+      label: edge.edge_type === "depends_on" ? undefined : edge.edge_type,
     })),
     [storeEdges]
   );
 
-  const [nodes, , onNodesChange] = useNodesState(initialNodes);
-  const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState<TaskGraphFlowNode>(graphNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(graphEdges);
+
+  useEffect(() => {
+    setNodes(graphNodes);
+  }, [graphNodes, setNodes]);
+
+  useEffect(() => {
+    setEdges(graphEdges);
+  }, [graphEdges, setEdges]);
 
   if (isLoading) return <div className="text-muted-foreground text-sm p-4">{t("graph.loading")}</div>;
-  if (error) return <div className="text-red-500 text-sm p-4">{t("graph.error", { detail: error })}</div>;
+  if (error) return <div className="text-destructive text-sm p-4">{t("graph.error", { detail: error })}</div>;
   if (storeNodes.length === 0) return <div className="text-muted-foreground text-sm p-4">{t("graph.empty")}</div>;
 
   return (

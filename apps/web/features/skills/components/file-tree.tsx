@@ -69,11 +69,6 @@ function buildTree(filePaths: string[]): FileTreeNode[] {
   return sortNodes(root);
 }
 
-function getFileIcon(name: string) {
-  if (name.endsWith(".md") || name.endsWith(".mdx")) return FileText;
-  return File;
-}
-
 // ---------------------------------------------------------------------------
 // Tree node renderer
 // ---------------------------------------------------------------------------
@@ -124,7 +119,7 @@ function TreeNodeItem({
     );
   }
 
-  const Icon = getFileIcon(node.name);
+  const isMarkdown = node.name.endsWith(".md") || node.name.endsWith(".mdx");
 
   return (
     <button
@@ -137,7 +132,11 @@ function TreeNodeItem({
       )}
       style={{ paddingLeft: `${depth * 12 + 8 + 16}px` }}
     >
-      <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      {isMarkdown ? (
+        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      ) : (
+        <File className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      )}
       <span className="truncate">{node.name}</span>
     </button>
   );

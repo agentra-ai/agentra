@@ -1,36 +1,57 @@
-export const memoryApi = {
-  listTeamMemories: async (workspaceId: string) => {
-    const res = await fetch(`/api/workspaces/${workspaceId}/memories`)
-    return res.json()
-  },
+import { api } from "@/shared/api";
 
-  listAgentMemories: async (agentId: string) => {
-    const res = await fetch(`/api/agents/${agentId}/memories`)
-    return res.json()
-  },
+export type MemoryType = "learning" | "task_result" | "context" | "pattern";
 
-  storeMemory: async (data: {
-    workspace_id: string
-    agent_id?: string
-    memory_type: string
-    content: string
-    is_private?: boolean
-  }) => {
-    const res = await fetch(`/api/workspaces/${data.workspace_id}/memories`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    })
-    return res.json()
-  },
-
-  deleteMemory: async (id: string, agentId?: string) => {
-    await fetch(`/api/memories/${id}?agent_id=${agentId || ''}`, { method: 'DELETE' })
-  },
-
-  searchMemories: async (workspaceId: string, query: string, includeTeam = true) => {
-    const params = new URLSearchParams({ workspace_id: workspaceId, q: query, include_team: String(includeTeam) })
-    const res = await fetch(`/api/memories/search?${params}`)
-    return res.json()
-  },
+export interface MemoryEntry {
+  id: string;
+  workspace_id: string;
+  agent_id?: string;
+  memory_type: MemoryType;
+  content: string;
+  is_private?: boolean;
+  created_at: string;
 }
+
+export interface StoreMemoryRequest {
+  workspace_id: string;
+  agent_id?: string;
+  memory_type: MemoryType;
+  content: string;
+  is_private?: boolean;
+}
+
+export const memoryApi = {
+  listTeamMemories: (workspaceId: string): Promise<MemoryEntry[]> =>
+    api.get<MemoryEntry[]>(`/api/workspaces/${workspaceId}/memories`),
+
+  listAgentMemories: (agentId: string): Promise<MemoryEntry[]> =>
+    api.get<MemoryEntry[]>(`/api/agents/${agentId}/memories`),
+
+  storeMemory: (data: StoreMemoryRequest): Promise<MemoryEntry> => {
+    if (data.agent_id) {
+      return api.post<MemoryEntry>(`/api/agents/${data.agent_id}/memories`, {
+        memory_type: data.memory_type,
+        content: data.content,
+        is_private: data.is_private,
+      });
+    }
+    return api.post<MemoryEntry>(`/api/workspaces/${data.workspace_id}/memories`, {
+      memory_type: data.memory_type,
+      content: data.content,
+    });
+  },
+
+  deleteMemory: (memory: MemoryEntry): Promise<void> => {
+    if (memory.agent_id) {
+      return api.delete(`/api/agents/${memory.agent_id}/memories/${memory.id}`);
+    }
+    return api.delete(`/api/workspaces/${memory.workspace_id}/memories/${memory.id}`);
+  },
+
+  searchMemories: (workspaceId: string, query: string): Promise<{ memories: MemoryEntry[] }> => {
+    const params = new URLSearchParams({ q: query });
+    return api.get<{ memories: MemoryEntry[] }>(
+      `/api/workspaces/${workspaceId}/memories/search?${params}`,
+    );
+  },
+};

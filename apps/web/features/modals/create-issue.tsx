@@ -69,6 +69,7 @@ function PillButton({
 
 export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?: Record<string, unknown> | null }) {
   const tIssues = useTranslations("issues");
+  const tAssignee = useTranslations("issues.assigneeMenu");
   const tCommon = useTranslations("common");
   const tModals = useTranslations("modals");
   const f = useFormatter();
@@ -160,7 +161,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
             <div className="flex items-center justify-center size-5 rounded-full bg-emerald-500/15 text-emerald-500">
               <Check className="size-3" />
             </div>
-            <span className="text-sm font-medium">{tIssues("issueCreated")}</span>
+            <span className="text-sm font-medium">{tIssues("create.issueCreated")}</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground ml-7">
             <StatusIcon status={issue.status} className="size-3.5 shrink-0" />
@@ -174,7 +175,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
               toast.dismiss(t);
             }}
           >
-            {tIssues("viewIssue")}
+            {tIssues("create.viewIssue")}
           </button>
         </div>
       ), { duration: 5000 });
@@ -219,6 +220,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                 render={
                   <button
                     onClick={() => setIsExpanded(!isExpanded)}
+                    aria-label={isExpanded ? tIssues("create.collapse") : tIssues("create.expand")}
                     className="rounded-sm p-1.5 opacity-70 hover:opacity-100 hover:bg-accent/60 transition-all cursor-pointer"
                   >
                     {isExpanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
@@ -232,6 +234,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                 render={
                   <button
                     onClick={onClose}
+                    aria-label={tCommon("close")}
                     className="rounded-sm p-1.5 opacity-70 hover:opacity-100 hover:bg-accent/60 transition-all cursor-pointer"
                   >
                     <XIcon className="size-4" />
@@ -354,7 +357,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                   type="text"
                   value={assigneeFilter}
                   onChange={(e) => setAssigneeFilter(e.target.value)}
-                  placeholder={tIssues("assignee.assignToPlaceholder")}
+                  placeholder={tAssignee("assignToPlaceholder")}
                   className="w-full bg-transparent text-sm placeholder:text-muted-foreground outline-none"
                 />
               </div>
@@ -369,13 +372,13 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                   className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
                 >
                   <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-muted-foreground">{tIssues("assignee.unassigned")}</span>
+                  <span className="text-muted-foreground">{tAssignee("unassigned")}</span>
                 </button>
 
                 {/* Members */}
                 {filteredMembers.length > 0 && (
                   <>
-                    <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">{tIssues("assignee.membersSection")}</div>
+                    <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">{tAssignee("membersSection")}</div>
                     {filteredMembers.map((m) => (
                       <button
                         type="button"
@@ -396,7 +399,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                 {/* Agents */}
                 {filteredAgents.length > 0 && (
                   <>
-                    <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">{tIssues("assignee.agentsSection")}</div>
+                    <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">{tAssignee("agentsSection")}</div>
                     {filteredAgents.map((a) => (
                       <button
                         type="button"

@@ -31,7 +31,7 @@ Agentra 是一个 AI 原生任务管理平台——编码 Agent 不是侧边栏�
 
 你的 Agent 出现在看板上、参与对话、随着时间积累可复用的技能，并以与人类队友完全一致的方式承担责任——因为在数据库看来，他们**就是**团队成员。
 
-支持 **Claude Code**、**Codex** 与 **[23+  Provider](https://github.com/agentra-ai/agentra/blob/main/docs/ROADMAP.md)**。
+支持 **Claude Code**、**Codex** 与 **OpenCode**。其他 Provider 仍属于路线图内容，只有通过 Runtime conformance 后才会成为受支持能力。
 
 ## 功能特性
 
@@ -39,7 +39,7 @@ Agentra 是一个 AI 原生任务管理平台——编码 Agent 不是侧边栏�
 - **实时执行时间线** — 按阶段（阅读 → 实现 → 测试 → 提交）实时观看 Agent 工作；即便页面上滚，sticky sentinel 依然保持可见。
 - **自主生命周期** — 任务按 queued → claimed → started → completed/failed 流转，支持人类在环审批门。
 - **可复用专家模板** — 6 个内置 Agent 模板（Frontend / Backend / Test / Security / DevOps / Tech Writer），模板会硬编码你仓库自身的编码约定。
-- **一键自部署** — `docker compose up -d --build` 即可获得 PostgreSQL+pgvector、MinIO、后端、前端、Gateway 与管理后台。
+- **安全自部署 bootstrap** — 自动生成一次性密钥、依赖感知 readiness、应用端口默认仅绑定 loopback，数据库与管理控制台默认不暴露。
 - **多运行时** — 本地 daemon 保护隐私，云端 runtime 免于运维。
 
 ## 快速开始
@@ -49,13 +49,11 @@ Agentra 是一个 AI 原生任务管理平台——编码 Agent 不是侧边栏�
 ```bash
 git clone https://github.com/agentra-ai/agentra.git
 cd agentra
-cp .env.example .env
-# 编辑 .env — 至少修改 JWT_SECRET
-
+./scripts/bootstrap-env.sh
 docker compose up -d --build
 ```
 
-这会在容器里启动 PostgreSQL、执行数据库迁移，并按 `.env` 里的端口与公开地址启动前后端（`PORT`、`FRONTEND_PORT`、`FRONTEND_ORIGIN`、`NEXT_PUBLIC_API_URL`、`NEXT_PUBLIC_WS_URL`）。
+bootstrap 拒绝覆盖已有 `.env`，为 PostgreSQL、JWT 和 MinIO 分别生成随机凭据，并以仅所有者可读写的权限保存。Compose 默认启动 PostgreSQL、MinIO、migration、后端和前端；应用端口只绑定 loopback，PostgreSQL、MinIO、Adminer 与挂载 Docker socket 的 gateway 默认均不对外开放。
 
 完整部署文档请参阅 [自部署指南](SELF_HOSTING.md)。
 
@@ -63,17 +61,42 @@ docker compose up -d --build
 
 `agentra` CLI 将你的本地机器连接到 Agentra — 用于认证、管理工作区和运行 Agent daemon。
 
-```bash
-# 构建并安装
-make build
-cp server/bin/agentra /usr/local/bin/agentra
+macOS Homebrew：
 
-# 认证并启动
-agentra login
-agentra daemon start
+```bash
+brew install --cask agentra-ai/tap/agentra
 ```
 
-daemon 会自动检测 PATH 中可用的 Agent CLI（`claude`、`codex`）。当 Agent 被分配任务时，daemon 会创建隔离环境、运行 Agent、并将结果回传。
+macOS 或 Linux 使用带 checksum 校验的安装器：
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/agentra-ai/agentra/main/scripts/install.sh
+sh install.sh
+rm install.sh
+```
+
+Windows PowerShell：
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/agentra-ai/agentra/main/scripts/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+Remove-Item .\install.ps1
+```
+
+安装器会检测平台、下载对应的 GitHub Release 资产、使用 `checksums.txt` 校验、暂存替换二进制，并执行 `agentra version`；不会自动请求管理员权限。Tag release 还会发布带签名的 checksums、SPDX SBOM 与 GitHub provenance，详见[验证指南](docs/zh/DEPLOYMENT.md)。仍可选择源码构建：
+
+```bash
+make build
+cp server/bin/agentra /usr/local/bin/agentra
+```
+
+然后连接本机：
+
+```bash
+agentra setup --deployment self-host
+```
+
+self-host profile 使用 `http://127.0.0.1:8080` 和 `http://127.0.0.1:3000`，与安全 Compose 默认值一致。`setup` 会先验证两个端点并要求至少存在一个受支持的 Agent CLI（`claude`、`codex` 或 `opencode`），然后完成认证、工作区发现和 daemon 启动。仅管理机器可使用 `--no-daemon`。
 
 ### 3. 创建 Agent 并分配任务
 
@@ -89,7 +112,7 @@ daemon 会自动检测 PATH 中可用的 Agent CLI（`claude`、`codex`）。当
 - 前端：Next.js 16
 - 后端：Go + Chi + WebSocket
 - 数据库：PostgreSQL 17 + pgvector
-- 运行时：本地 daemon 执行 Claude Code 和 Codex
+- 运行时：本地 daemon 执行 Claude Code、Codex 和 OpenCode
 
 ## 开发
 
@@ -99,7 +122,6 @@ daemon 会自动检测 PATH 中可用的 Agent CLI（`claude`、`codex`）。当
 
 ```bash
 pnpm install
-cp .env.example .env
 make setup
 make start
 ```

@@ -2,28 +2,15 @@ package realtime
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
-	"github.com/agentra-ai/agentra/server/internal/auth"
 )
-
-// ensureTestSecret makes sure auth.JWTSecret() won't panic during tests.
-// In CI the environment is clean and JWT_SECRET is not set, so tests that
-// need to sign a JWT call this first to inject a deterministic dev secret.
-func ensureTestSecret(t *testing.T) {
-	t.Helper()
-	if os.Getenv("JWT_SECRET") == "" {
-		os.Setenv("JWT_SECRET", "test-secret-that-is-at-least-32-bytes-for-dev-only")
-	}
-	auth.ResetSecretForTesting()
-}
 
 const testWorkspaceID = "test-workspace"
 const testUserID = "test-user"
@@ -35,17 +22,19 @@ func (m *mockMembershipChecker) IsMember(_ context.Context, _, _ string) bool {
 	return true
 }
 
-func makeTestToken(t *testing.T) string {
-	t.Helper()
-	ensureTestSecret(t)
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": testUserID,
-	})
-	signed, err := token.SignedString(auth.JWTSecret())
-	if err != nil {
-		t.Fatalf("failed to sign test JWT: %v", err)
+type rejectMembershipChecker struct{}
+
+func (m *rejectMembershipChecker) IsMember(_ context.Context, _, _ string) bool {
+	return false
+}
+
+type mockUserAuthenticator struct{}
+
+func (a *mockUserAuthenticator) Authenticate(_ context.Context, token string) (string, error) {
+	if token == "test-token" || token == "mul_test_pat" {
+		return testUserID, nil
 	}
-	return signed
+	return "", errors.New("invalid token")
 }
 
 func newTestHub(t *testing.T) (*Hub, *httptest.Server) {
@@ -54,9 +43,10 @@ func newTestHub(t *testing.T) (*Hub, *httptest.Server) {
 	go hub.Run()
 
 	mc := &mockMembershipChecker{}
+	authenticator := &mockUserAuthenticator{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		HandleWebSocket(hub, mc, w, r)
+		HandleWebSocket(hub, authenticator, mc, w, r)
 	})
 	server := httptest.NewServer(mux)
 
@@ -71,13 +61,130 @@ func newTestHub(t *testing.T) (*Hub, *httptest.Server) {
 
 func connectWS(t *testing.T, server *httptest.Server) *websocket.Conn {
 	t.Helper()
-	token := makeTestToken(t)
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?token=" + token + "&workspace_id=" + testWorkspaceID
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?token=test-token&workspace_id=" + testWorkspaceID
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("failed to connect WebSocket: %v", err)
 	}
 	return conn
+}
+
+func newGatewayTestServer(t *testing.T, mc MembershipChecker) (*Hub, *httptest.Server) {
+	t.Helper()
+	hub := NewHub()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/gateway/connect", func(w http.ResponseWriter, r *http.Request) {
+		HandleGatewayWebSocket(hub, &mockUserAuthenticator{}, mc, w, r)
+	})
+	return hub, httptest.NewServer(mux)
+}
+
+func gatewayWSURL(server *httptest.Server) string {
+	return "ws" + strings.TrimPrefix(server.URL, "http") + "/api/gateway/connect?gateway_id=gateway-1&workspace_id=" + testWorkspaceID
+}
+
+func TestGatewayWebSocketRequiresAuthorizationHeader(t *testing.T) {
+	_, server := newGatewayTestServer(t, &mockMembershipChecker{})
+	defer server.Close()
+
+	for _, rawURL := range []string{
+		gatewayWSURL(server),
+		gatewayWSURL(server) + "&token=test-token",
+	} {
+		conn, response, err := websocket.DefaultDialer.Dial(rawURL, nil)
+		if conn != nil {
+			conn.Close()
+		}
+		if response != nil && response.Body != nil {
+			response.Body.Close()
+		}
+		if err == nil {
+			t.Fatalf("gateway connected without authorization header: %s", rawURL)
+		}
+		if response == nil || response.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("status = %v, want 401", response)
+		}
+	}
+}
+
+func TestGatewayWebSocketBindsAuthenticatedWorkspace(t *testing.T) {
+	hub, server := newGatewayTestServer(t, &mockMembershipChecker{})
+	defer server.Close()
+
+	header := http.Header{"Authorization": []string{"Bearer test-token"}}
+	conn, _, err := websocket.DefaultDialer.Dial(gatewayWSURL(server), header)
+	if err != nil {
+		t.Fatalf("connect gateway: %v", err)
+	}
+	defer conn.Close()
+
+	if got := hub.GatewayHub.GetGatewayForWorkspace(testWorkspaceID); got != "gateway-1" {
+		t.Fatalf("workspace gateway = %q, want gateway-1", got)
+	}
+}
+
+func TestGatewayWebSocketRejectsNonMember(t *testing.T) {
+	_, server := newGatewayTestServer(t, &rejectMembershipChecker{})
+	defer server.Close()
+
+	header := http.Header{"Authorization": []string{"Bearer test-token"}}
+	conn, response, err := websocket.DefaultDialer.Dial(gatewayWSURL(server), header)
+	if conn != nil {
+		conn.Close()
+	}
+	if response != nil && response.Body != nil {
+		defer response.Body.Close()
+	}
+	if err == nil {
+		t.Fatal("non-member gateway unexpectedly connected")
+	}
+	if response == nil || response.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %v, want 403", response)
+	}
+}
+
+func TestHub_AcceptsPATFromAuthorizationHeader(t *testing.T) {
+	_, server := newTestHub(t)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?workspace_id=" + testWorkspaceID
+	header := http.Header{"Authorization": []string{"Bearer mul_test_pat"}}
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err != nil {
+		t.Fatalf("connect with PAT authorization header: %v", err)
+	}
+	defer conn.Close()
+
+	if err := conn.WriteJSON(map[string]string{"type": "ping"}); err != nil {
+		t.Fatalf("write ping: %v", err)
+	}
+	var response map[string]string
+	if err := conn.ReadJSON(&response); err != nil {
+		t.Fatalf("read pong: %v", err)
+	}
+	if response["type"] != "pong" {
+		t.Fatalf("response type = %q, want pong", response["type"])
+	}
+}
+
+func TestHub_RejectsPATInQueryString(t *testing.T) {
+	_, server := newTestHub(t)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?token=mul_test_pat&workspace_id=" + testWorkspaceID
+	conn, response, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if conn != nil {
+		conn.Close()
+	}
+	if response != nil && response.Body != nil {
+		defer response.Body.Close()
+	}
+	if err == nil {
+		t.Fatal("query-string PAT unexpectedly connected")
+	}
+	if response == nil || response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %v, want 401", response)
+	}
 }
 
 // totalClients counts all clients across all rooms.

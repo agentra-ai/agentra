@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"os"
 	"strings"
 	"testing"
 )
@@ -27,6 +29,29 @@ func TestShouldReplaceLegacyDaemon(t *testing.T) {
 			t.Fatal("shouldReplaceLegacyDaemon() = true, want false")
 		}
 	})
+}
+
+func TestStreamDaemonLogLastLines(t *testing.T) {
+	path := t.TempDir() + "/daemon.log"
+	if err := os.WriteFile(path, []byte("one\ntwo\nthree\nfour\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var output bytes.Buffer
+	if err := streamDaemonLog(path, 2, false, &output); err != nil {
+		t.Fatalf("streamDaemonLog: %v", err)
+	}
+	if got, want := output.String(), "three\nfour\n"; got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+}
+
+func TestStreamDaemonLogRejectsNegativeLineCount(t *testing.T) {
+	var output bytes.Buffer
+	err := streamDaemonLog("unused", -1, false, &output)
+	if err == nil || !strings.Contains(err.Error(), "zero or greater") {
+		t.Fatalf("error = %v, want line count validation", err)
+	}
 }
 
 func TestDaemonStartConflictError(t *testing.T) {

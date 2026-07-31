@@ -35,6 +35,9 @@ import type {
   TimelineEntry,
   TaskMessagePayload,
   Attachment,
+  Project,
+  Milestone,
+  AgentMetricSummaryResponse,
 } from "@/shared/types";
 import { type Logger, noopLogger } from "@/shared/logger";
 
@@ -225,7 +228,7 @@ export class ApiClient {
   }
 
   // Admin metrics (Issue #18)
-  async getMetricSummary(days = 30): Promise<{ providers: any[] }> {
+  async getMetricSummary(days = 30): Promise<AgentMetricSummaryResponse> {
     const wsId = this.workspaceId;
     const q = new URLSearchParams({ workspace_id: wsId ?? "", days: String(days) });
     return this.fetch(`/api/admin/metrics/summary?${q}`);
@@ -415,8 +418,12 @@ export class ApiClient {
     return this.fetch(`/api/issues/${issueId}/active-task`);
   }
 
-  async listTaskMessages(taskId: string): Promise<TaskMessagePayload[]> {
-    return this.fetch(`/api/daemon/tasks/${taskId}/messages`);
+  async listTaskMessages(taskId: string, options?: { since?: number; limit?: number }): Promise<TaskMessagePayload[]> {
+    const search = new URLSearchParams();
+    if (options?.since !== undefined) search.set("since", String(options.since));
+    if (options?.limit !== undefined) search.set("limit", String(options.limit));
+    const query = search.toString();
+    return this.fetch(`/api/daemon/tasks/${taskId}/messages${query ? `?${query}` : ""}`);
   }
 
   async listTasksByIssue(issueId: string): Promise<AgentTask[]> {
@@ -621,23 +628,23 @@ export class ApiClient {
   }
 
   // Projects
-  async listProjects(workspaceId: string): Promise<any[]> {
-    return this.fetch<any[]>(`/api/workspaces/${workspaceId}/projects`);
+  async listProjects(workspaceId: string): Promise<Project[]> {
+    return this.fetch<Project[]>(`/api/workspaces/${workspaceId}/projects`);
   }
 
-  async getProject(workspaceId: string, projectId: string): Promise<any> {
-    return this.fetch<any>(`/api/workspaces/${workspaceId}/projects/${projectId}`);
+  async getProject(workspaceId: string, projectId: string): Promise<Project> {
+    return this.fetch<Project>(`/api/workspaces/${workspaceId}/projects/${projectId}`);
   }
 
-  async createProject(workspaceId: string, data: { title: string; slug: string; deadline?: string }): Promise<any> {
-    return this.fetch<any>(`/api/workspaces/${workspaceId}/projects`, {
+  async createProject(workspaceId: string, data: { title: string; slug: string; deadline?: string }): Promise<Project> {
+    return this.fetch<Project>(`/api/workspaces/${workspaceId}/projects`, {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
 
-  async updateProject(workspaceId: string, projectId: string, data: { title?: string; slug?: string; deadline?: string | null }): Promise<any> {
-    return this.fetch<any>(`/api/workspaces/${workspaceId}/projects/${projectId}`, {
+  async updateProject(workspaceId: string, projectId: string, data: { title?: string; slug?: string; deadline?: string | null }): Promise<Project> {
+    return this.fetch<Project>(`/api/workspaces/${workspaceId}/projects/${projectId}`, {
       method: "PUT",
       body: JSON.stringify(data),
     });
@@ -647,34 +654,34 @@ export class ApiClient {
     await this.fetch(`/api/workspaces/${workspaceId}/projects/${projectId}`, { method: "DELETE" });
   }
 
-  async listProjectIssues(workspaceId: string, projectId: string): Promise<any[]> {
-    return this.fetch<any[]>(`/api/workspaces/${workspaceId}/projects/${projectId}/issues`);
+  async listProjectIssues(workspaceId: string, projectId: string): Promise<Issue[]> {
+    return this.fetch<Issue[]>(`/api/workspaces/${workspaceId}/projects/${projectId}/issues`);
   }
 
-  async listUnassignedIssues(workspaceId: string): Promise<any[]> {
-    return this.fetch<any[]>(`/api/workspaces/${workspaceId}/projects/unassigned`);
+  async listUnassignedIssues(workspaceId: string): Promise<Issue[]> {
+    return this.fetch<Issue[]>(`/api/workspaces/${workspaceId}/projects/unassigned`);
   }
 
-  async assignIssueToProject(workspaceId: string, projectId: string, issueId: string, action: "assign" | "remove"): Promise<any> {
-    return this.fetch<any>(`/api/workspaces/${workspaceId}/projects/${projectId}/issues/${issueId}`, {
+  async assignIssueToProject(workspaceId: string, projectId: string, issueId: string, action: "assign" | "remove"): Promise<Issue> {
+    return this.fetch<Issue>(`/api/workspaces/${workspaceId}/projects/${projectId}/issues/${issueId}`, {
       method: "POST",
       body: JSON.stringify({ action }),
     });
   }
 
-  async listMilestones(workspaceId: string, projectId: string): Promise<any[]> {
-    return this.fetch<any[]>(`/api/workspaces/${workspaceId}/projects/${projectId}/milestones`);
+  async listMilestones(workspaceId: string, projectId: string): Promise<Milestone[]> {
+    return this.fetch<Milestone[]>(`/api/workspaces/${workspaceId}/projects/${projectId}/milestones`);
   }
 
-  async createMilestone(workspaceId: string, projectId: string, data: { title: string; deadline?: string }): Promise<any> {
-    return this.fetch<any>(`/api/workspaces/${workspaceId}/projects/${projectId}/milestones`, {
+  async createMilestone(workspaceId: string, projectId: string, data: { title: string; deadline?: string }): Promise<Milestone> {
+    return this.fetch<Milestone>(`/api/workspaces/${workspaceId}/projects/${projectId}/milestones`, {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
 
-  async updateMilestone(workspaceId: string, projectId: string, milestoneId: string, data: { status?: string; title?: string; deadline?: string | null }): Promise<any> {
-    return this.fetch<any>(`/api/workspaces/${workspaceId}/projects/${projectId}/milestones/${milestoneId}`, {
+  async updateMilestone(workspaceId: string, projectId: string, milestoneId: string, data: { status?: string; title?: string; deadline?: string | null }): Promise<Milestone> {
+    return this.fetch<Milestone>(`/api/workspaces/${workspaceId}/projects/${projectId}/milestones/${milestoneId}`, {
       method: "PATCH",
       body: JSON.stringify(data),
     });

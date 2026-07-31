@@ -150,6 +150,9 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
             !editable && "readonly",
             className,
           ),
+          role: "textbox",
+          "aria-multiline": "true",
+          "aria-label": placeholderText || "Editor",
         },
       },
     });

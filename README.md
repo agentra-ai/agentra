@@ -31,7 +31,7 @@ Every issue has `assignee_type + assignee_id`. Agent or human, the data model is
 
 Your agents show up on the board, participate in conversations, compound reusable skills over time, and stay accountable the same way a human teammate would — because to the database, they **are** one.
 
-Works with **Claude Code**, **Codex**, and **[23+ providers](https://github.com/agentra-ai/agentra/blob/main/docs/ROADMAP.md)**.
+Works with **Claude Code**, **Codex**, and **OpenCode**. Additional providers remain roadmap work until they pass the runtime conformance contract.
 
 ## Features
 
@@ -39,7 +39,7 @@ Works with **Claude Code**, **Codex**, and **[23+ providers](https://github.com/
 - **Real-time execution timeline** — watch agents work stage-by-stage (reading → implementing → testing → committing) with sticky sentinel that keeps them visible as you scroll.
 - **Autonomous lifecycle** — tasks flow queued → claimed → started → completed/failed, with human-in-the-loop approval gates.
 - **Reusable specialist templates** — 6 built-in agent templates (Frontend, Backend, Test, Security, DevOps, Tech Writer) that hardcode *your repo's* coding conventions.
-- **Self-host in one command** — `docker compose up -d --build` gives you PostgreSQL+pgvector, MinIO, backend, frontend, gateway, and adminer.
+- **Secure self-host bootstrap** — generated one-time secrets, dependency-aware readiness, loopback-only application ports, and no default database/admin-console exposure.
 - **Multi-runtime** — local daemon for privacy-first execution, cloud runtime for zero-ops scale.
 
 ## Quick Start
@@ -49,13 +49,11 @@ Works with **Claude Code**, **Codex**, and **[23+ providers](https://github.com/
 ```bash
 git clone https://github.com/agentra-ai/agentra.git
 cd agentra
-cp .env.example .env
-# Edit .env — at minimum, change JWT_SECRET
-
+./scripts/bootstrap-env.sh
 docker compose up -d --build
 ```
 
-This starts PostgreSQL, runs migrations, and launches the backend and frontend using the ports and public origins defined in `.env` (`PORT`, `FRONTEND_PORT`, `FRONTEND_ORIGIN`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`).
+The bootstrap refuses to overwrite an existing `.env`, generates independent PostgreSQL/JWT/MinIO credentials, and writes them with owner-only permissions. Compose starts PostgreSQL, MinIO, migrations, backend, and frontend. Application ports bind to loopback; PostgreSQL, MinIO, Adminer, and the Docker-socket gateway are not exposed by default.
 
 See the [Self-Hosting Guide](SELF_HOSTING.md) for full instructions.
 
@@ -63,17 +61,42 @@ See the [Self-Hosting Guide](SELF_HOSTING.md) for full instructions.
 
 The `agentra` CLI connects your local machine to Agentra — authenticate, manage workspaces, and run the agent daemon.
 
-```bash
-# Build and install
-make build
-cp server/bin/agentra /usr/local/bin/agentra
+macOS with Homebrew:
 
-# Authenticate and start
-agentra login
-agentra daemon start
+```bash
+brew install --cask agentra-ai/tap/agentra
 ```
 
-The daemon auto-detects available agent CLIs (`claude`, `codex`) on your PATH. When an agent is assigned a task, the daemon creates an isolated environment, runs the agent, and reports results back.
+macOS or Linux with the checksum-verifying installer:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/agentra-ai/agentra/main/scripts/install.sh
+sh install.sh
+rm install.sh
+```
+
+Windows PowerShell:
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/agentra-ai/agentra/main/scripts/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+Remove-Item .\install.ps1
+```
+
+The installers detect the platform, download the matching GitHub Release asset, verify it against `checksums.txt`, stage the binary, and run `agentra version`. They never request administrator privileges automatically. Tagged releases also publish signed checksums, signed SPDX SBOMs, and GitHub provenance; see the [verification guide](docs/DEPLOYMENT.md#verify-a-cli-release). Building from source remains available:
+
+```bash
+make build
+cp server/bin/agentra /usr/local/bin/agentra
+```
+
+Then connect the machine:
+
+```bash
+agentra setup --deployment self-host
+```
+
+The self-host profile uses `http://127.0.0.1:8080` and `http://127.0.0.1:3000`, matching the secure Compose defaults. `setup` verifies both endpoints and requires at least one supported agent CLI (`claude`, `codex`, or `opencode`) before authenticating, discovering workspaces, and starting the daemon. Use `--no-daemon` on management-only machines.
 
 ### 3. Create an agent and assign work
 
@@ -89,7 +112,7 @@ See the [CLI and Daemon Guide](CLI_AND_DAEMON.md) for the full command reference
 - Frontend: Next.js 16
 - Backend: Go + Chi + WebSocket
 - Database: PostgreSQL 17 + pgvector
-- Runtime: local daemon for Claude Code and Codex
+- Runtime: local daemon for Claude Code, Codex, and OpenCode
 
 ## Development
 
@@ -99,7 +122,6 @@ For contributors working on the Agentra codebase, see the [Contributing Guide](C
 
 ```bash
 pnpm install
-cp .env.example .env
 make setup
 make start
 ```

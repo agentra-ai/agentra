@@ -103,6 +103,18 @@ func (s *MinIOStorage) EnsureBucket(ctx context.Context) error {
 	return nil
 }
 
+// HealthCheck verifies that the configured bucket is reachable.
+func (s *MinIOStorage) HealthCheck(ctx context.Context) error {
+	exists, err := s.client.BucketExists(ctx, s.bucket)
+	if err != nil {
+		return fmt.Errorf("check MinIO bucket: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("MinIO bucket %q does not exist", s.bucket)
+	}
+	return nil
+}
+
 // KeyFromURL extracts the object key from a CDN or endpoint URL.
 func (s *MinIOStorage) KeyFromURL(rawURL string) string {
 	for _, prefix := range []string{

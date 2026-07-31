@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/agentra-ai/agentra/server/pkg/protocol"
 )
 
 // requestError is returned by postJSON/getJSON when the server responds with an error status.
@@ -100,9 +102,15 @@ type TaskMessageData struct {
 }
 
 func (c *Client) ReportTaskMessages(ctx context.Context, taskID string, messages []TaskMessageData) error {
-	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/messages", taskID), map[string]any{
-		"messages": messages,
-	}, nil)
+	for start := 0; start < len(messages); start += protocol.TaskMessageBatchSize {
+		end := min(start+protocol.TaskMessageBatchSize, len(messages))
+		if err := c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/messages", taskID), map[string]any{
+			"messages": messages[start:end],
+		}, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Client) CompleteTask(ctx context.Context, taskID, output, branchName, sessionID, workDir string) error {

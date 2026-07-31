@@ -1,243 +1,157 @@
-# Deployment Guide — Agentra
+# Deployment and Release Guide — Agentra
 
-> How to ship Agentra to production: **automated CI/CD** (push a tag → images land on Docker Hub) and **manual self-hosted** (`docker compose up` on your VM).
+Agentra supports two paths:
 
-**TOC:** [Automated](#automated-github-actions--docker-hub) · [Manual](#manual-docker-compose-self-host) · [Secrets](#secrets-reference) · [Releases](#release-calendar)
+- Tagged releases publish verifiable CLI assets to GitHub Releases and multi-architecture images to GHCR.
+- Self-hosters can build the same source locally with Docker Compose.
 
----
+The supply-chain workflow described here becomes public with the next `v*` tag. Releases created before that tag may not contain SBOMs, Sigstore bundles, GHCR images, or GitHub attestations.
 
-## Automated: GitHub Actions → Docker Hub
+## Tagged release pipeline
 
-**tl;dr** → `git tag v0.5.0 && git push origin v0.5.0`, wait ~3 min, images land on `docker.io/dougzeng/agentra`.
+Pushing a semantic tag triggers two independent workflows:
 
-### The flow, end to end
-
-```
-Local machine                GitHub Actions                      Docker Hub
-───────────────────────────  ─────────────────────────────────  ─────────────────────────
-                            │
-git tag v0.5.0               │
-git push origin v0.5.0  ──→  │  .github/workflows/docker.yml
-                            │      ├─ checkout code
-                            │      ├─ cp .env.example .env
-                            │      ├─ docker login dio dougzeng
-                            │      ├─ docker buildx build server  ──→  dougzeng/agentra:server-v0.5.0
-                            │      ├─ docker buildx build gateway ──→  dougzeng/agentra:gateway-v0.5.0
-                            │      ├─ docker buildx build web     ──→  dougzeng/agentra:web-v0.5.0
-                            │      └─ done
-```
-
-### Step-by-step (one-time setup)
-
-#### 1. Create a Docker Hub access token
-
-1. Sign in at https://hub.docker.com
-2. Account Settings → Security → New Access Token
-3. Name: `github-actions-agentra`
-4. Permission: **Read & Write**
-5. Copy the token (starts with `dckr_pat_`)
-
-#### 2. Configure GitHub repository secrets
-
-In the GitHub repository:
-
-```
-Settings → Secrets and variables → Actions → New repository secret
+```text
+v0.6.0
+  ├─ release.yml
+  │    ├─ Darwin/Linux/Windows CLI archives (amd64 + arm64)
+  │    ├─ SHA-256 checksums covering archives, SBOMs, and installers
+  │    ├─ SPDX 2.3 SBOM per archive
+  │    ├─ Cosign keyless bundles for checksums and SBOMs
+  │    ├─ GitHub build-provenance attestation
+  │    └─ Homebrew Cask update
+  └─ docker.yml
+       ├─ server, gateway, and web images
+       ├─ linux/amd64 + linux/arm64 manifest per image tag
+       ├─ BuildKit SBOM and max-mode provenance
+       ├─ Cosign keyless signature for each image digest
+       └─ GitHub registry-backed provenance attestation
 ```
 
-| Name | Value |
-|---|---|
-| `DOCKER_USERNAME` | `dougzeng` (your Docker Hub user) |
-| `DOCKERHUB_TOKEN` | the access token from step 1 |
-
-#### 3. Trigger the workflow
+Create and push a tag only after the repository checks pass:
 
 ```bash
-cd agentra
-# Make sure all your changes are committed and pushed
-git push origin main
-
-# Tag the release (patch bump by default)
-git tag v0.5.0
-
-# Push the tag — this fires docker.yml
-git push origin v0.5.0
+make check
+git tag v0.6.0
+git push origin v0.6.0
 ```
 
-Wait 2-3 minutes. Monitor:
+The container workflow uses the repository-scoped `GITHUB_TOKEN`; no personal Docker Hub credentials are required. The only cross-repository secret is `HOMEBREW_TAP_GITHUB_TOKEN`, which needs permission to update `agentra-ai/homebrew-tap`.
+
+### Published image tags
+
+All components share the official package `ghcr.io/agentra-ai/agentra`:
 
 ```bash
-gh run list --repo agentra-ai/agentra --workflow "Docker Hub"
-# Or visit https://github.com/agentra-ai/agentra/actions
+docker pull ghcr.io/agentra-ai/agentra:server-v0.6.0
+docker pull ghcr.io/agentra-ai/agentra:gateway-v0.6.0
+docker pull ghcr.io/agentra-ai/agentra:web-v0.6.0
+
+# Stable releases also publish rolling aliases.
+docker pull ghcr.io/agentra-ai/agentra:server-v0.6
+docker pull ghcr.io/agentra-ai/agentra:server-latest
 ```
 
-#### 4. Pull + deploy anywhere
+Each tag is a multi-platform manifest for `linux/amd64` and `linux/arm64`.
+
+## Verify a CLI release
+
+Install Cosign and GitHub CLI from their official distributions, then download the archive, checksum file, and checksum bundle from the same release. The workflow identity is intentionally pinned to this repository and tag:
 
 ```bash
-# On any Docker host:
-docker pull dougzeng/agentra:server-v0.5.0
-docker pull dougzeng/agentra:web-v0.5.0
-docker pull dougzeng/agentra:gateway-v0.5.0
+VERSION=v0.6.0
+ASSET=agentra_linux_amd64.tar.gz
+BASE="https://github.com/agentra-ai/agentra/releases/download/$VERSION"
 
-# Web + CLI also available:
-docker pull dougzeng/agentra:server-v0.5      # minor-pin alias
-docker pull dougzeng/agentra:server-latest      # if you maintain this tag
+curl -fLO "$BASE/$ASSET"
+curl -fLO "$BASE/checksums.txt"
+curl -fLO "$BASE/checksums.txt.sigstore.json"
+
+cosign verify-blob \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity "https://github.com/agentra-ai/agentra/.github/workflows/release.yml@refs/tags/$VERSION" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+
+grep "  $ASSET$" checksums.txt | shasum -a 256 -c -
+gh attestation verify "$ASSET" -R agentra-ai/agentra
 ```
 
-### Configuration reference
+Every archive also has a sibling `${ASSET}.spdx.json` SBOM and `${ASSET}.spdx.json.sigstore.json` bundle. Verify it with the same `cosign verify-blob` identity before inspecting its dependency inventory.
 
-See `.github/workflows/docker.yml` for current defaults:
+The shell and PowerShell installers always enforce SHA-256 integrity. Cosign and GitHub provenance verification are explicit because a clean machine cannot securely bootstrap those independent verification tools from the artifact it is trying to verify.
 
-| Setting | Value | Where to override |
-|---|---|---|
-| `REGISTRY` | `docker.io` | top-level `env:` block |
-| `IMAGE` | `dougzeng/agentra` | top-level `env:` block |
-| Tags per component | `{component}-{semver}` | per-job `docker/metadata-action` |
-| Build matrix | `server-runtime`, `gateway-runtime`, `web-runtime` | `strategy.matrix.target` |
-| Build cache | GitHub Actions cache | `cache-from: type=gha` |
+## Verify a container image
 
----
+```bash
+VERSION=v0.6.0
+IMAGE="ghcr.io/agentra-ai/agentra:server-$VERSION"
 
-## Manual: Docker Compose Self-Host
+docker pull "$IMAGE"
 
-**tl;dr** → clone → `.env` → `docker compose up -d`, open port 3000.
+cosign verify "$IMAGE" \
+  --certificate-identity "https://github.com/agentra-ai/agentra/.github/workflows/docker.yml@refs/tags/$VERSION" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
-### Prerequisites
-
-- Docker 24+ and Docker Compose v2
-- 4 GB RAM minimum (8 GB recommended for running agents)
-- A Linux/macOS host or VM
-
-### Step-by-step
-
-```
-                    ┌─────────────────────────────────────────────────────────────────────────┐
-                    │ .env secrets                                                        │
-                    │  generated by user, never committed                                │
-                    └────┬──────────────┬──────────────┬──────────────┬───────────────┘
-                         │              │              │              │
-    ┌────────────────────▼──┐     ┌─────▼────────┐   ┌─▼──────────┐ ┌─▼─────────────┐
-    │ postgres (pg17+        │     │ server       │   │ gateway     │ │ web           │
-    │   pgvector)            │     │ :8080        │   │ :8081       │ │ :3000         │
-    │ :5432                  │     │ Go           │   │ Go          │ │ Next.js 16    │
-    └────────────────────────┘     └──────────────┘   └─────────────┘ └───────────────┘
-          ▲                              ▲                 ▲
-          │                              │                 │
-    ┌─────┴────────────────┐    ┌────────┴─────────────────┘
-    │ migrate              │    │ agent CLIs (outside container)
-    │ (one-shot Job)       │    │ `agentra daemon start`
-    └──────────────────────┘    └─────────────────────────────
+gh attestation verify "oci://$IMAGE" -R agentra-ai/agentra
+docker buildx imagetools inspect "$IMAGE"
 ```
 
-#### 1. Clone + configure secrets
+The BuildKit SBOM and provenance are attached to the OCI image index. Verification must use the image digest resolved from the selected tag; never treat a mutable tag alone as an audit record.
+
+## Docker Compose self-host
+
+Prerequisites: Docker 24+, Docker Compose v2, and at least 4 GB RAM.
 
 ```bash
 git clone https://github.com/agentra-ai/agentra.git
 cd agentra
 
-# Generate REQUIRED secrets
-cp .env.example .env
+# Generates independent PostgreSQL, JWT, and MinIO credentials in a 0600 file.
+./scripts/bootstrap-env.sh
 
-# Edit the critical lines:
-#   JWT_SECRET              → openssl rand -hex 32
-#   POSTGRES_PASSWORD       → any strong password
-#   RESEND_API_KEY          → optional (for email OTP)
+# Review public URLs and optional integrations before starting.
 nano .env
-```
-
-#### 2. Stand up the stack
-
-```bash
-# Build everything from source (first run ~5 min)
 docker compose up -d --build
-
-# Watch the logs
-docker compose logs -f server web
 ```
 
-If you want to use the **Docker Hub prebuilt images** instead, skip `--build` and pull:
+The default profile keeps PostgreSQL and MinIO internal, binds Web/API to loopback, and does not start Adminer or the Docker-socket gateway. Use `--profile debug` or `--profile cloud-runtime` only when those privileged surfaces are intentionally required.
+
+Verify the deployment:
 
 ```bash
-# Pull latest published images
-docker pull dougzeng/agentra:server-latest
-docker pull dougzeng/agentra:web-latest
-docker pull dougzeng/agentra:gateway-latest
-
-# In docker-compose.yml, change "build: ..." to "image: dougzeng/agentra:server-latest" etc.
-docker compose up -d   # no --build, pulls prebuilt
-```
-
-#### 3. Verify
-
-```bash
-# Server health
-curl http://localhost:8080/health
-# Expected: {"status":"ok"}
-
-# Web app
-open http://localhost:3000
-# Expected: login page
-
-# Database migrated up to latest
+curl http://127.0.0.1:8080/livez
+curl http://127.0.0.1:8080/readyz
+open http://127.0.0.1:3000
 docker compose run --rm migrate
-# Expected: "skip 039_agent_task_metrics (already applied)" ... "Done."
 ```
 
-#### 4. Start the local agent daemon (on your Mac/Linux host, NOT in container)
+Install the host-side daemon separately and connect it to the self-hosted service:
 
 ```bash
-# Build the CLI once
-make build
-sudo cp server/bin/agentra /usr/local/bin/agentra
-
-# Authenticate (creates PAT + session)
-agentra login
-
-# Start the daemon in the background
-agentra daemon start
-
-# Verify the runtime shows up in the web UI
-# Settings → Runtimes → your machine should appear "online"
+curl -fsSLO https://raw.githubusercontent.com/agentra-ai/agentra/main/scripts/install.sh
+sh install.sh
+rm install.sh
+agentra setup --deployment self-host
 ```
 
-#### 5. (Optional) Run migrations manually
+Windows users run `scripts/install.ps1`; Homebrew users run `brew install --cask agentra-ai/tap/agentra`.
 
-```bash
-# If you ever need to bump the schema:
-docker compose run --rm migrate up
+## Secrets reference
 
-# Rollback one step:
-docker compose run --rm migrate down
-```
-
----
-
-## Secrets Reference
-
-| Secret | Where | How to generate |
+| Secret | Purpose | Source |
 |---|---|---|
-| `JWT_SECRET` | `server/` | `openssl rand -hex 32` |
-| `POSTGRES_PASSWORD` | `postgres/` | any strong password |
-| `RESEND_API_KEY` | email OTP | resend.com → API Keys |
-| `GOOGLE_CLIENT_*` | OAuth (optional) | console.cloud.google.com |
-| `STORAGE_DRIVER` | `minio` (default) or `s3` | — |
-| `DOCKER_USERNAME` | GitHub Actions secret | Docker Hub user |
-| `DOCKERHUB_TOKEN` | GitHub Actions secret | hub.docker.com → Settings → Security |
+| `JWT_SECRET` | API authentication | `scripts/bootstrap-env.sh` |
+| `POSTGRES_PASSWORD` | PostgreSQL | `scripts/bootstrap-env.sh` |
+| `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | object storage | `scripts/bootstrap-env.sh` |
+| `RESEND_API_KEY` | optional email OTP | Resend account |
+| `GOOGLE_CLIENT_*` | optional OAuth | Google Cloud console |
+| `HOMEBREW_TAP_GITHUB_TOKEN` | release workflow only | fine-grained token scoped to the tap repository |
 
----
+GHCR publishing, Cosign keyless signing, and GitHub attestations use short-lived workflow OIDC plus `GITHUB_TOKEN`; they do not require stored signing keys.
 
-## Release Calendar
+## Current security boundary
 
-Per CLAUDE.md policy: **bump the patch version each release**, unless major/minor warranted.
-
-| When | Tag | Example |
-|---|---|---|
-| Bug fix | patch | `v0.4.3` → `v0.4.4` |
-| New capability | minor | `v0.4.x` → `v0.5.0` |
-| CLI release must accompany every Production deployment | — | `v0.5.0` tag triggers both `release.yml` (CLI binaries) and `docker.yml` (images) |
-
-Both jobs run in parallel from the same tag push. The CLI binaries land on GitHub Releases; the container images land on Docker Hub.
-
----
-
-*sin*
+- Release archives, checksums, SBOMs, and OCI image digests receive identity-bound supply-chain signatures/attestations on the next tag.
+- macOS code signing/notarization and Windows Authenticode are separate platform trust systems and are not implemented yet.
+- Published release verification proves workflow identity and artifact integrity; it does not replace review of the tagged source or runtime hardening.

@@ -17,14 +17,17 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/agentra-ai/agentra/pkg/taskgraph"
 	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/realtime"
+	stripelib "github.com/agentra-ai/agentra/server/pkg/stripe"
 )
 
 var (
 	testServer      *httptest.Server
 	testPool        *pgxpool.Pool
+	testHub         *realtime.Hub
 	testToken       string
 	testUserID      string
 	testWorkspaceID string
@@ -56,13 +59,13 @@ func TestMain(m *testing.M) {
 
 	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
-		fmt.Printf("Skipping integration tests: could not connect to database: %v\n", err)
-		os.Exit(0)
+		fmt.Printf("Integration database unavailable; database-backed tests will skip: %v\n", err)
+		os.Exit(m.Run())
 	}
 	if err := pool.Ping(ctx); err != nil {
-		fmt.Printf("Skipping integration tests: database not reachable: %v\n", err)
+		fmt.Printf("Integration database unavailable; database-backed tests will skip: %v\n", err)
 		pool.Close()
-		os.Exit(0)
+		os.Exit(m.Run())
 	}
 
 	testPool = pool
@@ -75,6 +78,7 @@ func TestMain(m *testing.M) {
 
 	hub := realtime.NewHub()
 	go hub.Run()
+	testHub = hub
 
 	bus := events.New()
 	registerListeners(bus, hub)
@@ -108,6 +112,13 @@ func TestMain(m *testing.M) {
 	testServer.Close()
 	pool.Close()
 	os.Exit(code)
+}
+
+func requireIntegrationDB(t *testing.T) {
+	t.Helper()
+	if testPool == nil || testServer == nil {
+		t.Skip("integration database is not available")
+	}
 }
 
 func setupIntegrationTestFixture(ctx context.Context, pool *pgxpool.Pool) (string, string, error) {
@@ -219,6 +230,8 @@ func generateTestJWT(userID, email, name string) (string, error) {
 // ---- Health ----
 
 func TestHealth(t *testing.T) {
+	requireIntegrationDB(t)
+
 	resp, err := http.Get(testServer.URL + "/health")
 	if err != nil {
 		t.Fatalf("health check failed: %v", err)
@@ -239,6 +252,8 @@ func TestHealth(t *testing.T) {
 // ---- Auth ----
 
 func TestSendCodeAndVerify(t *testing.T) {
+	requireIntegrationDB(t)
+
 	const email = "integration-sendcode@agentra.ai"
 	ctx := context.Background()
 
@@ -332,6 +347,8 @@ func TestSendCodeAndVerify(t *testing.T) {
 }
 
 func TestVerifyCodeCreatesWorkspaceForNewUser(t *testing.T) {
+	requireIntegrationDB(t)
+
 	const email = "new-integration-verify@agentra.ai"
 	ctx := context.Background()
 
@@ -429,6 +446,8 @@ func TestVerifyCodeCreatesWorkspaceForNewUser(t *testing.T) {
 }
 
 func TestProtectedRoutesRequireAuth(t *testing.T) {
+	requireIntegrationDB(t)
+
 	paths := []string{"/api/me", "/api/issues", "/api/agents", "/api/inbox", "/api/workspaces"}
 
 	for _, path := range paths {
@@ -444,6 +463,8 @@ func TestProtectedRoutesRequireAuth(t *testing.T) {
 }
 
 func TestInvalidJWT(t *testing.T) {
+	requireIntegrationDB(t)
+
 	cases := []struct {
 		name  string
 		token string
@@ -483,6 +504,8 @@ func TestInvalidJWT(t *testing.T) {
 // ---- Issues CRUD through full router ----
 
 func TestIssuesCRUDThroughRouter(t *testing.T) {
+	requireIntegrationDB(t)
+
 	// Create
 	resp := authRequest(t, "POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
 		"title":    "Integration test issue",
@@ -572,9 +595,166 @@ func TestIssuesCRUDThroughRouter(t *testing.T) {
 	}
 }
 
+func TestTaskGraphThroughRouter(t *testing.T) {
+	requireIntegrationDB(t)
+
+	resp := authRequest(t, "POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Task graph integration test",
+	})
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("CreateIssue: expected 201, got %d: %s", resp.StatusCode, body)
+	}
+	var issue map[string]any
+	readJSON(t, resp, &issue)
+	issueID := issue["id"].(string)
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM issue WHERE id = $1`, issueID)
+	})
+
+	graphStore := taskgraph.NewGraphStore(testPool)
+	node, err := graphStore.CreateNode(
+		context.Background(),
+		testWorkspaceID,
+		issueID,
+		taskgraph.NodeTypeExecutor,
+		0,
+		[]byte(`{"description":"Implement the contract"}`),
+	)
+	if err != nil {
+		t.Fatalf("create graph node: %v", err)
+	}
+
+	resp = authRequest(t, "GET", "/api/issues/"+issueID+"/graph", nil)
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("GetTaskGraph: expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	var graph struct {
+		Nodes []taskgraph.GraphNode `json:"nodes"`
+		Edges []taskgraph.GraphEdge `json:"edges"`
+	}
+	readJSON(t, resp, &graph)
+	if len(graph.Nodes) != 1 || graph.Nodes[0].ID != node.ID {
+		t.Fatalf("expected graph node %s, got %#v", node.ID, graph.Nodes)
+	}
+
+	resp = authRequest(t, "PATCH", "/api/graph/nodes/"+node.ID, map[string]any{
+		"status":     "running",
+		"position_x": 42,
+	})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("UpdateTaskGraphNode: expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	var updated taskgraph.GraphNode
+	readJSON(t, resp, &updated)
+	if updated.Status != taskgraph.StatusRunning || updated.PositionX != 42 {
+		t.Fatalf("unexpected updated node: %#v", updated)
+	}
+
+	resp = authRequest(t, "PATCH", "/api/graph/nodes/"+node.ID, map[string]any{
+		"status": "not-a-status",
+	})
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("UpdateTaskGraphNode invalid status: expected 400, got %d", resp.StatusCode)
+	}
+
+	resp = authRequest(t, "DELETE", "/api/graph/nodes/"+node.ID, nil)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("DeleteTaskGraphNode: expected 204, got %d", resp.StatusCode)
+	}
+}
+
+func TestMetricsThroughRouterUsesAuthorizedWorkspace(t *testing.T) {
+	requireIntegrationDB(t)
+
+	resp := authRequest(t, "GET", "/api/admin/metrics/summary?days=7", nil)
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("Metrics Summary: expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	var summary struct {
+		Days int `json:"days"`
+	}
+	readJSON(t, resp, &summary)
+	if summary.Days != 7 {
+		t.Fatalf("expected 7 day window, got %d", summary.Days)
+	}
+
+	// A query parameter can select a workspace only through the same owner/admin
+	// middleware. It must not bypass authorization inside the metrics handler.
+	resp = authRequest(t, "GET", "/api/admin/metrics/summary?workspace_id=00000000-0000-0000-0000-000000000000&days=7", nil)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("Metrics Summary unauthorized workspace: expected 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestTeamMemoryThroughRouter(t *testing.T) {
+	requireIntegrationDB(t)
+
+	basePath := "/api/workspaces/" + testWorkspaceID + "/memories"
+	resp := authRequest(t, "POST", basePath, map[string]any{
+		"memory_type": "learning",
+		"content":     "  Router contract memory  ",
+	})
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("CreateTeamMemory: expected 201, got %d: %s", resp.StatusCode, body)
+	}
+	var created map[string]any
+	readJSON(t, resp, &created)
+	memoryID := created["id"].(string)
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM team_memory WHERE id = $1`, memoryID)
+	})
+	if created["content"] != "Router contract memory" {
+		t.Fatalf("expected trimmed content, got %#v", created["content"])
+	}
+
+	resp = authRequest(t, "GET", basePath+"/search?q=contract", nil)
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("SearchMemories: expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	var search struct {
+		Memories []map[string]any `json:"memories"`
+	}
+	readJSON(t, resp, &search)
+	if len(search.Memories) == 0 || search.Memories[0]["workspace_id"] != testWorkspaceID {
+		t.Fatalf("expected workspace-scoped search result, got %#v", search.Memories)
+	}
+
+	resp = authRequest(t, "POST", basePath, map[string]any{
+		"memory_type": "unsupported",
+		"content":     "invalid",
+	})
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("CreateTeamMemory invalid type: expected 400, got %d", resp.StatusCode)
+	}
+
+	resp = authRequest(t, "DELETE", basePath+"/"+memoryID, nil)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("DeleteTeamMemory: expected 204, got %d", resp.StatusCode)
+	}
+}
+
 // ---- Comments through full router ----
 
 func TestCommentsThroughRouter(t *testing.T) {
+	requireIntegrationDB(t)
+
 	// Create issue
 	resp := authRequest(t, "POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
 		"title": "Comment integration test",
@@ -625,6 +805,8 @@ func TestCommentsThroughRouter(t *testing.T) {
 // ---- Agents through full router ----
 
 func TestAgentsThroughRouter(t *testing.T) {
+	requireIntegrationDB(t)
+
 	// List
 	resp := authRequest(t, "GET", "/api/agents?workspace_id="+testWorkspaceID, nil)
 	if resp.StatusCode != 200 {
@@ -669,6 +851,8 @@ func TestAgentsThroughRouter(t *testing.T) {
 // ---- Workspaces through full router ----
 
 func TestWorkspacesThroughRouter(t *testing.T) {
+	requireIntegrationDB(t)
+
 	// List
 	resp := authRequest(t, "GET", "/api/workspaces", nil)
 	if resp.StatusCode != 200 {
@@ -731,6 +915,8 @@ func TestWorkspacesThroughRouter(t *testing.T) {
 // ---- Inbox through full router ----
 
 func TestInboxThroughRouter(t *testing.T) {
+	requireIntegrationDB(t)
+
 	resp := authRequest(t, "GET", "/api/inbox", nil)
 	if resp.StatusCode != 200 {
 		t.Fatalf("ListInbox: expected 200, got %d", resp.StatusCode)
@@ -746,6 +932,8 @@ func TestInboxThroughRouter(t *testing.T) {
 // ---- 404 for non-existent resources ----
 
 func TestNonExistentResources(t *testing.T) {
+	requireIntegrationDB(t)
+
 	fakeUUID := "00000000-0000-0000-0000-000000000000"
 
 	cases := []struct {
@@ -771,6 +959,8 @@ func TestNonExistentResources(t *testing.T) {
 // ---- Invalid request bodies ----
 
 func TestInvalidRequestBodies(t *testing.T) {
+	requireIntegrationDB(t)
+
 	resp := authRequest(t, "POST", "/api/issues?workspace_id="+testWorkspaceID, nil)
 	defer resp.Body.Close()
 	// Sending nil body should fail with 400
@@ -785,6 +975,8 @@ func TestInvalidRequestBodies(t *testing.T) {
 // ---- WebSocket integration through full router ----
 
 func TestWebSocketIntegration(t *testing.T) {
+	requireIntegrationDB(t)
+
 	// Connect WebSocket client
 	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "/ws?token=" + testToken + "&workspace_id=" + testWorkspaceID
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
@@ -851,5 +1043,44 @@ func TestWebSocketIntegration(t *testing.T) {
 	json.Unmarshal(msg, &deleteMsg)
 	if deleteMsg["type"] != "issue:deleted" {
 		t.Fatalf("expected type 'issue:deleted', got '%s'", deleteMsg["type"])
+	}
+}
+
+func TestWebSocketAcceptsPATAuthorizationHeader(t *testing.T) {
+	requireIntegrationDB(t)
+
+	rawToken := "mul_0123456789abcdef0123456789abcdef01234567"
+	tokenHash := auth.HashToken(rawToken)
+	if _, err := testPool.Exec(context.Background(), `
+		INSERT INTO personal_access_token (user_id, name, token_hash, token_prefix)
+		VALUES ($1, 'WebSocket integration', $2, 'mul_01234567')
+	`, testUserID, tokenHash); err != nil {
+		t.Fatalf("create PAT fixture: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM personal_access_token WHERE token_hash = $1`, tokenHash)
+	})
+
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "/ws?workspace_id=" + testWorkspaceID
+	header := http.Header{"Authorization": []string{"Bearer " + rawToken}}
+	conn, response, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if response != nil && response.Body != nil {
+		defer response.Body.Close()
+	}
+	if err != nil {
+		t.Fatalf("WebSocket PAT connection failed: %v", err)
+	}
+	defer conn.Close()
+
+	if err := conn.WriteJSON(map[string]string{"type": "ping"}); err != nil {
+		t.Fatalf("write ping: %v", err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	var message map[string]string
+	if err := conn.ReadJSON(&message); err != nil {
+		t.Fatalf("read pong: %v", err)
+	}
+	if message["type"] != "pong" {
+		t.Fatalf("message type = %q, want pong", message["type"])
 	}
 }

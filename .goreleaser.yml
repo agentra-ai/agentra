@@ -16,6 +16,7 @@ builds:
     goos:
       - darwin
       - linux
+      - windows
     goarch:
       - amd64
       - arm64
@@ -24,10 +25,72 @@ archives:
   - id: default
     formats:
       - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"
+  algorithm: sha256
+  extra_files:
+    - glob: ./scripts/install.sh
+    - glob: ./scripts/install.ps1
+
+sboms:
+  - id: archive-sboms
+    artifacts: archive
+    documents:
+      - "${artifact}.spdx.json"
+    disable: false
+
+signs:
+  - id: checksum-keyless
+    cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - --yes
+    artifacts: checksum
+  - id: sbom-keyless
+    cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - --yes
+    artifacts: sbom
+
+homebrew_casks:
+  - name: agentra
+    ids:
+      - default
+    binaries:
+      - agentra
+    repository:
+      owner: agentra-ai
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    homepage: "https://github.com/agentra-ai/agentra"
+    description: "AI-native task management CLI and local agent runtime"
+    skip_upload: auto
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/agentra"]
+          end
+
+release:
+  extra_files:
+    - glob: ./scripts/install.sh
+    - glob: ./scripts/install.ps1
 
 changelog:
   sort: asc

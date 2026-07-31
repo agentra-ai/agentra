@@ -54,6 +54,7 @@ const (
 	FailurePRCreateFailed  FailureReason = "pr_create_failed"
 	FailureContextExceeded FailureReason = "context_exceeded"
 	FailureContentFilter   FailureReason = "content_filter"
+	FailureInvalidConfig   FailureReason = "invalid_configuration"
 	FailureUnrecoverable   FailureReason = "unrecoverable_error"
 )
 
@@ -104,9 +105,9 @@ func (l *Loop) ParseConfig() LoopConfig {
 
 // StageAgent returns the agent id to use for a particular stage, honoring
 // any per-stage override in Loop.Config.stage_agents. Returns nil if no
-// override applies AND Loop.AgentID is nil — the coordinator treats that
-// as "use no agent" and the CreateAgentTask call will fail the NOT NULL
-// runtime_id check, which is the right loud failure mode.
+// override applies AND Loop.AgentID is nil. The coordinator validates this
+// before enqueueing work and moves an active invalid loop to a terminal
+// failure instead of relying on a database constraint error.
 func (l *Loop) StageAgent(stage Stage) *string {
 	cfg := l.ParseConfig()
 	if cfg.StageAgents != nil {

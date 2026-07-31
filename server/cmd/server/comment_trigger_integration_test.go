@@ -150,6 +150,8 @@ func strPtr(s string) *string { return &s }
 // - member vs agent thread starters
 // - presence/absence of @mentions
 func TestCommentTriggerOnComment(t *testing.T) {
+	requireIntegrationDB(t)
+
 	agentID := getAgentID(t)
 	issueID := createIssueAssignedToAgent(t, "Comment trigger integration test", agentID)
 	t.Cleanup(func() {
@@ -249,6 +251,8 @@ func TestCommentTriggerOnComment(t *testing.T) {
 // TestCommentTriggerAtAllSuppression verifies that @all mentions do not
 // trigger agent execution — @all is a broadcast, not a direct request.
 func TestCommentTriggerAtAllSuppression(t *testing.T) {
+	requireIntegrationDB(t)
+
 	agentID := getAgentID(t)
 	issueID := createIssueAssignedToAgent(t, "@all suppression test", agentID)
 	t.Cleanup(func() {
@@ -278,6 +282,8 @@ func TestCommentTriggerAtAllSuppression(t *testing.T) {
 // TestCommentTriggerOnAssignNoStatusGate verifies that assigning an agent to
 // a non-todo issue still triggers the agent (status gate was removed).
 func TestCommentTriggerOnAssignNoStatusGate(t *testing.T) {
+	requireIntegrationDB(t)
+
 	agentID := getAgentID(t)
 
 	// Create an in_progress issue.
@@ -313,6 +319,8 @@ func TestCommentTriggerOnAssignNoStatusGate(t *testing.T) {
 // TestCommentTriggerOnMentionNoStatusGate verifies that @mentioning an agent
 // on a done issue still triggers the agent (no status gate on on_mention).
 func TestCommentTriggerOnMentionNoStatusGate(t *testing.T) {
+	requireIntegrationDB(t)
+
 	agentID := getAgentID(t)
 
 	// Create a done issue (not assigned to agent).
@@ -341,6 +349,8 @@ func TestCommentTriggerOnMentionNoStatusGate(t *testing.T) {
 // comment @mentions an agent (not the assignee), replies in that thread
 // also trigger the mentioned agent — even without explicitly re-mentioning it.
 func TestCommentTriggerThreadInheritedMention(t *testing.T) {
+	requireIntegrationDB(t)
+
 	agentID := getAgentID(t)
 
 	// Create an issue NOT assigned to the agent, so on_comment won't fire.
@@ -386,6 +396,8 @@ func TestCommentTriggerThreadInheritedMention(t *testing.T) {
 // TestCommentTriggerCoalescing verifies that rapid-fire comments don't create
 // duplicate tasks (coalescing dedup).
 func TestCommentTriggerCoalescing(t *testing.T) {
+	requireIntegrationDB(t)
+
 	agentID := getAgentID(t)
 	issueID := createIssueAssignedToAgent(t, "Coalescing test", agentID)
 	t.Cleanup(func() {

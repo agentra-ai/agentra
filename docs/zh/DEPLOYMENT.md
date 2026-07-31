@@ -1,230 +1,157 @@
-# 部署指南 — Agentra (中文)
+# Agentra 部署与发布指南
 
-> 如何将 Agentra 交付到生产环境: **自动化 CI/CD** (push 一个 tag → Docker Hub 自动收货) 和 **手动自托管** (在 VM 上 `docker compose up`)。
+Agentra 支持两条交付路径：
 
-- [自动化: GitHub Actions → Docker Hub](#_1)
-- [手动: Docker Compose 自托管](#_2)
-- [密钥参考](#_3)
-- [发版日历](#_4)
+- 推送版本 tag 后，将可验证的 CLI 资产发布到 GitHub Releases，并把多架构镜像发布到 GHCR。
+- 自托管用户也可以用 Docker Compose 从同一份源码本地构建。
 
----
+本文描述的软件供应链能力会从下一个 `v*` tag 开始公开生效。此前创建的 release 可能还没有 SBOM、Sigstore bundle、GHCR 镜像或 GitHub attestation。
 
-## 自动化: GitHub Actions → Docker Hub
+## Tag 发布流水线
 
-**一句话总结** → `git tag v0.5.0 && git push origin v0.5.0`,等 ~3 分钟,镜像自动推送到 `docker.io/dougzeng/agentra`。
+推送语义版本 tag 会并行触发两个 workflow：
 
-### 端到端流程
-
-```
-本地机器                     GitHub Actions                          Docker Hub
-───────────────────────────  ─────────────────────────────────  ─────────────────────────
-                            │
-git tag v0.5.0               │
-git push origin v0.5.0  ──→  │  .github/workflows/docker.yml
-                            │      ├─ checkout 代码
-                            │      ├─ cp .env.example .env
-                            │      ├─ docker login dio dougzeng
-                            │      ├─ docker buildx build server  ──→  dougzeng/agentra:server-v0.5.0
-                            │      ├─ docker buildx build gateway ──→  dougzeng/agentra:gateway-v0.5.0
-                            │      ├─ docker buildx build web     ──→  dougzeng/agentra:web-v0.5.0
-                            │      └─ done
+```text
+v0.6.0
+  ├─ release.yml
+  │    ├─ Darwin/Linux/Windows CLI 归档（amd64 + arm64）
+  │    ├─ 覆盖归档、SBOM、安装器的 SHA-256
+  │    ├─ 每个归档一份 SPDX 2.3 SBOM
+  │    ├─ checksums 与 SBOM 的 Cosign keyless bundle
+  │    ├─ GitHub build provenance attestation
+  │    └─ Homebrew Cask 更新
+  └─ docker.yml
+       ├─ server、gateway、web 镜像
+       ├─ 每个 tag 的 linux/amd64 + linux/arm64 manifest
+       ├─ BuildKit SBOM 与 max-mode provenance
+       ├─ 每个镜像 digest 的 Cosign keyless 签名
+       └─ 写入 registry 的 GitHub provenance attestation
 ```
 
-### 步骤 (一次性设置)
-
-#### 1. 创建 Docker Hub access token
-
-1. 登录 https://hub.docker.com
-2. Account Settings → Security → New Access Token
-3. 名称: `github-actions-agentra`
-4. 权限: **Read & Write**
-5. 复制 token (以 `dckr_pat_` 开头)
-
-#### 2. 配置 GitHub 仓库 secret
-
-在 GitHub 仓库:
-
-```
-Settings → Secrets and variables → Actions → New repository secret
-```
-
-| 名称 | 值 |
-|---|---|
-| `DOCKER_USERNAME` | `dougzeng` |
-| `DOCKERHUB_TOKEN` | 步骤 1 生成的 token |
-
-#### 3. 触发 workflow
+仅在仓库检查通过后创建 tag：
 
 ```bash
-cd agentra
-# 确保所有改动已提交并推送
-git push origin main
-
-# tag 发布版本 (默认补丁版本递增)
-git tag v0.5.0
-
-# 推送 tag — 触发 docker.yml
-git push origin v0.5.0
+make check
+git tag v0.6.0
+git push origin v0.6.0
 ```
 
-等待 2-3 分钟,监控:
+容器 workflow 使用仓库范围的 `GITHUB_TOKEN`，不再需要个人 Docker Hub 凭据。唯一的跨仓库 secret 是 `HOMEBREW_TAP_GITHUB_TOKEN`，其权限只需覆盖 `agentra-ai/homebrew-tap`。
+
+### 镜像标签
+
+三个组件共用官方 package `ghcr.io/agentra-ai/agentra`：
 
 ```bash
-gh run list --repo agentra-ai/agentra --workflow "Docker Hub"
-# 或访问 https://github.com/agentra-ai/agentra/actions
+docker pull ghcr.io/agentra-ai/agentra:server-v0.6.0
+docker pull ghcr.io/agentra-ai/agentra:gateway-v0.6.0
+docker pull ghcr.io/agentra-ai/agentra:web-v0.6.0
+
+# 稳定版本同时提供滚动别名。
+docker pull ghcr.io/agentra-ai/agentra:server-v0.6
+docker pull ghcr.io/agentra-ai/agentra:server-latest
 ```
 
-#### 4. 在任何地方拉取部署
+每个标签都是包含 `linux/amd64` 与 `linux/arm64` 的多平台 manifest。
+
+## 验证 CLI release
+
+从官方渠道安装 Cosign 与 GitHub CLI，然后从同一 release 下载归档、checksum 和 checksum bundle。验证时把 workflow 身份固定到本仓库与当前 tag：
 
 ```bash
-# 任意 Docker 宿主机:
-docker pull dougzeng/agentra:server-v0.5.0
-docker pull dougzeng/agentra:web-v0.5.0
-docker pull dougzeng/agentra:gateway-v0.5.0
+VERSION=v0.6.0
+ASSET=agentra_linux_amd64.tar.gz
+BASE="https://github.com/agentra-ai/agentra/releases/download/$VERSION"
+
+curl -fLO "$BASE/$ASSET"
+curl -fLO "$BASE/checksums.txt"
+curl -fLO "$BASE/checksums.txt.sigstore.json"
+
+cosign verify-blob \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity "https://github.com/agentra-ai/agentra/.github/workflows/release.yml@refs/tags/$VERSION" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+
+grep "  $ASSET$" checksums.txt | shasum -a 256 -c -
+gh attestation verify "$ASSET" -R agentra-ai/agentra
 ```
 
----
+每个归档还有 `${ASSET}.spdx.json` SBOM 与 `${ASSET}.spdx.json.sigstore.json` bundle；检查依赖清单前，使用同一 workflow 身份执行 `cosign verify-blob`。
 
-## 手动: Docker Compose 自托管
+Shell 与 PowerShell 安装器始终强制执行 SHA-256 校验。Cosign 和 GitHub provenance 需要显式验证，因为一台干净机器无法从“正在被验证的产物”安全地自举独立验证工具。
 
-**一句话总结** → clone → `.env` → `docker compose up -d`,开放 3000 端口。
+## 验证容器镜像
 
-### 前置条件
+```bash
+VERSION=v0.6.0
+IMAGE="ghcr.io/agentra-ai/agentra:server-$VERSION"
 
-- Docker 24+ 与 Docker Compose v2
-- 最低 4 GB RAM (跑 agent 推荐 8 GB)
-- Linux/macOS 宿主机或 VM
+docker pull "$IMAGE"
 
-### 步骤
+cosign verify "$IMAGE" \
+  --certificate-identity "https://github.com/agentra-ai/agentra/.github/workflows/docker.yml@refs/tags/$VERSION" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
-```
-                    ┌─────────────────────────────────────────────────────────────────────────┐
-                    │ .env 密钥                                                            │
-                    │  用户生成,不入库                                                      │
-                    └────┬──────────────┬──────────────┬──────────────┬───────────────┘
-                         │              │              │              │
-    ┌────────────────────▼──┐     ┌─────▼────────┐   ┌─▼──────────┐ ┌─▼─────────────┐
-    │ postgres (pg17+        │     │ server       │   │ gateway     │ │ web           │
-    │   pgvector)            │     │ :8080        │   │ :8081       │ │ :3000         │
-    │ :5432                  │     │ Go           │   │ Go          │ │ Next.js 16    │
-    └────────────────────────┘     └──────────────┘   └─────────────┘ └───────────────┘
-          ▲                              ▲                 ▲
-          │                              │                 │
-    ┌─────┴────────────────┐    ┌────────┴─────────────────┐
-    │ migrate              │    │ agent CLI (容器外部)       │
-    │ (一次性 Job)          │    │ `agentra daemon start`   │
-    └──────────────────────┘    └─────────────────────────────
+gh attestation verify "oci://$IMAGE" -R agentra-ai/agentra
+docker buildx imagetools inspect "$IMAGE"
 ```
 
-#### 1. 克隆 + 配置密钥
+BuildKit SBOM 与 provenance 会附着在 OCI image index 上。审计时应记录标签解析出的 digest，不能把可变 tag 本身当作不可变证据。
+
+## Docker Compose 自托管
+
+前置条件：Docker 24+、Docker Compose v2、至少 4 GB RAM。
 
 ```bash
 git clone https://github.com/agentra-ai/agentra.git
 cd agentra
 
-# 复制模板
-cp .env.example .env
+# 分别生成 PostgreSQL、JWT、MinIO 凭据，并以 0600 保存。
+./scripts/bootstrap-env.sh
 
-# 编辑关键行:
-#   JWT_SECRET              → openssl rand -hex 32
-#   POSTGRES_PASSWORD       → 任意强密码
-#   RESEND_API_KEY          → 可选 (邮件 OTP)
+# 启动前检查公开 URL 与可选集成。
 nano .env
-```
-
-#### 2. 拉起完整栈
-
-```bash
-# 从源码构建 (首次 ~5 分钟)
 docker compose up -d --build
-
-# 观察日志
-docker compose logs -f server web
 ```
 
-如果使用 **Docker Hub 预构建镜像**,跳过 `--build`:
+默认 profile 让 PostgreSQL 与 MinIO 仅在内部网络可见，Web/API 只绑定 loopback，也不会启动 Adminer 或挂载 Docker socket 的 gateway。只有明确需要这些高权限入口时，才使用 `--profile debug` 或 `--profile cloud-runtime`。
+
+验证部署：
 
 ```bash
-# 拉取最新发布的镜像
-docker pull dougzeng/agentra:server-latest
-docker pull dougzeng/agentra:web-latest
-docker pull dougzeng/agentra:gateway-latest
-
-# docker-compose.yml 里将 "build: ..." 替换为 "image: dougzeng/agentra:server-latest" 等
-docker compose up -d   # 不需要 --build,自动拉取预构建镜像
-```
-
-#### 3. 验证
-
-```bash
-# Server 健康检查
-curl http://localhost:8080/health
-# 预期: {"status":"ok"}
-
-# Web 端
-open http://localhost:3000
-# 预期: 登录页
-
-# 数据库已 migrate 到最新
+curl http://127.0.0.1:8080/livez
+curl http://127.0.0.1:8080/readyz
+open http://127.0.0.1:3000
 docker compose run --rm migrate
-# 预期: "skip 039_agent_task_metrics (already applied)" ... "Done."
 ```
 
-#### 4. 在宿主机启动 daemon (Mac/Linux,**不在容器里**)
+在宿主机单独安装 daemon，并连接自托管服务：
 
 ```bash
-# 构建 CLI
-make build
-sudo cp server/bin/agentra /usr/local/bin/agentra
-
-# 认证 (创建 PAT + session)
-agentra login
-
-# 后台启动 daemon
-agentra daemon start
-
-# 在 Web 端验证 runtime 是否在线
-# Settings → Runtimes → 你的机器应显示 "online"
+curl -fsSLO https://raw.githubusercontent.com/agentra-ai/agentra/main/scripts/install.sh
+sh install.sh
+rm install.sh
+agentra setup --deployment self-host
 ```
 
-#### 5. (可选) 手动跑 migration
+Windows 用户运行 `scripts/install.ps1`；Homebrew 用户运行 `brew install --cask agentra-ai/tap/agentra`。
 
-```bash
-# 需要更新 schema 时:
-docker compose run --rm migrate up
+## Secret 参考
 
-# 回滚一步:
-docker compose run --rm migrate down
-```
-
----
-
-## 密钥参考
-
-| 密钥 | 位置 | 生成方式 |
+| Secret | 用途 | 来源 |
 |---|---|---|
-| `JWT_SECRET` | `server/` | `openssl rand -hex 32` |
-| `POSTGRES_PASSWORD` | `postgres/` | 任意强密码 |
-| `RESEND_API_KEY` | 邮件 OTP | resend.com → API Keys |
-| `GOOGLE_CLIENT_*` | OAuth (可选) | console.cloud.google.com |
-| `STORAGE_DRIVER` | `minio` (默认) 或 `s3` | — |
-| `DOCKER_USERNAME` | GitHub Actions secret | Docker Hub 用户名 |
-| `DOCKERHUB_TOKEN` | GitHub Actions secret | hub.docker.com → Settings → Security |
+| `JWT_SECRET` | API 认证 | `scripts/bootstrap-env.sh` |
+| `POSTGRES_PASSWORD` | PostgreSQL | `scripts/bootstrap-env.sh` |
+| `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | 对象存储 | `scripts/bootstrap-env.sh` |
+| `RESEND_API_KEY` | 可选邮件 OTP | Resend 账户 |
+| `GOOGLE_CLIENT_*` | 可选 OAuth | Google Cloud Console |
+| `HOMEBREW_TAP_GITHUB_TOKEN` | 仅 release workflow | 只授权 tap 仓库的 fine-grained token |
 
----
+GHCR 发布、Cosign keyless 签名与 GitHub attestation 使用短期 workflow OIDC 和 `GITHUB_TOKEN`，不需要保存长期签名私钥。
 
-## 发版日历
+## 当前安全边界
 
-按 CLAUDE.md 策略:**每次发版提升补丁版本**,除非有重大功能升级。
-
-| 时机 | Tag | 示例 |
-|---|---|---|
-| Bug 修复 | 补丁 | `v0.4.3` → `v0.4.4` |
-| 新功能 | 次版本 | `v0.4.x` → `v0.5.0` |
-| CLI 发版必须伴随每次 Production 部署 | — | `v0.5.0` 同时触发 `release.yml` (CLI 二进制) 和 `docker.yml` (镜像) |
-
-两个 job 从同一 tag push 并行触发。CLI 二进制发布到 GitHub Releases;容器镜像发布到 Docker Hub。
-
----
-
-*sin*
+- 从下一个 tag 开始，release 归档、checksums、SBOM 与 OCI digest 都有绑定 workflow 身份的供应链签名/attestation。
+- macOS code signing/notarization 与 Windows Authenticode 属于另外的平台信任体系，目前尚未实现。
+- 发布验证能够证明 workflow 身份与产物完整性，但不能替代对 tag 源码的审查或运行时加固。

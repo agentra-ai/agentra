@@ -57,6 +57,7 @@ function CommentInput({ issueId, onSubmit }: CommentInputProps) {
         />
         <Button
           size="icon-xs"
+          aria-label={tCommon("submit")}
           disabled={isEmpty || submitting}
           onClick={handleSubmit}
         >

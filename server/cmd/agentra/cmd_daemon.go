@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -170,7 +169,7 @@ func runDaemonBackground(cmd *cobra.Command) error {
 	child := exec.Command(exePath, args...)
 	child.Stdout = logFile
 	child.Stderr = logFile
-	child.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	configureBackgroundProcess(child)
 
 	if err := child.Start(); err != nil {
 		logFile.Close()
@@ -288,7 +287,7 @@ func runDaemonForeground(cmd *cobra.Command) error {
 	}
 	cfg.CLIVersion = cli.ResolveReportedCLIVersion(version)
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), daemonSignals()...)
 	defer stop()
 
 	logger := logger_pkg.NewLogger("daemon")
@@ -320,7 +319,7 @@ func runDaemonForeground(cmd *cobra.Command) error {
 		}
 		child.Stdout = logFile
 		child.Stderr = logFile
-		child.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		configureBackgroundProcess(child)
 
 		if err := child.Start(); err != nil {
 			logFile.Close()
@@ -370,7 +369,7 @@ func runDaemonStop(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("find process %d: %w", int(pid), err)
 	}
 
-	if err := process.Signal(syscall.SIGTERM); err != nil {
+	if err := terminateProcess(process); err != nil {
 		return fmt.Errorf("stop daemon (pid %d): %w", int(pid), err)
 	}
 
@@ -448,16 +447,7 @@ func runDaemonLogs(cmd *cobra.Command, _ []string) error {
 	follow, _ := cmd.Flags().GetBool("follow")
 	lines, _ := cmd.Flags().GetInt("lines")
 
-	args := []string{"-n", strconv.Itoa(lines)}
-	if follow {
-		args = append(args, "-f")
-	}
-	args = append(args, logPath)
-
-	tail := exec.Command("tail", args...)
-	tail.Stdout = os.Stdout
-	tail.Stderr = os.Stderr
-	return tail.Run()
+	return streamDaemonLog(logPath, lines, follow, os.Stdout)
 }
 
 // checkDaemonHealthOnPort calls the daemon's local health endpoint on the given port.
@@ -579,7 +569,7 @@ func stopRunningDaemon(healthPort int, health map[string]any) error {
 		return fmt.Errorf("find process %d: %w", pid, err)
 	}
 
-	if err := process.Signal(syscall.SIGTERM); err != nil {
+	if err := terminateProcess(process); err != nil {
 		return fmt.Errorf("stop daemon (pid %d): %w", pid, err)
 	}
 

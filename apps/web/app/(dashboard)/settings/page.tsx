@@ -70,7 +70,9 @@ export default function SettingsPage() {
           <TabsContent value="profile"><AccountTab /></TabsContent>
           <TabsContent value="appearance"><AppearanceTab /></TabsContent>
           <TabsContent value="tokens"><TokensTab /></TabsContent>
-          <TabsContent value="workspace"><WorkspaceTab /></TabsContent>
+          <TabsContent value="workspace">
+            <WorkspaceTab key={workspaceId ?? "no-workspace"} />
+          </TabsContent>
           <TabsContent value="repositories"><RepositoriesTab /></TabsContent>
           <TabsContent value="members"><MembersTab /></TabsContent>
           <TabsContent value="runtime"><RuntimeTab /></TabsContent>

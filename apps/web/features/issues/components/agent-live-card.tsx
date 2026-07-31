@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Bot, ChevronRight, ChevronUp, Loader2, ArrowDown, Brain, AlertCircle, Clock, CheckCircle2, XCircle, Square, Cloud } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { api } from "@/shared/api";
-import { useWSEvent } from "@/features/realtime";
+import { useWSEvent, useWSReconnect } from "@/features/realtime";
 import type { TaskMessagePayload, TaskCompletedPayload, TaskFailedPayload, TaskCancelledPayload, AgentStagePayload, AgentStage } from "@/shared/types/events";
 import type { AgentTask } from "@/shared/types/agent";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,24 @@ interface TimelineItem {
   content?: string;
   input?: Record<string, unknown>;
   output?: string;
+}
+
+const MAX_TIMELINE_ITEMS = 5000;
+
+function mergeTimeline(current: TimelineItem[], incoming: TimelineItem[]): TimelineItem[] {
+  const bySeq = new Map<number, TimelineItem>();
+  for (const item of current) bySeq.set(item.seq, item);
+  for (const item of incoming) bySeq.set(item.seq, item);
+  return [...bySeq.values()].sort((a, b) => a.seq - b.seq).slice(-MAX_TIMELINE_ITEMS);
+}
+
+function rememberSeen(set: Set<string>, key: string) {
+  set.add(key);
+  while (set.size > MAX_TIMELINE_ITEMS) {
+    const oldest = set.values().next().value;
+    if (oldest === undefined) break;
+    set.delete(oldest);
+  }
 }
 
 function formatElapsed(startedAt: string): string {
@@ -93,7 +111,7 @@ function buildTimeline(msgs: TaskMessagePayload[]): TimelineItem[] {
       output: msg.output ? redactSecrets(msg.output) : msg.output,
     });
   }
-  return items.sort((a, b) => a.seq - b.seq);
+  return items.sort((a, b) => a.seq - b.seq).slice(-MAX_TIMELINE_ITEMS);
 }
 
 // ─── AgentLiveCard (real-time view) ────────────────────────────────────────
@@ -127,11 +145,12 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
       if (!cancelled) {
         setActiveTask(task);
         if (task) {
-          api.listTaskMessages(task.id).then((msgs) => {
+          api.listTaskMessages(task.id, { limit: MAX_TIMELINE_ITEMS }).then((msgs) => {
             if (!cancelled) {
               const timeline = buildTimeline(msgs);
               setItems(timeline);
-              for (const m of msgs) seenSeqs.current.add(`${m.task_id}:${m.seq}`);
+              seenSeqs.current.clear();
+              for (const m of msgs) rememberSeen(seenSeqs.current, `${m.task_id}:${m.seq}`);
             }
           }).catch(console.error);
         }
@@ -149,7 +168,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
       if (msg.issue_id !== issueId) return;
       const key = `${msg.task_id}:${msg.seq}`;
       if (seenSeqs.current.has(key)) return;
-      seenSeqs.current.add(key);
+      rememberSeen(seenSeqs.current, key);
 
       setItems((prev) => {
         const item: TimelineItem = {
@@ -160,12 +179,32 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
           input: msg.input,
           output: msg.output,
         };
-        const next = [...prev, item];
-        next.sort((a, b) => a.seq - b.seq);
-        return next;
+        return mergeTimeline(prev, [item]);
       });
     }, [issueId]),
   );
+
+  // Recover any task messages missed while the WebSocket was disconnected.
+  // The API returns a bounded durable snapshot, so reconnect never grows the
+  // tab heap without limit.
+  useWSReconnect(useCallback(() => {
+    api.getActiveTaskForIssue(issueId).then(({ task }) => {
+      if (!task) {
+        setActiveTask(null);
+        setItems([]);
+        seenSeqs.current.clear();
+        return;
+      }
+      const sameTask = activeTask?.id === task.id;
+      setActiveTask(task);
+      api.listTaskMessages(task.id, { limit: MAX_TIMELINE_ITEMS }).then((messages) => {
+        const snapshot = buildTimeline(messages);
+        setItems((current) => sameTask ? mergeTimeline(snapshot, current) : snapshot);
+        seenSeqs.current.clear();
+        for (const message of messages) rememberSeen(seenSeqs.current, `${message.task_id}:${message.seq}`);
+      }).catch(console.error);
+    }).catch(console.error);
+  }, [activeTask?.id, issueId]));
 
   // Handle task completion/failure
   useWSEvent(
@@ -481,7 +520,7 @@ function TaskRunEntry({ task }: { task: AgentTask }) {
 
   const loadMessages = useCallback(() => {
     if (items !== null) return; // already loaded
-    api.listTaskMessages(task.id).then((msgs) => {
+    api.listTaskMessages(task.id, { limit: MAX_TIMELINE_ITEMS }).then((msgs) => {
       setItems(buildTimeline(msgs));
     }).catch((e) => {
       console.error(e);

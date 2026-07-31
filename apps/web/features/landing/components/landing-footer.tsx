@@ -21,6 +21,10 @@ const LOCALE_OPTIONS = [
   { code: "zh-CN", label: "中文" },
 ] as const;
 
+function setLocaleCookie(locale: "en" | "zh-CN") {
+  document.cookie = `agentra-locale=${locale}; path=/; max-age=31536000; samesite=lax`;
+}
+
 export function LandingFooter() {
   const t = useTranslations("landing.footer");
   const tHeader = useTranslations("landing.header");
@@ -31,7 +35,7 @@ export function LandingFooter() {
   const user = useAuthStore((state) => state.user);
 
   const switchTo = (next: "en" | "zh-CN") => {
-    document.cookie = `agentra-locale=${next}; path=/; max-age=31536000; samesite=lax`;
+    setLocaleCookie(next);
     startTransition(() => {
       router.replace(pathname ?? "/");
     });
@@ -78,7 +82,7 @@ export function LandingFooter() {
 
           <div className="flex items-center gap-5">
             <p className="text-[13px] text-white/34">
-              {t("copyright").replace("{year}", String(currentYear))}
+              {t("copyright", { year: currentYear })}
             </p>
             <div className="flex items-center rounded-full border border-white/10 bg-white/[0.04] p-1">
               {LOCALE_OPTIONS.map((opt) => (

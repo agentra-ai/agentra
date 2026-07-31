@@ -8,15 +8,20 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/gorilla/websocket"
-	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/gateway"
+	"github.com/gorilla/websocket"
 )
 
 // MembershipChecker verifies a user belongs to a workspace.
 type MembershipChecker interface {
 	IsMember(ctx context.Context, userID, workspaceID string) bool
+}
+
+// UserAuthenticator validates a JWT or PAT and returns its user identity.
+// Browser clients keep using the query token while non-browser clients can
+// send Authorization so long-lived PATs never appear in URLs or proxy logs.
+type UserAuthenticator interface {
+	Authenticate(ctx context.Context, token string) (string, error)
 }
 
 // wsUpgrader is constructed via newWSUpgrader() so the origin allow-list
@@ -73,7 +78,7 @@ func (c *Client) isInRoom(workspaceID string) bool {
 // Hub manages WebSocket connections organized by workspace rooms.
 type Hub struct {
 	rooms      map[string]map[*Client]bool // workspaceID -> clients
-	broadcast  chan []byte                  // global broadcast (daemon events)
+	broadcast  chan []byte                 // global broadcast (daemon events)
 	register   chan *Client
 	unregister chan *Client
 	mu         sync.RWMutex
@@ -263,8 +268,18 @@ func (h *Hub) Broadcast(message []byte) {
 }
 
 // HandleWebSocket upgrades an HTTP connection to WebSocket with JWT auth.
-func HandleWebSocket(hub *Hub, mc MembershipChecker, w http.ResponseWriter, r *http.Request) {
+func HandleWebSocket(hub *Hub, authenticator UserAuthenticator, mc MembershipChecker, w http.ResponseWriter, r *http.Request) {
 	tokenStr := r.URL.Query().Get("token")
+	if strings.HasPrefix(tokenStr, "mul_") {
+		http.Error(w, `{"error":"personal access tokens must use the authorization header"}`, http.StatusUnauthorized)
+		return
+	}
+	if tokenStr == "" {
+		authHeader := r.Header.Get("Authorization")
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			tokenStr = strings.TrimPrefix(authHeader, "Bearer ")
+		}
+	}
 	workspaceID := r.URL.Query().Get("workspace_id")
 
 	if tokenStr == "" || workspaceID == "" {
@@ -272,27 +287,13 @@ func HandleWebSocket(hub *Hub, mc MembershipChecker, w http.ResponseWriter, r *h
 		return
 	}
 
-	// Validate JWT
-	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, jwt.ErrSignatureInvalid
-		}
-		return auth.JWTSecret(), nil
-	})
-	if err != nil || !token.Valid {
+	if authenticator == nil {
 		http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 		return
 	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		http.Error(w, `{"error":"invalid claims"}`, http.StatusUnauthorized)
-		return
-	}
-
-	userID, ok := claims["sub"].(string)
-	if !ok || strings.TrimSpace(userID) == "" {
-		http.Error(w, `{"error":"invalid claims"}`, http.StatusUnauthorized)
+	userID, err := authenticator.Authenticate(r.Context(), tokenStr)
+	if err != nil || strings.TrimSpace(userID) == "" {
+		http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 		return
 	}
 
@@ -384,27 +385,39 @@ func (c *Client) writePump() {
 	}
 }
 
-// HandleGatewayWebSocket upgrades an HTTP connection to WebSocket for Cloud Runtime Gateway connections.
-//
-// Gateways are internal services that connect from inside the docker
-// network and authenticate with an AGENTRA_AUTH_TOKEN query param. They
-// do not send an Origin header (server-to-server calls don't carry
-// one), and the WebSocket origin allow-list on the rest of the
-// application is a browser-CSRF defense, not relevant here. So we use
-// a dedicated upgrader whose CheckOrigin always allows — the token
-// check is the auth gate.
-func HandleGatewayWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
-	gatewayID := r.URL.Query().Get("gateway_id")
-	if gatewayID == "" {
-		http.Error(w, `{"error":"gateway_id required"}`, http.StatusBadRequest)
+// HandleGatewayWebSocket upgrades a server-to-server Cloud Runtime Gateway
+// connection. A valid user JWT/PAT in Authorization and workspace membership
+// bind the socket to exactly one tenant; secrets are never accepted in URLs.
+func HandleGatewayWebSocket(hub *Hub, authenticator UserAuthenticator, mc MembershipChecker, w http.ResponseWriter, r *http.Request) {
+	gatewayID := strings.TrimSpace(r.URL.Query().Get("gateway_id"))
+	workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
+	if gatewayID == "" || len(gatewayID) > 128 {
+		http.Error(w, `{"error":"valid gateway_id required"}`, http.StatusBadRequest)
+		return
+	}
+	if workspaceID == "" {
+		http.Error(w, `{"error":"workspace_id required"}`, http.StatusBadRequest)
 		return
 	}
 
-	// Validate auth token if provided
-	token := r.URL.Query().Get("token")
-	if token != "" {
-		// For now, tokens are not validated - gateways are trusted within the network
-		// In production, validate against a shared secret or JWT
+	authHeader := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		http.Error(w, `{"error":"authorization header required"}`, http.StatusUnauthorized)
+		return
+	}
+	token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	if token == "" || authenticator == nil {
+		http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+		return
+	}
+	userID, err := authenticator.Authenticate(r.Context(), token)
+	if err != nil || strings.TrimSpace(userID) == "" {
+		http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+		return
+	}
+	if mc == nil || !mc.IsMember(r.Context(), userID, workspaceID) {
+		http.Error(w, `{"error":"not a member of this workspace"}`, http.StatusForbidden)
+		return
 	}
 
 	gatewayUpgrader := websocket.Upgrader{
@@ -417,10 +430,11 @@ func HandleGatewayWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	}
 
 	gatewayClient := &gateway.Client{
-		ID:   gatewayID,
-		Conn: conn,
-		Hub:  hub.GatewayHub,
-		Send: make(chan []byte, 256),
+		ID:          gatewayID,
+		WorkspaceID: workspaceID,
+		Conn:        conn,
+		Hub:         hub.GatewayHub,
+		Send:        make(chan []byte, 256),
 	}
 
 	hub.GatewayHub.Register(gatewayClient)
@@ -428,5 +442,5 @@ func HandleGatewayWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	go gatewayClient.WritePump()
 	go gatewayClient.ReadPump()
 
-	slog.Info("gateway connected", "gateway_id", gatewayID)
+	slog.Info("gateway connected", "gateway_id", gatewayID, "workspace_id", workspaceID)
 }

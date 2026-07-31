@@ -2,10 +2,13 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/agentra-ai/agentra/server/pkg/protocol"
 )
 
 type Config struct {
@@ -27,8 +30,8 @@ type Gateway struct {
 	cfg          Config
 	logger       *slog.Logger
 	containerMgr *ContainerManager
-	wsClient    *WSClient
-	tasks       sync.Map
+	wsClient     *WSClient
+	tasks        sync.Map
 }
 
 type RunningTask struct {
@@ -53,7 +56,7 @@ func New(cfg Config, logger *slog.Logger) *Gateway {
 }
 
 func (g *Gateway) Run(ctx context.Context) error {
-	g.wsClient = NewWSClient(g.cfg.ServerURL, g.cfg.GatewayID, g.cfg.AuthToken, g.logger)
+	g.wsClient = NewWSClient(g.cfg.ServerURL, g.cfg.GatewayID, g.cfg.WorkspaceID, g.cfg.AuthToken, g.logger)
 
 	// Register task dispatch callback
 	g.wsClient.OnTaskDispatch = func(taskID string, config map[string]any) {
@@ -163,27 +166,59 @@ func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
 
 	// Run goroutine to wait for completion and clean up
 	go func() {
+		logCtx, stopLogs := context.WithCancel(taskCtx)
+		defer stopLogs()
+		tail := newBoundedTailBuffer(protocol.GatewayTaskResultBytes)
+		emitter := &taskLogEmitter{
+			sender: g.wsClient,
+			taskID: taskID,
+			tail:   tail,
+		}
+		logsDone := make(chan error, 1)
+		go func() {
+			logsDone <- g.containerMgr.StreamContainerLogs(
+				logCtx,
+				containerID,
+				emitter.writer(protocol.GatewayStreamStdout),
+				emitter.writer(protocol.GatewayStreamStderr),
+			)
+		}()
+
 		// Wait for container to finish
 		exitCode, err := g.containerMgr.WaitContainer(taskCtx, containerID)
 		if err != nil {
+			stopLogs()
 			g.logger.Error("task wait failed", "task_id", taskID, "error", err)
 			// Container wait failure is retryable (container may be hung)
-			g.wsClient.SendTaskFailedWithRetry(taskID, fmt.Sprintf("wait failed: %v", err), true)
+			if sendErr := g.wsClient.SendTaskFailedWithRetry(taskID, fmt.Sprintf("wait failed: %v", err), true); sendErr != nil {
+				g.logger.Error("task wait failed: report failed", "task_id", taskID, "error", sendErr)
+			}
 		} else {
-			// Get logs
-			logs, err := g.containerMgr.GetContainerLogs(context.Background(), containerID, time.Time{})
-			if err != nil {
-				g.logger.Error("task logs failed", "task_id", taskID, "error", err)
+			// Docker's follow stream normally closes immediately after container
+			// exit. Bound the drain so a broken Docker connection cannot stall task
+			// completion forever.
+			select {
+			case logErr := <-logsDone:
+				if logErr != nil && !errors.Is(logErr, context.Canceled) {
+					g.logger.Error("task log stream failed", "task_id", taskID, "error", logErr)
+				}
+			case <-time.After(5 * time.Second):
+				stopLogs()
+				g.logger.Warn("task log stream drain timed out", "task_id", taskID)
 			}
 
-			output := string(logs)
+			output := tail.String()
 			if exitCode == 0 {
 				g.logger.Info("task completed", "task_id", taskID, "exit_code", exitCode)
-				g.wsClient.SendTaskCompleted(taskID, exitCode, output)
+				if sendErr := g.wsClient.SendTaskCompleted(taskID, exitCode, output); sendErr != nil {
+					g.logger.Error("task completed: report failed", "task_id", taskID, "error", sendErr)
+				}
 			} else {
 				// Agent exit code != 0 is not retryable (agent code failed)
 				g.logger.Info("task failed", "task_id", taskID, "exit_code", exitCode)
-				g.wsClient.SendTaskFailedWithRetry(taskID, output, false)
+				if sendErr := g.wsClient.SendTaskFailedWithRetry(taskID, output, false); sendErr != nil {
+					g.logger.Error("task failed: report failed", "task_id", taskID, "error", sendErr)
+				}
 			}
 		}
 

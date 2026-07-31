@@ -39,9 +39,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   ALL_STATUSES,
-  STATUS_CONFIG,
   PRIORITY_ORDER,
-  PRIORITY_CONFIG,
 } from "@/features/issues/config";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { useWorkspaceStore } from "@/features/workspace";
@@ -56,7 +54,6 @@ import {
   useIssuesScopeStore,
   type IssuesScope,
 } from "@/features/issues/stores/issues-scope-store";
-import { filterIssues } from "@/features/issues/utils/filter";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import type { Issue } from "@/shared/types";
 
@@ -152,6 +149,7 @@ function ActorSubContent({
 }) {
   const [search, setSearch] = useState("");
   const t = useTranslations("issues");
+  const tAssignee = useTranslations("issues.assigneeMenu");
   const tCommon = useTranslations("common");
   const members = useWorkspaceStore((s) => s.members);
   const agents = useWorkspaceStore((s) => s.agents);
@@ -189,7 +187,7 @@ function ActorSubContent({
             >
               <HoverCheck checked={includeNoAssignee ?? false} />
               <UserMinus className="size-3.5 text-muted-foreground" />
-              {t("assignee.unassigned")}
+              {tAssignee("unassigned")}
               {(noAssigneeCount ?? 0) > 0 && (
                 <span className="ml-auto text-xs text-muted-foreground">
                   {noAssigneeCount}
@@ -200,7 +198,7 @@ function ActorSubContent({
 
         {filteredMembers.length > 0 && (
           <DropdownMenuGroup>
-            <DropdownMenuLabel>{t("assignee.membersSection")}</DropdownMenuLabel>
+            <DropdownMenuLabel>{tAssignee("membersSection")}</DropdownMenuLabel>
             {filteredMembers.map((m) => {
               const checked = isSelected("member", m.user_id);
               const count = counts.get(`member:${m.user_id}`) ?? 0;
@@ -229,7 +227,7 @@ function ActorSubContent({
 
         {filteredAgents.length > 0 && (
           <DropdownMenuGroup>
-            <DropdownMenuLabel>{t("assignee.agentsSection")}</DropdownMenuLabel>
+            <DropdownMenuLabel>{tAssignee("agentsSection")}</DropdownMenuLabel>
             {filteredAgents.map((a) => {
               const checked = isSelected("agent", a.id);
               const count = counts.get(`agent:${a.id}`) ?? 0;
@@ -272,7 +270,6 @@ function ActorSubContent({
 
 export function IssuesHeader({ scopedIssues }: { scopedIssues: Issue[] }) {
   const t = useTranslations("issues");
-  const tNav = useTranslations("navigation");
   const tUI = useTranslations("commonUI");
   const scope = useIssuesScopeStore((s) => s.scope);
   const setScope = useIssuesScopeStore((s) => s.setScope);
@@ -344,7 +341,12 @@ export function IssuesHeader({ scopedIssues }: { scopedIssues: Issue[] }) {
               render={
                 <TooltipTrigger
                   render={
-                    <Button variant="outline" size="icon-sm" className="relative text-muted-foreground">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      className="relative text-muted-foreground"
+                      aria-label={tUI("filter")}
+                    >
                       <Filter className="size-4" />
                       {hasActiveFilters && (
                         <span className="absolute top-0 right-0 size-1.5 rounded-full bg-brand" />
@@ -492,7 +494,12 @@ export function IssuesHeader({ scopedIssues }: { scopedIssues: Issue[] }) {
               render={
                 <TooltipTrigger
                   render={
-                    <Button variant="outline" size="icon-sm" className="text-muted-foreground">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      className="text-muted-foreground"
+                      aria-label={tUI("displaySettings")}
+                    >
                       <SlidersHorizontal className="size-4" />
                     </Button>
                   }
@@ -578,7 +585,12 @@ export function IssuesHeader({ scopedIssues }: { scopedIssues: Issue[] }) {
               render={
                 <TooltipTrigger
                   render={
-                    <Button variant="outline" size="icon-sm" className="text-muted-foreground">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      className="text-muted-foreground"
+                      aria-label={viewMode === "board" ? tUI("boardView") : tUI("listView")}
+                    >
                       {viewMode === "board" ? (
                         <Columns3 className="size-4" />
                       ) : (

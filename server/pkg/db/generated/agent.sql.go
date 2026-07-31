@@ -1190,12 +1190,13 @@ SET status = 'queued',
     retry_count = retry_count + 1,
     dispatched_at = NULL,
     started_at = NULL
-WHERE id = $1 AND status = 'failed' AND retry_count < max_retries
+WHERE id = $1 AND status IN ('failed', 'dispatched', 'running') AND retry_count < max_retries
 RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id
 `
 
-// Resets a failed task back to queued, incrementing retry_count.
-// Used for automatic retry with exponential backoff on transient failures.
+// Resets a failed or active task back to queued, incrementing retry_count.
+// Cloud gateways report transient failures directly from dispatched/running;
+// accepting those states avoids first emitting a terminal failure.
 func (q *Queries) RetryAgentTask(ctx context.Context, id pgtype.UUID) (AgentTaskQueue, error) {
 	row := q.db.QueryRow(ctx, retryAgentTask, id)
 	var i AgentTaskQueue

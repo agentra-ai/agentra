@@ -139,8 +139,9 @@ WHERE id = $1 AND status IN ('dispatched', 'running')
 RETURNING *;
 
 -- name: RetryAgentTask :one
--- Resets a failed task back to queued, incrementing retry_count.
--- Used for automatic retry with exponential backoff on transient failures.
+-- Resets a failed or active task back to queued, incrementing retry_count.
+-- Cloud gateways report transient failures directly from dispatched/running;
+-- accepting those states avoids first emitting a terminal failure.
 UPDATE agent_task_queue
 SET status = 'queued',
     completed_at = NULL,
@@ -148,7 +149,7 @@ SET status = 'queued',
     retry_count = retry_count + 1,
     dispatched_at = NULL,
     started_at = NULL
-WHERE id = $1 AND status = 'failed' AND retry_count < max_retries
+WHERE id = $1 AND status IN ('failed', 'dispatched', 'running') AND retry_count < max_retries
 RETURNING *;
 
 -- name: FailStaleTasks :many

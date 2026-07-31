@@ -7,13 +7,15 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -24,13 +26,45 @@ jobs:
           cache-dependency-path: server/go.sum
 
       - name: Run tests
-        run: cd server && go test ./...
+        run: |
+          bash scripts/test-installers.sh
+          cd server && go test ./...
+
+      - name: Setup Syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@v0
+        with:
+          syft-version: v1.50.0
+
+      - name: Add Syft to PATH
+        run: echo "$(dirname '${{ steps.syft.outputs.cmd }}')" >> "$GITHUB_PATH"
+
+      - name: Setup Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Validate GoReleaser configuration
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: check
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+      - name: Validate release assets and signatures
+        env:
+          AGENTRA_CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
+        run: |
+          node scripts/verify_release_artifacts.mjs --require-signatures
+          bash scripts/verify-release-signatures.sh
+
+      - name: Attest release provenance
+        uses: actions/attest@v4
+        with:
+          subject-checksums: ./dist/checksums.txt

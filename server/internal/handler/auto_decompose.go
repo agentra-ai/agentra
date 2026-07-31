@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/agentra-ai/agentra/pkg/taskgraph"
 	"github.com/agentra-ai/agentra/server/internal/service"
 )
 
@@ -23,27 +24,9 @@ type AutoDecomposeRequest struct {
 // AutoDecomposeResponse is returned after successful decomposition.
 type AutoDecomposeResponse struct {
 	Plan  string                `json:"plan"`
-	Nodes []autoDecomposeNode   `json:"nodes"`
-	Edges []autoDecomposeEdge   `json:"edges"`
+	Nodes []taskgraph.GraphNode `json:"nodes"`
+	Edges []taskgraph.GraphEdge `json:"edges"`
 	Usage map[string]any        `json:"usage,omitempty"`
-}
-
-type autoDecomposeNode struct {
-	ID          string         `json:"id"`
-	NodeType    string         `json:"node_type"`
-	AgentID     string         `json:"agent_id,omitempty"`
-	Status      string         `json:"status"`
-	Context     map[string]any `json:"context"`
-	Depth       int            `json:"depth"`
-	PositionX   float64        `json:"position_x"`
-	PositionY   float64        `json:"position_y"`
-}
-
-type autoDecomposeEdge struct {
-	ID         string `json:"id"`
-	FromNodeID string `json:"from_node_id"`
-	ToNodeID   string `json:"to_node_id"`
-	EdgeType   string `json:"edge_type"`
 }
 
 // AutoDecomposeIssue handles POST /api/issues/{id}/auto-decompose.
@@ -92,31 +75,9 @@ func (h *Handler) AutoDecomposeIssue(w http.ResponseWriter, r *http.Request) {
 	// Map response.
 	resp := AutoDecomposeResponse{
 		Plan:  result.Plan,
-		Nodes: make([]autoDecomposeNode, len(result.Nodes)),
-		Edges: make([]autoDecomposeEdge, len(result.Edges)),
+		Nodes: result.Nodes,
+		Edges: result.Edges,
 		Usage: result.TokenUsage,
-	}
-
-	for i, n := range result.Nodes {
-		resp.Nodes[i] = autoDecomposeNode{
-			ID:        n.ID,
-			NodeType:  string(n.NodeType),
-			AgentID:   n.AgentID,
-			Status:    string(n.Status),
-			Context:   n.Context,
-			Depth:     n.Depth,
-			PositionX: n.PositionX,
-			PositionY: n.PositionY,
-		}
-	}
-
-	for i, e := range result.Edges {
-		resp.Edges[i] = autoDecomposeEdge{
-			ID:         e.ID,
-			FromNodeID: e.FromNodeID,
-			ToNodeID:   e.ToNodeID,
-			EdgeType:   string(e.EdgeType),
-		}
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -145,4 +106,3 @@ func (h *Handler) handlePlannerError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusInternalServerError, "auto-decompose failed: "+err.Error())
 	}
 }
-

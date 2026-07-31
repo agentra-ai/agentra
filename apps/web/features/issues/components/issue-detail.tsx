@@ -1,7 +1,7 @@
 "use client";
 
 import { useFormatter, useTranslations } from "next-intl";
-import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -18,7 +18,6 @@ import {
   Trash2,
   UserMinus,
   Users,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,8 +38,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
@@ -213,17 +210,16 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const issue = useIssueStore((s) => s.issues.find((i) => i.id === id)) ?? null;
   const [issueLoading, setIssueLoading] = useState(!issue);
   const t = useTranslations("issues");
+  const tAssignee = useTranslations("issues.assigneeMenu");
   const tCommon = useTranslations("common");
   const tLoops = useTranslations("loops");
   const f = useFormatter();
 
   // If issue isn't in the store yet, fetch and upsert it
   useEffect(() => {
-    if (issue) {
-      setIssueLoading(false);
-      return;
-    }
-    setIssueLoading(true);
+    if (issue) return;
+    let cancelled = false;
+
     api
       .getIssue(id)
       .then((iss) => {
@@ -233,12 +229,18 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
         console.error(e);
         toast.error(t("toast.loadIssueFailed"));
       })
-      .finally(() => setIssueLoading(false));
-  }, [id, !!issue]);
+      .finally(() => {
+        if (!cancelled) setIssueLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, issue, t]);
 
   // Custom hooks — encapsulate timeline, reactions, subscribers
   const {
-    timeline, loading: timelineLoading, submitting, submitComment, submitReply,
+    timeline, loading: timelineLoading, submitComment, submitReply,
     editComment, deleteComment, toggleReaction: handleToggleReaction,
   } = useIssueTimeline(id, user?.id);
 
@@ -251,7 +253,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
     subscribers, loading: subscribersLoading, isSubscribed, toggleSubscribe: handleToggleSubscribe, toggleSubscriber,
   } = useIssueSubscribers(id, user?.id);
 
-  const loading = issueLoading;
+  const loading = issueLoading && !issue;
 
   // Scroll to highlighted comment once timeline loads (fire only once per highlightCommentId)
   useEffect(() => {
@@ -297,7 +299,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
         toast.error(t("toast.updateIssueFailed"));
       });
     },
-    [issue, id],
+    [issue, id, t],
   );
 
   const descEditorRef = useRef<ContentEditorRef>(null);
@@ -524,7 +526,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                       onClick={() => handleUpdateField({ assignee_type: null, assignee_id: null })}
                     >
                       <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
-                      {t("assignee.unassigned")}
+                      {tAssignee("unassigned")}
                       {!issue.assignee_type && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
                     </DropdownMenuItem>
                     {members.map((m) => (
@@ -768,7 +770,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                       <CommandList className="max-h-64">
                         <CommandEmpty>{tCommon("noResults")}</CommandEmpty>
                         {members.length > 0 && (
-                          <CommandGroup heading={t("assignee.membersSection")}>
+                          <CommandGroup heading={tAssignee("membersSection")}>
                             {members.filter((m, i, arr) => arr.findIndex((x) => x.user_id === m.user_id) === i).map((m) => {
                               const sub = subscribers.find((s) => s.user_type === "member" && s.user_id === m.user_id);
                               const isSubbed = !!sub;
@@ -788,7 +790,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                           </CommandGroup>
                         )}
                         {agents.filter((a) => !a.archived_at).length > 0 && (
-                          <CommandGroup heading={t("assignee.agentsSection")}>
+                          <CommandGroup heading={tAssignee("agentsSection")}>
                             {agents.filter((a) => !a.archived_at).map((a) => {
                               const sub = subscribers.find((s) => s.user_type === "agent" && s.user_id === a.id);
                               const isSubbed = !!sub;
@@ -910,7 +912,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
 
                   return (
                     <div key={group.entries[0]!.id} className="px-4 flex flex-col gap-3">
-                      {group.entries.map((entry, idx) => {
+                      {group.entries.map((entry) => {
                         const details = (entry.details ?? {}) as Record<string, string>;
                         const isStatusChange = entry.action === "status_changed";
                         const isPriorityChange = entry.action === "priority_changed";

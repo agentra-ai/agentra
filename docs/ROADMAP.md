@@ -2,9 +2,12 @@
 
 **The platform where AI agents work alongside humans as true teammates — not just tools.**
 
-- Version: v0.4.4 (working)
-- Last Updated: Jul 2026 (post-Council Route B verdict)
+- Version: derived from Git release tags at build time
+- Last Updated: 31 Jul 2026
 - License: Apache 2.0 Open Source
+
+> [!IMPORTANT]
+> The machine-checked [capability manifest](capabilities.json) is the source of truth for shipped support levels. Historical `Done` labels below mean an implementation milestone landed; they do not automatically mean the feature is a stable, end-to-end product contract. New capability claims must use `stable`, `beta`, `experimental`, or `planned` and include evidence in the manifest.
 
 ## Council Verdict (Jul 2026): Phase 3 Begins
 
@@ -19,10 +22,10 @@ Per council-of-high-intelligence deliberation (Karpathy 1.5× + Machiavelli + Wa
 
 | Metric | Value |
 |--------|-------|
-| Current Version | v0.2 |
+| Current Version | See the latest Git tag/release |
 | Agent Integrations | Claude, Codex, OpenCode |
 | LLM Providers | 23+ |
-| MCP Server | ✅ Done |
+| MCP Server | Beta |
 | Target Team Size | 2–10 |
 | Roadmap Horizon | 18 months (Q2 2025 → Q3 2026) |
 
@@ -51,7 +54,7 @@ Per council-of-high-intelligence deliberation (Karpathy 1.5× + Machiavelli + Wa
 | Gap | Competitor | Priority | Timeframe |
 |-----|------------|----------|-----------|
 | Goal → DAG Auto-Decomposition | open-multi-agent | 🔴 P0 | 30 days |
-| One-Command Install (`npx create-agentra`) | agent-tasks, open-multi-agent | 🔴 P0 | 30 days |
+| Verifiable cross-platform install (`install.sh`, PowerShell, Homebrew, `agentra setup`) | agent-tasks, open-multi-agent | 🟡 P0 | Beta; public assets on next tag |
 | Git-Native Hooks | agent-tasks | 🟡 P1 | 30-60 days |
 | Provider Breadth (7→15+) | swarmclaw | 🟡 P1 | 30-60 days |
 | Plugin/Skill Ecosystem Scale | wshobson/agents | 🟢 P2 | Phase 4 |
@@ -113,7 +116,7 @@ Today, Agentra v0.2 ships a working end-to-end loop: create an issue, assign it 
 | Multi-Provider Support | 7 providers (3 CLI + 4 API) via Backend Facade | P0 | ✅ Done |
 | Execution Traces | execution_traces table + TaskService integration | P1 | ✅ Done |
 | Goal → DAG Auto-decomposition | LLM auto-decompose issue into task graph (open-multi-agent has this) | P0 | ✅ Done ([spec](archive/specs/2026-05-10-goal-to-dag-auto-decomposition-design.md)) |
-| One-Command Install | `npx create-agentra` / `brew install agentra` / embedded SQLite mode | P0 | 📐 Designed ([spec](archive/specs/2026-05-10-one-command-install-design.md)) |
+| One-Command Install | Homebrew Cask, checksum-verifying shell/PowerShell installers, and idempotent `agentra setup` | P0 | 🧪 Beta; signed assets on next tag |
 | GitHub Integration | GitHub OAuth App + webhooks + PR/commit linking | P1 | 🚧 In Progress |
 | Git-Native Hooks | Auto-link commits via prepare-commit-msg + post-merge hooks (agent-tasks has this) | P1 | ✅ Done ([spec](archive/specs/2026-05-10-git-native-hooks-design.md)) |
 | Provider Breadth (7→15) | Add DeepSeek, Groq, Together, Mistral, xAI, Gemini API, more | P1 | ✅ Done |
@@ -160,7 +163,7 @@ Ship Agentra Cloud Runtime — a managed environment where agents run without re
 
 Reduce time-to-first-agent-task from hours to minutes.
 
-- `npx create-agentra` or `brew install agentra` one-liner setup
+- Homebrew Cask or shell/PowerShell install followed by `agentra setup`
 - Guided in-app onboarding: create workspace → invite agent → run first task
 - Sample Skills library: pre-built tasks (write tests, review PR, generate docs)
 - Improved CLAUDE.md / AGENTS.md — context injection into every agent task
@@ -269,7 +272,7 @@ Expand beyond Claude/Codex/OpenCode to match swarmclaw's 23+ providers.
 | Multi-Provider Support | 7 providers (3 CLI + 4 API) via Backend Facade. | P0 | Platform | ✅ Done (Phase 2.5) |
 | Analytics Dashboard | Agent perf, cycle time, cost, velocity charts. | P1 | Product | Pending |
 | Goal → DAG Auto-Decomposition | LLM auto-decomposes issue into task graph (learn from open-multi-agent). | P0 | Platform | ✅ Done ([spec](archive/specs/2026-05-10-goal-to-dag-auto-decomposition-design.md)) |
-| One-Command Install | `npx create-agentra` / `brew install agentra` zero-config setup. | P0 | DX | 📐 Designed ([spec](archive/specs/2026-05-10-one-command-install-design.md)) |
+| One-Command Install | Homebrew/shell/PowerShell install plus `agentra setup`; signed SBOM/provenance release contract. | P0 | DX | 🧪 Beta; public assets on next tag |
 | Git-Native Hooks | Auto-link commits to tasks; `post-merge` auto-completes tasks. | P1 | Platform | ✅ Done ([spec](archive/specs/2026-05-10-git-native-hooks-design.md)) |
 
 ---
@@ -524,7 +527,7 @@ See [competitive-analysis-v2.md](archive/specs/2026-05-10-competitive-analysis-v
 | Threat | Competitor | Stars | Mitigation |
 |--------|-----------|-------|------------|
 | Goal → DAG auto-decomposition | open-multi-agent | 6k | Phase 2: Auto-decompose API (P0, 30 days) |
-| One-command install UX | agent-tasks, open-multi-agent | - | Phase 1: `npx create-agentra` (P0, 30 days) |
+| One-command install UX | agent-tasks, open-multi-agent | - | Phase 1: cross-platform installers + `agentra setup` (beta) |
 | Claude Code ecosystem gravity | wshobson/agents, oh-my-claudecode | 33k–35k | Embrace MCP interop; don't compete on plugins |
 | Python framework dominance | CrewAI, AutoGen, MetaGPT | 51k–67k | Position as platform, not framework; target Go+TS shops |
 | OpenAI endorsement | openai/swarm | 21k | Monitor; this is research, not product |

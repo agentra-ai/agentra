@@ -188,6 +188,100 @@ func TestIntegration_RestoreOnStartup_LeavesPausedLoopAlone(t *testing.T) {
 	}
 }
 
+func TestIntegration_RestoreOnStartup_FailsRunningLoopWithoutStage(t *testing.T) {
+	pool := testPool(t)
+	q := dbpkg.New(pool)
+	coord := looppkg.NewCoordinator(q, events.New())
+	store := looppkg.NewStore(q)
+
+	wsID := uuid.NewString()
+	issueID := uuid.NewString()
+	agentID := uuid.NewString()
+	seedWorkspaceAndIssue(t, pool, wsID, issueID)
+	seedAgent(t, pool, wsID, agentID)
+	t.Cleanup(func() {
+		cleanupLoopData(t, pool, wsID, issueID, agentID)
+	})
+
+	loopRow, err := store.CreateLoop(context.Background(), looppkg.CreateLoopInput{
+		IssueID: issueID, WorkspaceID: wsID, AgentID: &agentID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	running := looppkg.StatusRunning
+	now := time.Now().UTC()
+	if _, err := store.UpdateStatus(context.Background(), loopRow.ID, looppkg.UpdateStatusInput{
+		Status:    &running,
+		StartedAt: &now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	coord.RestoreOnStartup(context.Background())
+
+	assertInvalidConfigurationFailure(t, store, loopRow.ID)
+}
+
+func TestIntegration_RestoreOnStartup_FailsRunningLoopWithoutAgent(t *testing.T) {
+	pool := testPool(t)
+	q := dbpkg.New(pool)
+	coord := looppkg.NewCoordinator(q, events.New())
+	store := looppkg.NewStore(q)
+
+	wsID := uuid.NewString()
+	issueID := uuid.NewString()
+	seedWorkspaceAndIssue(t, pool, wsID, issueID)
+	t.Cleanup(func() {
+		cleanupLoopData(t, pool, wsID, issueID, uuid.Nil.String())
+	})
+
+	loopRow, err := store.CreateLoop(context.Background(), looppkg.CreateLoopInput{
+		IssueID: issueID, WorkspaceID: wsID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	running := looppkg.StatusRunning
+	plan := looppkg.StagePlan
+	now := time.Now().UTC()
+	if _, err := store.UpdateStatus(context.Background(), loopRow.ID, looppkg.UpdateStatusInput{
+		Status:       &running,
+		CurrentStage: &plan,
+		StartedAt:    &now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	coord.RestoreOnStartup(context.Background())
+
+	assertInvalidConfigurationFailure(t, store, loopRow.ID)
+	if hasInFlightTask(t, pool, loopRow.ID, "loop_plan") {
+		t.Error("invalid loop configuration must not enqueue a task")
+	}
+}
+
+func assertInvalidConfigurationFailure(t *testing.T, store *looppkg.Store, loopID string) {
+	t.Helper()
+	got, err := store.GetLoop(context.Background(), loopID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != looppkg.StatusFailed {
+		t.Errorf("expected status=failed, got %q", got.Status)
+	}
+	if got.FailureReason == nil || *got.FailureReason != string(looppkg.FailureInvalidConfig) {
+		var actual string
+		if got.FailureReason != nil {
+			actual = *got.FailureReason
+		}
+		t.Errorf("expected failure_reason=%q, got %q", looppkg.FailureInvalidConfig, actual)
+	}
+	if got.CompletedAt == nil {
+		t.Error("expected completed_at set on invalid configuration failure")
+	}
+}
+
 // hasInFlightTask returns true if there is a queued, dispatched, or running
 // task of the given type for the given loop. Used by restore tests to assert
 // the precondition that no work is in flight before invoking RestoreOnStartup.

@@ -7,13 +7,13 @@
 import pg from "pg";
 
 const API_BASE =
-  process.env.E2E_API_BASE ??
-  process.env.NEXT_PUBLIC_API_URL ??
-  process.env.API_BASE_URL ??
+  process.env.E2E_API_BASE ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.API_BASE_URL ||
   `http://localhost:${process.env.PORT ?? "8080"}`;
 const DATABASE_URL =
-  process.env.E2E_DATABASE_URL ??
-  process.env.DATABASE_URL ??
+  process.env.E2E_DATABASE_URL ||
+  process.env.DATABASE_URL ||
   "postgres://agentra:agentra@localhost:5432/agentra?sslmode=disable";
 
 interface TestWorkspace {
@@ -22,46 +22,80 @@ interface TestWorkspace {
   slug: string;
 }
 
+interface TestLoginResponse {
+  token: string;
+  user?: { name?: string };
+}
+
+interface TestProject {
+  id: string;
+  title: string;
+  slug: string;
+}
+
+const tokenCache = new Map<string, string>();
+
 export class TestApiClient {
   private token: string | null = null;
   private workspaceId: string | null = null;
   private createdIssueIds: string[] = [];
+  private createdProjectIds: string[] = [];
 
   async login(email: string, name: string) {
-    // Step 1: Send verification code
-    const sendRes = await fetch(`${API_BASE}/auth/send-code`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
-    if (!sendRes.ok) {
-      // Rate limited — code already sent recently, read it from DB
-      if (sendRes.status !== 429) {
-        throw new Error(`send-code failed: ${sendRes.status}`);
-      }
+    const normalizedEmail = email.trim().toLowerCase();
+    const cachedToken = tokenCache.get(normalizedEmail);
+    if (cachedToken) {
+      this.token = cachedToken;
+      return { token: cachedToken };
     }
 
-    // Step 2: Read code from database
     const client = new pg.Client(DATABASE_URL);
     await client.connect();
     try {
-      const result = await client.query(
-        "SELECT code FROM verification_code WHERE email = $1 AND used = FALSE AND expires_at > now() ORDER BY created_at DESC LIMIT 1",
-        [email]
-      );
-      if (result.rows.length === 0) {
-        throw new Error(`No verification code found for ${email}`);
-      }
-      const code = result.rows[0].code;
+      // Each Playwright worker has its own identity. Clearing only that
+      // worker's stale test codes keeps rapid local reruns below the product's
+      // per-email rate limit without weakening production behavior.
+      await client.query("DELETE FROM verification_code WHERE email = $1", [
+        normalizedEmail,
+      ]);
 
-      // Step 3: Verify code to get JWT
+      const sendRes = await fetch(`${API_BASE}/auth/send-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail }),
+      });
+      if (!sendRes.ok) {
+        throw new Error(`send-code failed: ${sendRes.status}`);
+      }
+
+      const sendData = (await sendRes.json()) as { dev_code?: string };
+      let code = sendData.dev_code;
+      if (!code) {
+        const result = await client.query(
+          "SELECT code FROM verification_code WHERE email = $1 AND used = FALSE AND expires_at > now() ORDER BY created_at DESC LIMIT 1",
+          [normalizedEmail],
+        );
+        if (result.rows.length === 0) {
+          throw new Error(`No verification code found for ${normalizedEmail}`);
+        }
+        code = result.rows[0].code as string;
+      }
+
       const verifyRes = await fetch(`${API_BASE}/auth/verify-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code }),
+        body: JSON.stringify({ email: normalizedEmail, code }),
       });
-      const data = await verifyRes.json();
+      if (!verifyRes.ok) {
+        throw new Error(`verify-code failed: ${verifyRes.status}`);
+      }
+
+      const data = (await verifyRes.json()) as TestLoginResponse;
+      if (!data.token) {
+        throw new Error("verify-code response did not include a token");
+      }
       this.token = data.token;
+      tokenCache.set(normalizedEmail, data.token);
 
       // Update user name if needed
       if (name && data.user?.name !== name) {
@@ -128,6 +162,29 @@ export class TestApiClient {
     await this.authedFetch(`/api/issues/${id}`, { method: "DELETE" });
   }
 
+  async listProjects(): Promise<TestProject[]> {
+    if (!this.workspaceId) throw new Error("Workspace is not selected");
+    const res = await this.authedFetch(
+      `/api/workspaces/${this.workspaceId}/projects`,
+    );
+    if (!res.ok) throw new Error(`list projects failed: ${res.status}`);
+    return res.json();
+  }
+
+  trackProject(id: string) {
+    if (!this.createdProjectIds.includes(id)) {
+      this.createdProjectIds.push(id);
+    }
+  }
+
+  async deleteProject(id: string) {
+    if (!this.workspaceId) throw new Error("Workspace is not selected");
+    await this.authedFetch(
+      `/api/workspaces/${this.workspaceId}/projects/${id}`,
+      { method: "DELETE" },
+    );
+  }
+
   /** Clean up all issues created during this test. */
   async cleanup() {
     for (const id of this.createdIssueIds) {
@@ -138,6 +195,14 @@ export class TestApiClient {
       }
     }
     this.createdIssueIds = [];
+    for (const id of this.createdProjectIds) {
+      try {
+        await this.deleteProject(id);
+      } catch {
+        /* ignore — may already be deleted */
+      }
+    }
+    this.createdProjectIds = [];
   }
 
   getToken() {

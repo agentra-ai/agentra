@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -22,8 +24,9 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/realtime"
 	"github.com/agentra-ai/agentra/server/internal/service"
 	"github.com/agentra-ai/agentra/server/internal/storage"
-	"github.com/agentra-ai/agentra/server/internal/util"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
+	"github.com/agentra-ai/agentra/server/pkg/protocol"
+	"github.com/agentra-ai/agentra/server/pkg/redact"
 	stripelib "github.com/agentra-ai/agentra/server/pkg/stripe"
 )
 
@@ -90,6 +93,7 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 	projectsHandler := handler.NewProjectHandler(queries)
 	billingHandler := handler.NewBillingHandler(queries, stripeClient)
 	memoryHandler := handler.NewMemoryHandler(queries)
+	metricsHandler := handler.NewMetricsHandler(queries)
 	if loopCoord != nil {
 		h.SetLoopCoordinator(loopCoord)
 	}
@@ -115,21 +119,26 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 		slog.Warn("CORS not configured: set CORS_ALLOWED_ORIGINS or FRONTEND_ORIGIN; cross-origin browser requests will fail")
 	}
 
-	// Health check
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
+	readiness := newReadinessDependencies(pool, fileStorage, loopCoord != nil)
+
+	// /health remains the lightweight endpoint used by the CLI.
+	// Deployments should use /livez for liveness and /readyz for traffic gates.
+	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
+		writeHealthJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+	r.Get("/livez", livenessHandler)
+	r.Get("/readyz", readinessHandler(readiness))
 
 	// WebSocket
 	mc := &membershipChecker{queries: queries}
+	wa := &websocketAuthenticator{queries: queries}
 	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
-		realtime.HandleWebSocket(hub, mc, w, r)
+		realtime.HandleWebSocket(hub, wa, mc, w, r)
 	})
 
 	// Cloud Runtime Gateway WebSocket
 	r.Get("/api/gateway/connect", func(w http.ResponseWriter, r *http.Request) {
-		realtime.HandleGatewayWebSocket(hub, w, r)
+		realtime.HandleGatewayWebSocket(hub, wa, mc, w, r)
 	})
 
 	// Auth (public)
@@ -249,50 +258,23 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 				r.Route("/memories", func(r chi.Router) {
 					r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
 					r.Get("/", memoryHandler.ListTeamMemories)
+					r.Get("/search", memoryHandler.SearchMemories)
 					r.Post("/", memoryHandler.CreateTeamMemory)
 					r.Delete("/{memoryId}", memoryHandler.DeleteTeamMemory)
 				})
 			})
 
-			// Agent memories — workspace membership is resolved inside the
-			// handler via the agent id URL param. Registered at the
-			// /api/workspaces level (outside the {id} group) since these
-			// target agents, not workspaces.
-			memoryHandler.RegisterAgentRoutes(r)
-
-			// Projects (workspace-scoped)
-			r.Route("/api/workspaces/{id}/projects", func(r chi.Router) {
-				// Reads require workspace membership
-				r.Group(func(r chi.Router) {
-					r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
-					r.Get("/", projectsHandler.ListProjects)
-					r.Get("/unassigned", projectsHandler.ListUnassignedIssues)
-					r.Get("/{projectId}", projectsHandler.GetProject)
-					r.Get("/{projectId}/issues", projectsHandler.ListProjectIssues)
-					r.Get("/{projectId}/milestones", projectsHandler.ListMilestones)
-				})
-				// Writes require owner or admin role
-				r.Group(func(r chi.Router) {
-					r.Use(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner", "admin"))
-					r.Post("/", projectsHandler.CreateProject)
-					r.Put("/{projectId}", projectsHandler.UpdateProject)
-					r.Delete("/{projectId}", projectsHandler.DeleteProject)
-					r.Post("/{projectId}/issues/{issueId}", projectsHandler.AssignOrRemoveIssue)
-					r.Post("/{projectId}/milestones", projectsHandler.CreateMilestone)
-					r.Patch("/{projectId}/milestones/{milestoneId}", projectsHandler.UpdateMilestone)
-				})
-			})
 		})
+
+		// Agent memories resolve their workspace from the agent URL parameter.
+		// Register from the protected API root so the handler paths are not
+		// accidentally prefixed with /api/workspaces.
+		memoryHandler.RegisterAgentRoutes(r)
 
 		r.Route("/api/tokens", func(r chi.Router) {
 			r.Get("/", h.ListPersonalAccessTokens)
 			r.Post("/", h.CreatePersonalAccessToken)
 			r.Delete("/{id}", h.RevokePersonalAccessToken)
-		})
-
-		// --- Workspace-scoped routes (all require workspace membership) ---
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireWorkspaceMember(queries))
 		})
 
 		// Issues (workspace-scoped; workspace_id comes from X-Workspace-ID header or query param)
@@ -320,6 +302,24 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 				r.Get("/attachments", h.ListAttachments)
 				r.Post("/auto-decompose", h.AutoDecomposeIssue)
 			})
+		})
+
+		// Task graph reads and node mutations are workspace-scoped. The
+		// handlers additionally verify that the issue or node belongs to the
+		// authorized workspace.
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireWorkspaceMember(queries))
+			r.Get("/api/issues/{id}/graph", h.GetTaskGraph)
+			r.Patch("/api/graph/nodes/{id}", h.UpdateTaskGraphNode)
+			r.Delete("/api/graph/nodes/{id}", h.DeleteTaskGraphNode)
+		})
+
+		// Metrics are restricted to workspace owners and admins. The
+		// handler only accepts the workspace authorized and injected by the
+		// middleware instead of independently trusting a query parameter.
+		r.Route("/api/admin/metrics", func(r chi.Router) {
+			r.Use(middleware.RequireWorkspaceRole(queries, "owner", "admin"))
+			metricsHandler.RegisterRoutes(r)
 		})
 
 		// Attachments
@@ -357,7 +357,6 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 				r.Put("/skills", h.SetAgentSkills)
 			})
 		})
-
 
 		// Projects (workspace-scoped, member-level reads / owner-admin writes)
 		r.Route("/api/workspaces/{id}/projects", func(r chi.Router) {
@@ -450,6 +449,18 @@ type membershipChecker struct {
 	queries *db.Queries
 }
 
+type websocketAuthenticator struct {
+	queries *db.Queries
+}
+
+func (wa *websocketAuthenticator) Authenticate(ctx context.Context, token string) (string, error) {
+	identity, err := middleware.AuthenticateUserToken(ctx, wa.queries, token)
+	if err != nil {
+		return "", err
+	}
+	return identity.UserID, nil
+}
+
 func (mc *membershipChecker) IsMember(ctx context.Context, userID, workspaceID string) bool {
 	_, err := mc.queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
 		UserID:      parseUUID(userID),
@@ -468,16 +479,41 @@ func parseUUID(s string) pgtype.UUID {
 
 // setGatewayCallbacks wires up the GatewayHub callbacks to TaskService methods.
 func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
-	hub.GatewayHub.OnTaskComplete = func(gatewayID, taskID string, exitCode int, output string) {
+	authorize := func(ctx context.Context, gatewayID, workspaceID, taskID, event string) (pgtype.UUID, bool) {
+		task, err := h.TaskService.ValidateCloudGatewayTask(ctx, workspaceID, taskID)
+		if err != nil {
+			slog.Warn("gateway event rejected", "gateway_id", gatewayID, "workspace_id", workspaceID, "task_id", taskID, "event", event)
+			return pgtype.UUID{}, false
+		}
+		return task.ID, true
+	}
+
+	hub.GatewayHub.OnTaskDispatched = func(gatewayID, workspaceID, taskID, containerID string) {
 		ctx := context.Background()
-		taskUUID := util.ParseUUID(taskID)
-		if !taskUUID.Valid {
-			slog.Error("gateway complete: invalid task ID", "task_id", taskID)
+		taskUUID, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskDispatched)
+		if !ok {
 			return
 		}
+		if _, err := h.TaskService.StartTask(ctx, taskUUID); err != nil {
+			slog.Error("gateway dispatched: failed to start task", "gateway_id", gatewayID, "task_id", taskID, "container_id", containerID, "error", err)
+		}
+	}
+
+	hub.GatewayHub.OnTaskComplete = func(gatewayID, workspaceID, taskID string, exitCode int, output string) {
+		ctx := context.Background()
+		taskUUID, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskCompleted)
+		if !ok {
+			return
+		}
+		output = boundedGatewayText(output)
 		// Exit code 0 = success, non-zero = failure
 		if exitCode == 0 {
-			_, err := h.TaskService.CompleteTask(ctx, taskUUID, []byte(output), "", "")
+			result, err := json.Marshal(protocol.TaskCompletedPayload{TaskID: taskID, Output: output})
+			if err != nil {
+				slog.Error("gateway complete: marshal result failed", "task_id", taskID, "error", err)
+				return
+			}
+			_, err = h.TaskService.CompleteTask(ctx, taskUUID, result, "", "")
 			if err != nil {
 				slog.Error("gateway complete: failed", "task_id", taskID, "error", err)
 			}
@@ -489,13 +525,13 @@ func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
 		}
 	}
 
-	hub.GatewayHub.OnTaskFail = func(gatewayID, taskID string, errorMsg string, retryable bool) {
+	hub.GatewayHub.OnTaskFail = func(gatewayID, workspaceID, taskID string, errorMsg string, retryable bool) {
 		ctx := context.Background()
-		taskUUID := util.ParseUUID(taskID)
-		if !taskUUID.Valid {
-			slog.Error("gateway fail: invalid task ID", "task_id", taskID)
+		taskUUID, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskFailed)
+		if !ok {
 			return
 		}
+		errorMsg = boundedGatewayText(errorMsg)
 
 		// If the failure is retryable, attempt to retry the task
 		if retryable {
@@ -518,9 +554,17 @@ func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
 		}
 	}
 
-	hub.GatewayHub.OnTaskLogs = func(gatewayID, taskID string, logs string) {
-		// Broadcast logs to workspace via realtime
-		// TODO: Implement log streaming to web clients
-		slog.Debug("gateway logs", "gateway_id", gatewayID, "task_id", taskID, "logs_len", len(logs))
+	hub.GatewayHub.OnTaskLogs = func(gatewayID, workspaceID, taskID string, seq int, stream, content string) {
+		if err := h.RecordGatewayTaskLog(context.Background(), workspaceID, taskID, seq, stream, content); err != nil {
+			slog.Warn("gateway logs rejected", "gateway_id", gatewayID, "workspace_id", workspaceID, "task_id", taskID, "seq", seq, "error", err)
+		}
 	}
+}
+
+func boundedGatewayText(value string) string {
+	value = redact.Text(strings.ToValidUTF8(value, "\uFFFD"))
+	if len(value) <= protocol.GatewayTaskResultBytes {
+		return value
+	}
+	return strings.ToValidUTF8(value[len(value)-protocol.GatewayTaskResultBytes:], "")
 }

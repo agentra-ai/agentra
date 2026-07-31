@@ -4,26 +4,20 @@ import { useEffect, useState } from "react";
 import { api } from "@/shared/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-type MetricRow = {
-  provider: string;
-  total: number;
-  successes: number;
-  success_rate_pct: string;
-  median_duration_ms: number;
-  total_cost_usd: number;
-};
+import type { AgentMetricSummary } from "@/shared/types";
 
 export default function AdminMetricsPage() {
-  const [rows, setRows] = useState<MetricRow[]>([]);
+  const [rows, setRows] = useState<AgentMetricSummary[]>([]);
   const [days, setDays] = useState(30);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     api
       .getMetricSummary(days)
-      .then((res: any) => setRows(res.providers ?? []))
-      .catch((e: any) => setErr(e.message));
+      .then((res) => setRows(res.providers ?? []))
+      .catch((error: unknown) => {
+        setErr(error instanceof Error ? error.message : "Unknown error");
+      });
   }, [days]);
 
   if (err) return <div className="p-6 text-destructive">Failed: {err}</div>;

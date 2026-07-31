@@ -1,13 +1,12 @@
-import { Extension } from "@tiptap/core";
+import { Extension, type Editor } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { UploadResult } from "@/shared/hooks/use-file-upload";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function removeImageBySrc(editor: any, src: string) {
+function removeImageBySrc(editor: Editor, src: string) {
   if (!editor) return;
   const { tr } = editor.state;
   let deleted = false;
-  editor.state.doc.descendants((node: any, pos: number) => {
+  editor.state.doc.descendants((node, pos) => {
     if (deleted) return false;
     if (node.type.name === "image" && node.attrs.src === src) {
       tr.delete(pos, pos + node.nodeSize);
@@ -23,8 +22,7 @@ function removeImageBySrc(editor: any, src: string) {
  * Used by both paste/drop (at cursor) and button upload (at end of doc).
  */
 export async function uploadAndInsertFile(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  editor: any,
+  editor: Editor,
   file: File,
   handler: (file: File) => Promise<UploadResult | null>,
   pos?: number,
@@ -44,8 +42,12 @@ export async function uploadAndInsertFile(
       const result = await handler(file);
       if (result) {
         const { tr } = editor.state;
-        editor.state.doc.descendants((node: { type: { name: string }; attrs: { src: string } }, nodePos: number) => {
-          if (node.type.name === "image" && node.attrs.src === blobUrl) {
+        editor.state.doc.descendants((node, nodePos) => {
+          if (
+            node.type.name === "image" &&
+            typeof node.attrs.src === "string" &&
+            node.attrs.src === blobUrl
+          ) {
             tr.setNodeMarkup(nodePos, undefined, {
               ...node.attrs,
               src: result.link,
