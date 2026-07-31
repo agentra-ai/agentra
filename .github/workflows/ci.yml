@@ -14,6 +14,15 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  workflows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Lint GitHub Actions
+        uses: docker://rhysd/actionlint:1.7.12
+
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -55,11 +64,8 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
-      POSTGRES_HOST: localhost
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: agentra
-      DATABASE_URL: postgres://agentra:agentra@${{ env.POSTGRES_HOST }}:${{ env.POSTGRES_PORT }}/${{ env.POSTGRES_DB }}?sslmode=disable
-      TEST_DATABASE_URL: postgres://agentra:agentra@${{ env.POSTGRES_HOST }}:${{ env.POSTGRES_PORT }}/${{ env.POSTGRES_DB }}?sslmode=disable
+      DATABASE_URL: postgres://agentra:agentra@localhost:5432/agentra?sslmode=disable
+      TEST_DATABASE_URL: postgres://agentra:agentra@localhost:5432/agentra?sslmode=disable
     steps:
       - name: Checkout
         uses: actions/checkout@v6

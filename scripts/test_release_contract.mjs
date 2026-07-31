@@ -39,6 +39,7 @@ invariant(goreleaser.includes("./scripts/install.sh") && goreleaser.includes("./
 for (const runner of ["ubuntu-latest", "macos-latest", "windows-latest"]) {
   invariant(ci.includes(runner), `CI installer matrix is missing ${runner}`);
 }
+invariant(ci.includes("docker://rhysd/actionlint:1.7.12"), "CI must lint workflow semantics with pinned actionlint");
 invariant(ci.includes("test-installers.ps1"), "CI must execute the Windows installer fixture");
 invariant(release.includes("goreleaser-action@v7") && release.includes("args: check"), "Release must validate GoReleaser configuration before publishing");
 for (const permission of ["id-token: write", "attestations: write"]) {
