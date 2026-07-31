@@ -144,11 +144,20 @@ Windows users run `scripts/install.ps1`; Homebrew users run `brew install --cask
 | `JWT_SECRET` | API authentication | `scripts/bootstrap-env.sh` |
 | `POSTGRES_PASSWORD` | PostgreSQL | `scripts/bootstrap-env.sh` |
 | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | object storage | `scripts/bootstrap-env.sh` |
-| `RESEND_API_KEY` | optional email OTP | Resend account |
+| `RESEND_API_KEY` | email OTP when `EMAIL_PROVIDER=resend` | Resend account |
+| `SMTP_PASSWORD` | email OTP when `EMAIL_PROVIDER=smtp` and authentication is enabled | SMTP provider |
 | `GOOGLE_CLIENT_*` | optional OAuth | Google Cloud console |
 | `HOMEBREW_TAP_GITHUB_TOKEN` | release workflow only | fine-grained token scoped to the tap repository |
 
 GHCR publishing, Cosign keyless signing, and GitHub attestations use short-lived workflow OIDC plus `GITHUB_TOKEN`; they do not require stored signing keys.
+
+For a public deployment, set `APP_ENV=production`, `EMAIL_PROVIDER` to `resend`
+or `smtp`, and `EMAIL_FROM` to a sender on a verified domain. SMTP supports
+`SMTP_TLS_MODE=starttls` (default), implicit TLS with `tls`, and unauthenticated
+private relays with `none`. Registration can be restricted with
+`AGENTRA_SIGNUP_DISABLED`, `AGENTRA_SIGNUP_ALLOWLIST`, and
+`AGENTRA_WORKSPACE_CREATION_DISABLED`; invitations remain usable when public
+signup is disabled.
 
 ## Current security boundary
 

@@ -77,14 +77,28 @@ All configuration is done via environment variables. Generate `.env` with `./scr
 | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | Local object-storage credentials; generated independently | random values |
 | `FRONTEND_ORIGIN` | URL where the frontend is served (used for CORS) | `https://app.example.com` |
 
-### Email (Required for Authentication)
+### Email OTP delivery and access policy
 
-Agentra uses email-based magic link authentication via [Resend](https://resend.com).
+Agentra supports the Resend API and standard SMTP. `EMAIL_PROVIDER=console` is
+for local development only: it returns the OTP in the API response. The server
+rejects that mode when `APP_ENV=production` so a public deployment cannot leak
+login codes through the browser.
 
 | Variable | Description |
 |----------|-------------|
-| `RESEND_API_KEY` | Your Resend API key |
-| `RESEND_FROM_EMAIL` | Sender email address (default: `noreply@agentra.ai`) |
+| `EMAIL_PROVIDER` | `resend`, `smtp`, or local-only `console` |
+| `EMAIL_FROM` | RFC 5322 sender, for example `Agentra <login@example.com>` |
+| `RESEND_API_KEY` | Required for the `resend` provider |
+| `SMTP_HOST` / `SMTP_PORT` | SMTP endpoint; port defaults to `587` |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | Optional SMTP credentials; both are required when either is set |
+| `SMTP_TLS_MODE` | `starttls` (default), `tls` for implicit TLS, or `none` for an unauthenticated private relay |
+| `SMTP_TIMEOUT` | Connection and operation deadline (default: `10s`) |
+| `AGENTRA_SIGNUP_DISABLED` | Deny new, unprovisioned users; invited users may still sign in |
+| `AGENTRA_SIGNUP_ALLOWLIST` | Comma-separated exact emails and `@domain` entries for new signups |
+| `AGENTRA_WORKSPACE_CREATION_DISABLED` | Block workspace creation; new users must be invited or match a claimed SSO domain |
+
+In production, verify the sender domain and set `APP_ENV=production`. For SMTP,
+use `starttls` on ports such as 587 or `tls` on an implicit-TLS port such as 465.
 
 ### Google OAuth (Optional)
 

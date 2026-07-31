@@ -17,7 +17,6 @@ require (
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/lmittmann/tint v1.1.3
 	github.com/minio/minio-go/v7 v7.0.100
-	github.com/resend/resend-go/v2 v2.28.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.49.0
 )
@@ -26,6 +25,7 @@ require (
 	github.com/go-chi/chi v1.5.5
 	github.com/google/uuid v1.6.0
 	github.com/pgvector/pgvector-go v0.3.0
+	github.com/resend/resend-go/v3 v3.12.0
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/stretchr/testify v1.11.1
 	github.com/stripe/stripe-go/v76 v76.25.0

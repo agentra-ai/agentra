@@ -144,11 +144,19 @@ Windows 用户运行 `scripts/install.ps1`；Homebrew 用户运行 `brew install
 | `JWT_SECRET` | API 认证 | `scripts/bootstrap-env.sh` |
 | `POSTGRES_PASSWORD` | PostgreSQL | `scripts/bootstrap-env.sh` |
 | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | 对象存储 | `scripts/bootstrap-env.sh` |
-| `RESEND_API_KEY` | 可选邮件 OTP | Resend 账户 |
+| `RESEND_API_KEY` | `EMAIL_PROVIDER=resend` 时的邮件 OTP | Resend 账户 |
+| `SMTP_PASSWORD` | `EMAIL_PROVIDER=smtp` 且开启认证时的邮件 OTP | SMTP 服务商 |
 | `GOOGLE_CLIENT_*` | 可选 OAuth | Google Cloud Console |
 | `HOMEBREW_TAP_GITHUB_TOKEN` | 仅 release workflow | 只授权 tap 仓库的 fine-grained token |
 
 GHCR 发布、Cosign keyless 签名与 GitHub attestation 使用短期 workflow OIDC 和 `GITHUB_TOKEN`，不需要保存长期签名私钥。
+
+公网部署应设置 `APP_ENV=production`，将 `EMAIL_PROVIDER` 配为 `resend` 或
+`smtp`，并把 `EMAIL_FROM` 设为已验证域名下的发件人。SMTP 支持默认的
+`SMTP_TLS_MODE=starttls`、隐式 TLS 的 `tls`，以及仅用于无认证内网 relay
+的 `none`。可通过 `AGENTRA_SIGNUP_DISABLED`、`AGENTRA_SIGNUP_ALLOWLIST`
+和 `AGENTRA_WORKSPACE_CREATION_DISABLED` 限制注册与 workspace 创建；关闭
+公开注册后，预先邀请的用户仍可登录。
 
 ## 当前安全边界
 

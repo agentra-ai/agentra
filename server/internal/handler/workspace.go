@@ -7,12 +7,12 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/agentra-ai/agentra/server/internal/logger"
 	"github.com/agentra-ai/agentra/server/internal/util"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/agentra-ai/agentra/server/pkg/protocol"
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var nonAlpha = regexp.MustCompile(`[^a-zA-Z]`)
@@ -133,6 +133,10 @@ type CreateWorkspaceRequest struct {
 func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	userID, ok := requireUserID(w, r)
 	if !ok {
+		return
+	}
+	if h.AccessPolicy.WorkspaceCreationDisabled {
+		writeError(w, http.StatusForbidden, errWorkspaceCreationDisabled.Error())
 		return
 	}
 
@@ -283,8 +287,8 @@ func (h *Handler) ListMembers(w http.ResponseWriter, r *http.Request) {
 
 // SSOConfig defines the workspace-level SSO policy.
 type SSOConfig struct {
-	SSOPolicy     string `json:"sso_policy"`      // "open" (default), "domain_claim"
-	ClaimedDomain string `json:"claimed_domain"`   // e.g. "acme.com"
+	SSOPolicy     string `json:"sso_policy"`     // "open" (default), "domain_claim"
+	ClaimedDomain string `json:"claimed_domain"` // e.g. "acme.com"
 }
 
 // SetSSOConfig lets workspace owner claim an email domain for JIT provisioning.

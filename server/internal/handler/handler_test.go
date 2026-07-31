@@ -11,13 +11,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/agentra-ai/agentra/pkg/taskgraph"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/realtime"
 	"github.com/agentra-ai/agentra/server/internal/service"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
-	"github.com/agentra-ai/agentra/pkg/taskgraph"
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var testHandler *Handler
@@ -157,6 +157,15 @@ func withURLParam(req *http.Request, key, value string) *http.Request {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add(key, value)
 	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+}
+
+func withAccessPolicy(t *testing.T, policy service.AccessPolicy) {
+	t.Helper()
+	previous := testHandler.AccessPolicy
+	testHandler.AccessPolicy = policy
+	t.Cleanup(func() {
+		testHandler.AccessPolicy = previous
+	})
 }
 
 func TestIssueCRUD(t *testing.T) {
@@ -424,6 +433,86 @@ func TestSendCodeRateLimit(t *testing.T) {
 	}
 }
 
+func TestSendCodeRejectsNewUserWhenSignupDisabled(t *testing.T) {
+	const email = "disabled-signup-test@agentra.ai"
+	withAccessPolicy(t, service.AccessPolicy{SignupDisabled: true})
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM verification_code WHERE email = $1`, email)
+		testPool.Exec(context.Background(), `DELETE FROM "user" WHERE email = $1`, email)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/auth/send-code", strings.NewReader(`{"email":"`+email+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	testHandler.SendCode(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("SendCode: expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var count int
+	if err := testPool.QueryRow(context.Background(), `SELECT count(*) FROM verification_code WHERE email = $1`, email).Scan(&count); err != nil {
+		t.Fatalf("count verification codes: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected no verification code, got %d", count)
+	}
+}
+
+func TestSendCodeAllowsPreprovisionedUserWhenSignupDisabled(t *testing.T) {
+	const email = "invited-signup-test@agentra.ai"
+	withAccessPolicy(t, service.AccessPolicy{SignupDisabled: true})
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM verification_code WHERE email = $1`, email)
+		testPool.Exec(context.Background(), `DELETE FROM "user" WHERE email = $1`, email)
+	})
+	if _, err := testPool.Exec(context.Background(), `INSERT INTO "user" (name, email) VALUES ('Invited User', $1)`, email); err != nil {
+		t.Fatalf("create preprovisioned user: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/auth/send-code", strings.NewReader(`{"email":"`+email+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	testHandler.SendCode(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("SendCode: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSendCodeRequiresInvitationWhenWorkspaceCreationDisabled(t *testing.T) {
+	const email = "workspace-policy-signup-test@agentra.ai"
+	withAccessPolicy(t, service.AccessPolicy{WorkspaceCreationDisabled: true})
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM verification_code WHERE email = $1`, email)
+		testPool.Exec(context.Background(), `DELETE FROM "user" WHERE email = $1`, email)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/auth/send-code", strings.NewReader(`{"email":"`+email+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	testHandler.SendCode(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("SendCode: expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateWorkspaceRejectsWhenCreationDisabled(t *testing.T) {
+	const slug = "workspace-creation-disabled-test"
+	withAccessPolicy(t, service.AccessPolicy{WorkspaceCreationDisabled: true})
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM workspace WHERE slug = $1`, slug)
+	})
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/workspaces", map[string]string{
+		"name": "Blocked Workspace",
+		"slug": slug,
+	})
+	testHandler.CreateWorkspace(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("CreateWorkspace: expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestVerifyCode(t *testing.T) {
 	const email = "verify-test@agentra.ai"
 	ctx := context.Background()
@@ -477,6 +566,56 @@ func TestVerifyCode(t *testing.T) {
 	}
 	if resp.User.Email != email {
 		t.Fatalf("VerifyCode: expected email '%s', got '%s'", email, resp.User.Email)
+	}
+}
+
+func TestVerifyCodeJoinsClaimedDomainWhenWorkspaceCreationDisabled(t *testing.T) {
+	const (
+		email  = "domain-policy-user@policy.agentra.test"
+		domain = "policy.agentra.test"
+	)
+	ctx := context.Background()
+	withAccessPolicy(t, service.AccessPolicy{WorkspaceCreationDisabled: true})
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM verification_code WHERE email = $1`, email)
+		testPool.Exec(ctx, `DELETE FROM "user" WHERE email = $1`, email)
+		testPool.Exec(ctx, `UPDATE workspace SET claimed_domain = '', sso_policy = 'open' WHERE id = $1`, testWorkspaceID)
+	})
+	if _, err := testPool.Exec(ctx, `UPDATE workspace SET claimed_domain = $1, sso_policy = 'domain_claim' WHERE id = $2`, domain, testWorkspaceID); err != nil {
+		t.Fatalf("claim test domain: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/auth/send-code", strings.NewReader(`{"email":"`+email+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	testHandler.SendCode(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("SendCode: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	dbCode, err := testHandler.Queries.GetLatestVerificationCode(ctx, email)
+	if err != nil {
+		t.Fatalf("GetLatestVerificationCode: %v", err)
+	}
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest("POST", "/auth/verify-code", strings.NewReader(`{"email":"`+email+`","code":"`+dbCode.Code+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	testHandler.VerifyCode(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("VerifyCode: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var workspaceCount int
+	if err := testPool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM member m
+		JOIN "user" u ON u.id = m.user_id
+		WHERE u.email = $1 AND m.workspace_id = $2
+	`, email, testWorkspaceID).Scan(&workspaceCount); err != nil {
+		t.Fatalf("count domain workspace memberships: %v", err)
+	}
+	if workspaceCount != 1 {
+		t.Fatalf("expected exactly one claimed-domain membership, got %d", workspaceCount)
 	}
 }
 
@@ -665,11 +804,11 @@ func TestResolveActor(t *testing.T) {
 	})
 
 	tests := []struct {
-		name            string
-		agentIDHeader   string
-		taskIDHeader    string
-		wantActorType   string
-		wantIsAgent     bool
+		name          string
+		agentIDHeader string
+		taskIDHeader  string
+		wantActorType string
+		wantIsAgent   bool
 	}{
 		{
 			name:          "no headers returns member",

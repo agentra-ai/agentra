@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
+	"net/mail"
 	"os"
 	"strings"
 	"time"
@@ -17,6 +19,12 @@ import (
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+)
+
+var (
+	errSignupDisabled            = errors.New("signup is disabled; ask an administrator for an invitation")
+	errSignupNotAllowed          = errors.New("this email address is not allowed to sign up")
+	errWorkspaceCreationDisabled = errors.New("workspace creation is disabled; ask an administrator for an invitation")
 )
 
 type UserResponse struct {
@@ -121,6 +129,9 @@ func (h *Handler) ensureUserWorkspace(ctx context.Context, user db.User) error {
 	if len(workspaces) > 0 {
 		return nil
 	}
+	if h.AccessPolicy.WorkspaceCreationDisabled {
+		return errWorkspaceCreationDisabled
+	}
 
 	tx, err := h.TxStarter.Begin(ctx)
 	if err != nil {
@@ -135,6 +146,9 @@ func (h *Handler) ensureUserWorkspace(ctx context.Context, user db.User) error {
 	}
 	if len(workspaces) > 0 {
 		return nil
+	}
+	if h.AccessPolicy.WorkspaceCreationDisabled {
+		return errWorkspaceCreationDisabled
 	}
 
 	wsName := defaultWorkspaceName(user)
@@ -172,6 +186,50 @@ func emailDomain(email string) string {
 		return ""
 	}
 	return strings.ToLower(email[idx+1:])
+}
+
+func validLoginEmail(email string) bool {
+	address, err := mail.ParseAddress(email)
+	return err == nil && address.Address == email && emailDomain(email) != ""
+}
+
+func (h *Handler) checkSignupAccess(ctx context.Context, email string) error {
+	_, err := h.Queries.GetUserByEmail(ctx, email)
+	if err == nil {
+		return nil
+	}
+	if !isNotFound(err) {
+		return err
+	}
+
+	if h.AccessPolicy.SignupDisabled {
+		return errSignupDisabled
+	}
+	if !h.AccessPolicy.AllowsNewSignup(email) {
+		return errSignupNotAllowed
+	}
+	if !h.AccessPolicy.WorkspaceCreationDisabled {
+		return nil
+	}
+
+	domain := emailDomain(email)
+	workspace, err := h.Queries.FindWorkspaceByEmailDomain(ctx, domain)
+	if err != nil {
+		if isNotFound(err) {
+			return errWorkspaceCreationDisabled
+		}
+		return err
+	}
+	if !workspace.ID.Valid {
+		return errWorkspaceCreationDisabled
+	}
+	return nil
+}
+
+func isAccessPolicyError(err error) bool {
+	return errors.Is(err, errSignupDisabled) ||
+		errors.Is(err, errSignupNotAllowed) ||
+		errors.Is(err, errWorkspaceCreationDisabled)
 }
 
 func generateCode() (string, error) {
@@ -218,8 +276,17 @@ func (h *Handler) SendCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	email := strings.ToLower(strings.TrimSpace(req.Email))
-	if email == "" {
-		writeError(w, http.StatusBadRequest, "email is required")
+	if !validLoginEmail(email) {
+		writeError(w, http.StatusBadRequest, "a valid email is required")
+		return
+	}
+
+	if err := h.checkSignupAccess(r.Context(), email); err != nil {
+		if isAccessPolicyError(err) {
+			writeError(w, http.StatusForbidden, err.Error())
+		} else {
+			writeError(w, http.StatusInternalServerError, "failed to evaluate signup policy")
+		}
 		return
 	}
 
@@ -236,7 +303,7 @@ func (h *Handler) SendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.Queries.CreateVerificationCode(r.Context(), db.CreateVerificationCodeParams{
+	verification, err := h.Queries.CreateVerificationCode(r.Context(), db.CreateVerificationCodeParams{
 		Email:     email,
 		Code:      code,
 		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(10 * time.Minute), Valid: true},
@@ -246,8 +313,9 @@ func (h *Handler) SendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	devCode, err := h.EmailService.SendVerificationCode(email, code)
+	devCode, err := h.EmailService.SendVerificationCode(r.Context(), email, code)
 	if err != nil {
+		_ = h.Queries.MarkVerificationCodeUsed(r.Context(), verification.ID)
 		writeError(w, http.StatusInternalServerError, "failed to send verification code")
 		return
 	}
@@ -275,6 +343,18 @@ func (h *Handler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "email and code are required")
 		return
 	}
+	if !validLoginEmail(email) {
+		writeError(w, http.StatusBadRequest, "a valid email is required")
+		return
+	}
+	if err := h.checkSignupAccess(r.Context(), email); err != nil {
+		if isAccessPolicyError(err) {
+			writeError(w, http.StatusForbidden, err.Error())
+		} else {
+			writeError(w, http.StatusInternalServerError, "failed to evaluate signup policy")
+		}
+		return
+	}
 
 	dbCode, err := h.Queries.GetLatestVerificationCode(r.Context(), email)
 	if err != nil {
@@ -300,11 +380,6 @@ func (h *Handler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.ensureUserWorkspace(r.Context(), user); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to provision workspace")
-		return
-	}
-
 	// JIT provisioning: if the user's email domain matches a claimed workspace,
 	// auto-add them as a member. Best-effort — never blocks login.
 	ctx := r.Context()
@@ -325,6 +400,15 @@ func (h *Handler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+	}
+
+	if err := h.ensureUserWorkspace(r.Context(), user); err != nil {
+		if errors.Is(err, errWorkspaceCreationDisabled) {
+			writeError(w, http.StatusForbidden, err.Error())
+		} else {
+			writeError(w, http.StatusInternalServerError, "failed to provision workspace")
+		}
+		return
 	}
 
 	tokenString, err := h.issueJWT(user)

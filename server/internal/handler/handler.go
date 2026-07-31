@@ -5,10 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
-	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/agentra-ai/agentra/pkg/taskgraph"
 	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/events"
@@ -17,29 +13,39 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/realtime"
 	"github.com/agentra-ai/agentra/server/internal/service"
 	"github.com/agentra-ai/agentra/server/internal/storage"
+	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Forwarding wrappers to preserve existing call sites in other handler files.
-func writeJSON(w http.ResponseWriter, status int, v any)                        { handlerutil.WriteJSON(w, status, v) }
-func writeError(w http.ResponseWriter, status int, msg string)                  { handlerutil.WriteError(w, status, msg) }
-func parseUUID(s string) pgtype.UUID                                             { return handlerutil.ParseUUID(s) }
-func uuidToString(u pgtype.UUID) string                                         { return handlerutil.UUIDToString(u) }
-func textToPtr(t pgtype.Text) *string                                           { return handlerutil.TextToPtr(t) }
-func ptrToText(s *string) pgtype.Text                                           { return handlerutil.PtrToText(s) }
-func strToText(s string) pgtype.Text                                            { return handlerutil.StrToText(s) }
-func timestampToString(t pgtype.Timestamptz) string                             { return handlerutil.TimestampToString(t) }
-func timestampToPtr(t pgtype.Timestamptz) *string                               { return handlerutil.TimestampToPtr(t) }
-func uuidToPtr(u pgtype.UUID) *string                                           { return handlerutil.UUIDToPtr(u) }
-func isNotFound(err error) bool                                                  { return handlerutil.IsNotFound(err) }
-func isUniqueViolation(err error) bool                                          { return handlerutil.IsUniqueViolation(err) }
-func requestUserID(r *http.Request) string                                      { return handlerutil.RequestUserID(r) }
-func requireUserID(w http.ResponseWriter, r *http.Request) (string, bool)       { return handlerutil.RequireUserID(w, r) }
-func resolveWorkspaceID(r *http.Request) string                                 { return handlerutil.ResolveWorkspaceID(r) }
-func ctxMember(ctx context.Context) (db.Member, bool)                           { return handlerutil.CtxMember(ctx) }
-func ctxWorkspaceID(ctx context.Context) string                                  { return handlerutil.CtxWorkspaceID(ctx) }
-func workspaceIDFromURL(r *http.Request, param string) string                   { return handlerutil.WorkspaceIDFromURL(r, param) }
-func roleAllowed(role string, roles ...string) bool                              { return handlerutil.RoleAllowed(role, roles...) }
-func countOwners(members []db.Member) int                                      { return handlerutil.CountOwners(members) }
+func writeJSON(w http.ResponseWriter, status int, v any) { handlerutil.WriteJSON(w, status, v) }
+func writeError(w http.ResponseWriter, status int, msg string) {
+	handlerutil.WriteError(w, status, msg)
+}
+func parseUUID(s string) pgtype.UUID                { return handlerutil.ParseUUID(s) }
+func uuidToString(u pgtype.UUID) string             { return handlerutil.UUIDToString(u) }
+func textToPtr(t pgtype.Text) *string               { return handlerutil.TextToPtr(t) }
+func ptrToText(s *string) pgtype.Text               { return handlerutil.PtrToText(s) }
+func strToText(s string) pgtype.Text                { return handlerutil.StrToText(s) }
+func timestampToString(t pgtype.Timestamptz) string { return handlerutil.TimestampToString(t) }
+func timestampToPtr(t pgtype.Timestamptz) *string   { return handlerutil.TimestampToPtr(t) }
+func uuidToPtr(u pgtype.UUID) *string               { return handlerutil.UUIDToPtr(u) }
+func isNotFound(err error) bool                     { return handlerutil.IsNotFound(err) }
+func isUniqueViolation(err error) bool              { return handlerutil.IsUniqueViolation(err) }
+func requestUserID(r *http.Request) string          { return handlerutil.RequestUserID(r) }
+func requireUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	return handlerutil.RequireUserID(w, r)
+}
+func resolveWorkspaceID(r *http.Request) string       { return handlerutil.ResolveWorkspaceID(r) }
+func ctxMember(ctx context.Context) (db.Member, bool) { return handlerutil.CtxMember(ctx) }
+func ctxWorkspaceID(ctx context.Context) string       { return handlerutil.CtxWorkspaceID(ctx) }
+func workspaceIDFromURL(r *http.Request, param string) string {
+	return handlerutil.WorkspaceIDFromURL(r, param)
+}
+func roleAllowed(role string, roles ...string) bool { return handlerutil.RoleAllowed(role, roles...) }
+func countOwners(members []db.Member) int           { return handlerutil.CountOwners(members) }
 
 type txStarter interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
@@ -60,6 +66,7 @@ type Handler struct {
 	TaskService     *service.TaskService
 	TraceService    *service.TraceService
 	EmailService    *service.EmailService
+	AccessPolicy    service.AccessPolicy
 	GraphStore      *taskgraph.GraphStore
 	PlannerService  *service.PlannerService
 	PingStore       *PingStore
@@ -78,6 +85,14 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 
 	traceSvc := service.NewTraceServiceFromPool(txStarter)
 	taskSvc := service.NewTaskService(queries, hub, bus, traceSvc)
+	accessPolicy, err := service.NewAccessPolicyFromEnv()
+	if err != nil {
+		slog.Error("invalid access policy configuration; signup and workspace creation disabled", "error", err)
+		accessPolicy = service.AccessPolicy{
+			SignupDisabled:            true,
+			WorkspaceCreationDisabled: true,
+		}
+	}
 
 	return &Handler{
 		Queries:        queries,
@@ -87,9 +102,10 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 		Bus:            bus,
 		TaskService:    taskSvc,
 		TraceService:   traceSvc,
+		EmailService:   emailService,
+		AccessPolicy:   accessPolicy,
 		GraphStore:     graphStore,
 		PlannerService: plannerSvc,
-		EmailService:   emailService,
 		PingStore:      NewPingStore(),
 		UpdateStore:    NewUpdateStore(),
 		LoopStore:      loop.NewStore(queries),

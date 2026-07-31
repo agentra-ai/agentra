@@ -264,6 +264,9 @@ Memory + Eval + Analytics feedback
 - 已将容器发布从个人 Docker Hub 凭据收敛到官方 `ghcr.io/agentra-ai/agentra` package；server、gateway、web 每个 tag 均声明 `linux/amd64` 与 `linux/arm64` manifest，并附带 BuildKit SBOM/max provenance、Cosign keyless digest 签名和 GitHub registry attestation。
 - CLI release 现在为 6 个归档生成 SPDX 2.3 SBOM，`checksums.txt` 同时覆盖归档、SBOM 与两份安装器；checksum 与每份 SBOM 都由 GitHub OIDC 身份生成 Sigstore bundle，所有 checksummed subject 再写入 GitHub provenance attestation。
 - 真实 GoReleaser + Syft snapshot 已证明 6 个归档和 6 个 SBOM 可生成；正式 OIDC 签名、GHCR push 与 attestation 必须等下一次 tag 在 GitHub Actions 中执行，因此供应链能力保持 beta。macOS notarization/code signing 与 Windows Authenticode 仍是后续平台信任工作。
+- 已实现 `M1-06` 的服务端策略闭环：OTP 邮件支持 Resend API 与 SMTP（STARTTLS、隐式 TLS、无认证内网 relay），生产环境没有真实 provider 时失败关闭，不再把开发验证码返回浏览器。
+- 新用户注册可按精确邮箱或 `@domain` allowlist 限制，也可完全关闭；已被邀请/预置的用户仍能登录。关闭 workspace 创建后，新用户必须已被邀请或匹配 workspace 声明域名，显式创建 API 同样返回 403，避免生成无 workspace 的孤儿账号。
+- 邮件与访问策略目前是进程级环境配置，SMTP 尚无 provider-container CI，readiness 也未探测出站邮件，因此保持 beta。
 
 ### M2 — Runtime Conformance：少而精地扩 provider
 

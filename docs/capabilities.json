@@ -320,6 +320,32 @@
       }
     },
     {
+      "id": "policy-controlled-email-auth",
+      "name": "Policy-controlled email authentication",
+      "status": "beta",
+      "surfaces": ["api", "web", "deployment"],
+      "summary": "Email OTP delivery supports Resend and SMTP with enforced TLS modes, while server-side signup allowlists and workspace-creation policy preserve invitation-only deployments.",
+      "limitations": [
+        "Email and access policy configuration is process-wide and requires a server restart to change.",
+        "SMTP protocol behavior is unit-tested but not yet exercised against provider containers in CI.",
+        "Readiness does not yet probe outbound email delivery, and the Web UI does not expose policy administration."
+      ],
+      "evidence": {
+        "files": [
+          "server/internal/service/email.go",
+          "server/internal/service/access_policy.go",
+          "server/internal/handler/auth.go",
+          "server/internal/handler/workspace.go",
+          "SELF_HOSTING.md"
+        ],
+        "tests": [
+          "server/internal/service/email_test.go",
+          "server/internal/service/access_policy_test.go",
+          "server/internal/handler/handler_test.go"
+        ]
+      }
+    },
+    {
       "id": "durable-automations",
       "name": "Durable automations",
       "status": "planned",
