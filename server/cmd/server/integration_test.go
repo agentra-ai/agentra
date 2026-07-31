@@ -227,6 +227,48 @@ func generateTestJWT(userID, email, name string) (string, error) {
 	return token.SignedString(auth.JWTSecret())
 }
 
+func createTaskMessageFixture(t *testing.T, status, runtimeType, cloudRuntimeID string) (issueID, taskID string) {
+	t.Helper()
+	var agentID, runtimeID string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT id, runtime_id FROM agent
+		WHERE workspace_id = $1
+		ORDER BY created_at ASC
+		LIMIT 1
+	`, testWorkspaceID).Scan(&agentID, &runtimeID); err != nil {
+		t.Fatalf("load task fixture agent: %v", err)
+	}
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO issue (workspace_id, title, status, priority, creator_type, creator_id, assignee_type, assignee_id)
+		VALUES ($1, 'Task message fixture', 'in_progress', 'medium', 'member', $2, 'agent', $3)
+		RETURNING id
+	`, testWorkspaceID, testUserID, agentID).Scan(&issueID); err != nil {
+		t.Fatalf("create task fixture issue: %v", err)
+	}
+	t.Cleanup(func() {
+		// Completed tasks create both trace models. Keep this fixture compatible
+		// with databases that have not yet applied lifecycle FK migration 048.
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM execution_traces WHERE task_id = $1`, taskID)
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM task_runs WHERE task_id = $1`, taskID)
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM issue WHERE id = $1`, issueID)
+	})
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO agent_task_queue (
+			agent_id, issue_id, status, runtime_id, runtime_type, cloud_runtime_id,
+			dispatched_at, started_at
+		)
+		VALUES (
+			$1, $2, $3, $4, $5, NULLIF($6, '')::uuid,
+			CASE WHEN $3 IN ('dispatched', 'running') THEN now() ELSE NULL END,
+			CASE WHEN $3 = 'running' THEN now() ELSE NULL END
+		)
+		RETURNING id
+	`, agentID, issueID, status, runtimeID, runtimeType, cloudRuntimeID).Scan(&taskID); err != nil {
+		t.Fatalf("create task fixture: %v", err)
+	}
+	return issueID, taskID
+}
+
 // ---- Health ----
 
 func TestHealth(t *testing.T) {
@@ -969,6 +1011,160 @@ func TestInvalidRequestBodies(t *testing.T) {
 		if resp.StatusCode != 500 {
 			t.Fatalf("expected 400 or 500, got %d", resp.StatusCode)
 		}
+	}
+}
+
+// ---- Durable task message stream ----
+
+func TestTaskMessagesAreRedactedIdempotentAndCursorBounded(t *testing.T) {
+	requireIntegrationDB(t)
+	_, taskID := createTaskMessageFixture(t, "running", "local", "")
+	path := "/api/daemon/tasks/" + taskID + "/messages"
+
+	resp := authRequest(t, http.MethodPost, path, map[string]any{
+		"messages": []map[string]any{
+			{"seq": 1, "type": "text", "content": "OPENAI_API_KEY=super-secret"},
+			{"seq": 2, "type": "text", "content": "second"},
+		},
+	})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("report messages: status = %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	// Replaying a cursor is a successful no-op and must not replace or duplicate
+	// the original durable message.
+	resp = authRequest(t, http.MethodPost, path, map[string]any{
+		"messages": []map[string]any{{"seq": 2, "type": "text", "content": "duplicate"}},
+	})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("replay message: status = %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	resp = authRequest(t, http.MethodGet, path+"?since=1&limit=1", nil)
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("list messages: status = %d: %s", resp.StatusCode, body)
+	}
+	var messages []map[string]any
+	readJSON(t, resp, &messages)
+	if len(messages) != 1 || messages[0]["seq"] != float64(2) || messages[0]["content"] != "second" {
+		t.Fatalf("cursor response = %#v", messages)
+	}
+
+	var count int
+	var firstContent string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT count(*), min(content) FILTER (WHERE seq = 1)
+		FROM task_message WHERE task_id = $1
+	`, taskID).Scan(&count, &firstContent); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("persisted messages = %d, want 2", count)
+	}
+	if strings.Contains(firstContent, "super-secret") || !strings.Contains(firstContent, "REDACTED") {
+		t.Fatalf("secret was not redacted: %q", firstContent)
+	}
+}
+
+func TestTaskMessagesRejectCrossWorkspaceReads(t *testing.T) {
+	requireIntegrationDB(t)
+	var otherWorkspaceID string
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO workspace (name, slug, description)
+		VALUES ('Task Message Isolation', $1, '')
+		RETURNING id
+	`, "task-message-isolation-"+strings.ToLower(fmt.Sprintf("%d", time.Now().UnixNano()))).Scan(&otherWorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM workspace WHERE id = $1`, otherWorkspaceID)
+	})
+
+	var agentID, runtimeID, issueID, taskID string
+	if err := testPool.QueryRow(context.Background(), `SELECT id, runtime_id FROM agent WHERE workspace_id = $1 LIMIT 1`, testWorkspaceID).Scan(&agentID, &runtimeID); err != nil {
+		t.Fatal(err)
+	}
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO issue (workspace_id, title, creator_type, creator_id)
+		VALUES ($1, 'Foreign task', 'member', $2)
+		RETURNING id
+	`, otherWorkspaceID, testUserID).Scan(&issueID); err != nil {
+		t.Fatal(err)
+	}
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO agent_task_queue (agent_id, issue_id, status, runtime_id)
+		VALUES ($1, $2, 'running', $3)
+		RETURNING id
+	`, agentID, issueID, runtimeID).Scan(&taskID); err != nil {
+		t.Fatal(err)
+	}
+
+	resp := authRequest(t, http.MethodGet, "/api/daemon/tasks/"+taskID+"/messages", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("cross-workspace read status = %d, want 404: %s", resp.StatusCode, body)
+	}
+}
+
+func TestGatewayLogsFlowThroughDurableTaskMessageLedger(t *testing.T) {
+	requireIntegrationDB(t)
+	if testHub == nil {
+		t.Fatal("test gateway hub is not configured")
+	}
+
+	var cloudRuntimeID string
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO cloud_runtimes (
+			workspace_id, provider, encrypted_api_key, api_key_hash, max_concurrent_tasks
+		)
+		VALUES ($1, 'anthropic', $2, $3, 1)
+		RETURNING id
+	`, testWorkspaceID, []byte("encrypted-test-key"), "gateway-test-"+fmt.Sprintf("%d", time.Now().UnixNano())).Scan(&cloudRuntimeID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM cloud_runtimes WHERE id = $1`, cloudRuntimeID)
+	})
+	_, taskID := createTaskMessageFixture(t, "dispatched", "cloud", cloudRuntimeID)
+
+	testHub.GatewayHub.OnTaskDispatched("gateway-1", testWorkspaceID, taskID, "container-1")
+	testHub.GatewayHub.OnTaskLogs("gateway-evil", "00000000-0000-0000-0000-000000000000", taskID, 1, "stdout", "cross-tenant")
+	testHub.GatewayHub.OnTaskLogs("gateway-1", testWorkspaceID, taskID, 1, "stdout", "AUTH_TOKEN=very-secret")
+	testHub.GatewayHub.OnTaskLogs("gateway-1", testWorkspaceID, taskID, 1, "stdout", "duplicate")
+
+	var status, content string
+	var count int
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT atq.status, count(tm.id), min(tm.content)
+		FROM agent_task_queue atq
+		LEFT JOIN task_message tm ON tm.task_id = atq.id
+		WHERE atq.id = $1
+		GROUP BY atq.status
+	`, taskID).Scan(&status, &count, &content); err != nil {
+		t.Fatal(err)
+	}
+	if status != "running" || count != 1 {
+		t.Fatalf("gateway task = status %q, messages %d", status, count)
+	}
+	if strings.Contains(content, "very-secret") || !strings.Contains(content, "REDACTED") {
+		t.Fatalf("gateway content was not redacted: %q", content)
+	}
+
+	testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, 0, "completed")
+	if err := testPool.QueryRow(context.Background(), `SELECT status FROM agent_task_queue WHERE id = $1`, taskID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "completed" {
+		t.Fatalf("gateway task status = %q, want completed", status)
 	}
 }
 

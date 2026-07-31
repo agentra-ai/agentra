@@ -3,7 +3,7 @@ package protocol
 const (
 	// TaskMessageBatchSize and TaskMessageFieldBytes define the shared daemon
 	// and server ingestion contract for durable task output.
-	TaskMessageBatchSize = 100
+	TaskMessageBatchSize  = 100
 	TaskMessageFieldBytes = 64 * 1024
 
 	// GatewayLogChunkBytes bounds one WebSocket log frame. Keeping frames small

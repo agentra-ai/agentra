@@ -71,23 +71,38 @@ func (c *WSClient) Connect(ctx context.Context) error {
 }
 
 func (c *WSClient) Run(ctx context.Context) error {
-	for {
+	if c.conn == nil {
+		return fmt.Errorf("gateway websocket is not connected")
+	}
+
+	// ReadMessage blocks while the connection is idle. Closing the socket on
+	// context cancellation makes shutdown prompt without requiring traffic from
+	// the server.
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			_, msg, err := c.conn.ReadMessage()
-			if err != nil {
-				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					c.logger.Error("websocket error", "error", err)
-				}
-				return err
-			}
+			_ = c.conn.Close()
+		case <-done:
+		}
+	}()
 
-			if err := c.handleMessage(msg); err != nil {
-				c.logger.Warn("gateway server message rejected", "error", err)
-				continue
+	for {
+		_, msg, err := c.conn.ReadMessage()
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				c.logger.Error("websocket error", "error", err)
+			}
+			return err
+		}
+
+		if err := c.handleMessage(msg); err != nil {
+			c.logger.Warn("gateway server message rejected", "error", err)
+			continue
 		}
 	}
 }

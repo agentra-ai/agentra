@@ -47,10 +47,7 @@ func (w *taskLogWriter) Write(p []byte) (int, error) {
 	for len(p) > 0 {
 		size := min(len(p), protocol.GatewayLogChunkBytes)
 		chunk := p[:size]
-		content := strings.ToValidUTF8(string(chunk), "\uFFFD")
-		if len(content) > protocol.GatewayLogChunkBytes {
-			content = content[:protocol.GatewayLogChunkBytes]
-		}
+		content := strings.ToValidUTF8(string(chunk), "?")
 
 		w.emitter.seq++
 		if w.emitter.tail != nil {

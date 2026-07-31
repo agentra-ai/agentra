@@ -80,7 +80,8 @@
       "no_priority": "No Priority",
       "none": "No Priority"
     },
-    "assignee": {
+    "assignee": "Assignee",
+    "assigneeMenu": {
       "assignToPlaceholder": "Assign to...",
       "membersSection": "Members",
       "agentsSection": "Agents",

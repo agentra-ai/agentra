@@ -17,6 +17,12 @@ type MembershipChecker interface {
 	IsMember(ctx context.Context, userID, workspaceID string) bool
 }
 
+// GatewayAuthorizer restricts infrastructure connections to workspace roles
+// allowed to operate a cloud runtime.
+type GatewayAuthorizer interface {
+	CanConnectGateway(ctx context.Context, userID, workspaceID string) bool
+}
+
 // UserAuthenticator validates a JWT or PAT and returns its user identity.
 // Browser clients keep using the query token while non-browser clients can
 // send Authorization so long-lived PATs never appear in URLs or proxy logs.
@@ -388,7 +394,7 @@ func (c *Client) writePump() {
 // HandleGatewayWebSocket upgrades a server-to-server Cloud Runtime Gateway
 // connection. A valid user JWT/PAT in Authorization and workspace membership
 // bind the socket to exactly one tenant; secrets are never accepted in URLs.
-func HandleGatewayWebSocket(hub *Hub, authenticator UserAuthenticator, mc MembershipChecker, w http.ResponseWriter, r *http.Request) {
+func HandleGatewayWebSocket(hub *Hub, authenticator UserAuthenticator, authorizer GatewayAuthorizer, w http.ResponseWriter, r *http.Request) {
 	gatewayID := strings.TrimSpace(r.URL.Query().Get("gateway_id"))
 	workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
 	if gatewayID == "" || len(gatewayID) > 128 {
@@ -415,8 +421,8 @@ func HandleGatewayWebSocket(hub *Hub, authenticator UserAuthenticator, mc Member
 		http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 		return
 	}
-	if mc == nil || !mc.IsMember(r.Context(), userID, workspaceID) {
-		http.Error(w, `{"error":"not a member of this workspace"}`, http.StatusForbidden)
+	if authorizer == nil || !authorizer.CanConnectGateway(r.Context(), userID, workspaceID) {
+		http.Error(w, `{"error":"workspace owner or admin role required"}`, http.StatusForbidden)
 		return
 	}
 

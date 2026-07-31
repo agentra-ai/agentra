@@ -469,6 +469,14 @@ func (mc *membershipChecker) IsMember(ctx context.Context, userID, workspaceID s
 	return err == nil
 }
 
+func (mc *membershipChecker) CanConnectGateway(ctx context.Context, userID, workspaceID string) bool {
+	member, err := mc.queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
+		UserID:      parseUUID(userID),
+		WorkspaceID: parseUUID(workspaceID),
+	})
+	return err == nil && (member.Role == "owner" || member.Role == "admin")
+}
+
 func parseUUID(s string) pgtype.UUID {
 	var u pgtype.UUID
 	if err := u.Scan(s); err != nil {
@@ -479,29 +487,36 @@ func parseUUID(s string) pgtype.UUID {
 
 // setGatewayCallbacks wires up the GatewayHub callbacks to TaskService methods.
 func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
-	authorize := func(ctx context.Context, gatewayID, workspaceID, taskID, event string) (pgtype.UUID, bool) {
+	authorize := func(ctx context.Context, gatewayID, workspaceID, taskID, event string) (db.AgentTaskQueue, bool) {
 		task, err := h.TaskService.ValidateCloudGatewayTask(ctx, workspaceID, taskID)
 		if err != nil {
 			slog.Warn("gateway event rejected", "gateway_id", gatewayID, "workspace_id", workspaceID, "task_id", taskID, "event", event)
-			return pgtype.UUID{}, false
+			return db.AgentTaskQueue{}, false
 		}
-		return task.ID, true
+		return task, true
 	}
 
 	hub.GatewayHub.OnTaskDispatched = func(gatewayID, workspaceID, taskID, containerID string) {
 		ctx := context.Background()
-		taskUUID, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskDispatched)
+		task, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskDispatched)
 		if !ok {
 			return
 		}
-		if _, err := h.TaskService.StartTask(ctx, taskUUID); err != nil {
+		if task.Status == "running" {
+			return
+		}
+		if task.Status != "dispatched" {
+			slog.Warn("gateway dispatched: invalid task state", "gateway_id", gatewayID, "task_id", taskID, "status", task.Status)
+			return
+		}
+		if _, err := h.TaskService.StartTask(ctx, task.ID); err != nil {
 			slog.Error("gateway dispatched: failed to start task", "gateway_id", gatewayID, "task_id", taskID, "container_id", containerID, "error", err)
 		}
 	}
 
 	hub.GatewayHub.OnTaskComplete = func(gatewayID, workspaceID, taskID string, exitCode int, output string) {
 		ctx := context.Background()
-		taskUUID, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskCompleted)
+		task, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskCompleted)
 		if !ok {
 			return
 		}
@@ -513,12 +528,12 @@ func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
 				slog.Error("gateway complete: marshal result failed", "task_id", taskID, "error", err)
 				return
 			}
-			_, err = h.TaskService.CompleteTask(ctx, taskUUID, result, "", "")
+			_, err = h.TaskService.CompleteTask(ctx, task.ID, result, "", "")
 			if err != nil {
 				slog.Error("gateway complete: failed", "task_id", taskID, "error", err)
 			}
 		} else {
-			_, err := h.TaskService.FailTask(ctx, taskUUID, output)
+			_, err := h.TaskService.FailTask(ctx, task.ID, output)
 			if err != nil {
 				slog.Error("gateway fail: failed", "task_id", taskID, "error", err)
 			}
@@ -527,7 +542,7 @@ func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
 
 	hub.GatewayHub.OnTaskFail = func(gatewayID, workspaceID, taskID string, errorMsg string, retryable bool) {
 		ctx := context.Background()
-		taskUUID, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskFailed)
+		task, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskFailed)
 		if !ok {
 			return
 		}
@@ -535,7 +550,7 @@ func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
 
 		// If the failure is retryable, attempt to retry the task
 		if retryable {
-			if task, retried, err := h.TaskService.RetryTask(ctx, taskUUID); err != nil {
+			if task, retried, err := h.TaskService.RetryTask(ctx, task.ID); err != nil {
 				slog.Error("gateway fail: retry failed", "task_id", taskID, "error", err)
 				// Fall through to mark as failed
 			} else if retried {
@@ -548,7 +563,7 @@ func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
 			}
 		}
 
-		_, err := h.TaskService.FailTask(ctx, taskUUID, errorMsg)
+		_, err := h.TaskService.FailTask(ctx, task.ID, errorMsg)
 		if err != nil {
 			slog.Error("gateway fail: failed", "task_id", taskID, "error", err)
 		}

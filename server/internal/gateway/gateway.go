@@ -147,11 +147,6 @@ func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
 
 	g.logger.Info("container created", "task_id", taskID, "container_id", containerID)
 
-	// Notify server that container is running
-	if err := g.wsClient.SendTaskDispatched(taskID, containerID); err != nil {
-		g.logger.Error("task dispatch: failed to send dispatched", "task_id", taskID, "error", err)
-	}
-
 	// Start container with retry
 	if err := g.startContainerWithRetry(taskCtx, containerID, taskID); err != nil {
 		g.logger.Error("task dispatch: container start failed after retries", "task_id", taskID, "error", err)
@@ -162,6 +157,11 @@ func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
 		g.wsClient.SendTaskFailedWithRetry(taskID, fmt.Sprintf("failed to start container after %d attempts: %v", g.cfg.MaxRetries, err), false)
 		g.tasks.Delete(taskID)
 		return
+	}
+
+	// The task is running only after Docker confirms a successful start.
+	if err := g.wsClient.SendTaskDispatched(taskID, containerID); err != nil {
+		g.logger.Error("task dispatch: failed to send dispatched", "task_id", taskID, "error", err)
 	}
 
 	// Run goroutine to wait for completion and clean up

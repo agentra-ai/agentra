@@ -6,6 +6,9 @@ RETURNING *;
 -- name: GetCloudRuntimeByWorkspace :one
 SELECT * FROM cloud_runtimes WHERE workspace_id = $1 AND is_active = true;
 
+-- name: GetCloudRuntimeByID :one
+SELECT * FROM cloud_runtimes WHERE id = $1;
+
 -- name: UpdateCloudRuntime :one
 UPDATE cloud_runtimes
 SET gateway_url = $2, provider = $3, encrypted_api_key = $4, api_key_hash = $5, max_concurrent_tasks = $6, updated_at = NOW()

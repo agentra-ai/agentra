@@ -107,3 +107,44 @@ func TestWSClientConnectFailsClosedOnMissingIdentity(t *testing.T) {
 		})
 	}
 }
+
+func TestWSClientRunStopsWhenContextIsCanceledWhileIdle(t *testing.T) {
+	connected := make(chan struct{})
+	release := make(chan struct{})
+	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/gateway/connect", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		close(connected)
+		<-release
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	defer close(release)
+
+	serverURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	client := NewWSClient(serverURL, "gateway-1", "workspace-1", "secret-token", discardLogger())
+	if err := client.Connect(context.Background()); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	<-connected
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- client.Run(ctx) }()
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != context.Canceled {
+			t.Fatalf("Run() error = %v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run did not stop after context cancellation")
+	}
+}

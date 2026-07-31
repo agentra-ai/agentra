@@ -59,8 +59,8 @@ func (s *TaskService) ValidateCloudGatewayTask(ctx context.Context, workspaceID,
 		return db.AgentTaskQueue{}, ErrGatewayTaskNotAuthorized
 	}
 
-	runtime, err := s.Queries.GetCloudRuntimeByWorkspace(ctx, issue.WorkspaceID)
-	if err != nil || !runtime.IsActive || runtime.ID != task.CloudRuntimeID {
+	runtime, err := s.Queries.GetCloudRuntimeByID(ctx, task.CloudRuntimeID)
+	if err != nil || runtime.WorkspaceID != issue.WorkspaceID {
 		return db.AgentTaskQueue{}, ErrGatewayTaskNotAuthorized
 	}
 
@@ -439,13 +439,13 @@ func normalizeMetricTaskType(taskType string) string {
 	}
 }
 
-// RetryTask resets a failed task back to queued for automatic retry.
+// RetryTask resets a failed or active task back to queued for automatic retry.
 // Returns the updated task if retry was successful, or nil if max retries exceeded.
 func (s *TaskService) RetryTask(ctx context.Context, taskID pgtype.UUID) (*db.AgentTaskQueue, bool, error) {
 	task, err := s.Queries.RetryAgentTask(ctx, taskID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// Either task not found, not in failed state, or max retries exceeded
+			// Either task not found, not in a retryable state, or max retries exceeded.
 			return nil, false, nil
 		}
 		return nil, false, fmt.Errorf("retry task: %w", err)

@@ -76,6 +76,36 @@ agentra setup --deployment cloud \
 
 There is no hardcoded public Agentra Cloud endpoint until that service is released. Use `--token` for headless PAT authentication, `--no-daemon` for a management-only machine, and `--profile <name>` to isolate multiple deployments.
 
+## Command Inventory
+
+This table is the supported top-level CLI surface. Run `agentra` or `agentra --help` for the same generated list, and `agentra <command> --help` for flags and subcommands.
+
+<!-- CLI_ROOT_COMMANDS_START -->
+| Command | Purpose |
+|---|---|
+| `agentra agent` | Manage agents and their skills or task history. |
+| `agentra attachment` | Download issue attachments. |
+| `agentra auth` | Inspect or clear authentication state. |
+| `agentra completion` | Generate shell completion scripts. |
+| `agentra config` | Inspect or update local CLI configuration. |
+| `agentra conventions` | Manage `.agentra/AGENT.md` project conventions. |
+| `agentra daemon` | Run and inspect the local agent runtime. |
+| `agentra doctor` | Diagnose installation, runtime, repository, and connectivity. |
+| `agentra eval` | Run the experimental headless evaluation smoke suite. |
+| `agentra git` | Install or remove Agentra Git hooks. |
+| `agentra help` | Show help for any command. |
+| `agentra issue` | Manage issues, comments, and execution history. |
+| `agentra login` | Authenticate and configure workspace access. |
+| `agentra loop` | Manage Agentic Engineering Loops. |
+| `agentra repo` | Check out repositories for agent work. |
+| `agentra runtime` | Inspect and update registered runtimes. |
+| `agentra setup` | Configure a cloud or self-hosted deployment end to end. |
+| `agentra skill` | Manage workspace skills and skill files. |
+| `agentra update` | Update a direct CLI installation. |
+| `agentra version` | Print embedded version and commit metadata. |
+| `agentra workspace` | Inspect, watch, and seed workspaces. |
+<!-- CLI_ROOT_COMMANDS_END -->
+
 ## Authentication
 
 ### Browser Login

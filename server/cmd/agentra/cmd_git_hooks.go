@@ -36,7 +36,6 @@ var hooksInstallDir string
 
 func init() {
 	gitHooksInstallCmd.Flags().StringVar(&hooksInstallDir, "dir", ".", "Repository directory (default: current directory)")
-	gitHooksCmd.AddCommand(gitHooksInstallCmd)
 }
 
 func runGitHooksInstall(cmd *cobra.Command, args []string) error {
@@ -206,7 +205,6 @@ var gitHooksUninstallCmd = &cobra.Command{
 
 func init() {
 	gitHooksUninstallCmd.Flags().StringVar(&hooksInstallDir, "dir", ".", "Repository directory")
-	gitHooksCmd.AddCommand(gitHooksUninstallCmd)
 }
 
 func runGitHooksUninstall(cmd *cobra.Command, args []string) error {
@@ -234,7 +232,7 @@ func runGitHooksUninstall(cmd *cobra.Command, args []string) error {
 var gitHooksCmd = &cobra.Command{
 	Use:   "hooks",
 	Short: "Manage git hooks for Agentra integration",
-	Long:  `Install or uninstall git hooks that link commits/PRs to Agentra issues.
+	Long: `Install or uninstall git hooks that link commits/PRs to Agentra issues.
 
 Examples:
   agentra git hooks install              # Install hooks in current repo

@@ -984,12 +984,12 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 
 		flush := func() {
 			mu.Lock()
-			// Flush any accumulated thinking as a single message.
+			// Flush accumulated thinking as bounded messages.
 			if pendingThinking.Len() > 0 {
 				appendContentLocked("thinking", pendingThinking.String())
 				pendingThinking.Reset()
 			}
-			// Flush any accumulated text as a single message.
+			// Flush accumulated text as bounded messages.
 			if pendingText.Len() > 0 {
 				appendContentLocked("text", pendingText.String())
 				pendingText.Reset()

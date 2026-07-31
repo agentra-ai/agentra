@@ -30,6 +30,34 @@ Remove-Item .\install.ps1
 
 ## 命令
 
+下表是受支持的 CLI 顶层命令面。运行 `agentra` 或 `agentra --help` 可获得由实际注册树生成的相同列表，运行 `agentra <command> --help` 可查看参数和子命令。
+
+<!-- CLI_ROOT_COMMANDS_START -->
+| 命令 | 用途 |
+|---|---|
+| `agentra agent` | 管理 Agent、技能和任务历史。 |
+| `agentra attachment` | 下载 Issue 附件。 |
+| `agentra auth` | 查看或清除认证状态。 |
+| `agentra completion` | 生成 Shell 自动补全脚本。 |
+| `agentra config` | 查看或修改本地 CLI 配置。 |
+| `agentra conventions` | 管理 `.agentra/AGENT.md` 项目约定。 |
+| `agentra daemon` | 运行和检查本地 Agent Runtime。 |
+| `agentra doctor` | 诊断安装、Runtime、仓库和连接。 |
+| `agentra eval` | 运行实验性的无头评测 smoke suite。 |
+| `agentra git` | 安装或移除 Agentra Git hooks。 |
+| `agentra help` | 查看任意命令的帮助。 |
+| `agentra issue` | 管理 Issue、评论和执行历史。 |
+| `agentra login` | 完成认证和 Workspace 访问配置。 |
+| `agentra loop` | 管理 Agentic Engineering Loop。 |
+| `agentra repo` | 检出供 Agent 工作的仓库。 |
+| `agentra runtime` | 检查和更新已注册的 Runtime。 |
+| `agentra setup` | 端到端配置云端或自托管部署。 |
+| `agentra skill` | 管理 Workspace 技能及技能文件。 |
+| `agentra update` | 更新直接安装的 CLI。 |
+| `agentra version` | 输出内嵌版本与 commit 元数据。 |
+| `agentra workspace` | 检查、监听和初始化 Workspace。 |
+<!-- CLI_ROOT_COMMANDS_END -->
+
 ### 引导式配置
 
 ```bash

@@ -530,9 +530,9 @@ type TaskMessageBatchRequest struct {
 }
 
 const (
-	maxTaskMessageBodyBytes  = 8 * 1024 * 1024
-	defaultTaskMessageLimit  = 500
-	maxTaskMessageLimit      = 5000
+	maxTaskMessageBodyBytes = 8 * 1024 * 1024
+	defaultTaskMessageLimit = 500
+	maxTaskMessageLimit     = 5000
 )
 
 var taskMessageTypes = map[string]bool{
@@ -544,8 +544,8 @@ var taskMessageTypes = map[string]bool{
 }
 
 func validateTaskMessage(msg TaskMessageRequest) error {
-	if msg.Seq <= 0 {
-		return fmt.Errorf("seq must be positive")
+	if msg.Seq <= 0 || int64(msg.Seq) > 2147483647 {
+		return fmt.Errorf("seq must be between 1 and 2147483647")
 	}
 	if !taskMessageTypes[msg.Type] {
 		return fmt.Errorf("unsupported message type %q", msg.Type)
@@ -729,7 +729,7 @@ func (h *Handler) ListTaskMessages(w http.ResponseWriter, r *http.Request) {
 	var messages []db.TaskMessage
 	if sinceStr := r.URL.Query().Get("since"); sinceStr != "" {
 		sinceSeq, parseErr := strconv.Atoi(sinceStr)
-		if parseErr != nil || sinceSeq < 0 {
+		if parseErr != nil || sinceSeq < 0 || int64(sinceSeq) > 2147483647 {
 			writeError(w, http.StatusBadRequest, "invalid since parameter")
 			return
 		}

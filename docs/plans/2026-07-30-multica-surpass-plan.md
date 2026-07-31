@@ -208,14 +208,20 @@ Memory + Eval + Analytics feedback
 - `make check` 全绿，并加入 CI required checks。
 - capability manifest 与 release notes 自动校验，无手工状态漂移。
 
-当前实施进度（2026-07-31）：
+当前实施进度（2026-08-01）：
 
 - 已建立 Chi route inventory contract test；数据库不可用时纯路由测试仍会真实执行。
 - 已接通 Task Graph 的读取、节点更新和节点删除 API，并增加 workspace membership 与实体归属双重校验。
 - 已挂载 owner/admin Metrics API，handler 只取经过 middleware 授权的 workspace 上下文，query 参数不能绕过成员与角色校验。
 - 已清理 Projects 重复挂载和 Agent Memory 的错误 API 前缀。
 - 已确认 `cmd_eval.go` 会在自身 `init()` 中注册 CLI command；此前“CLI root 未注册”的判断不成立。
+- 已完成 `M0-08` CLI command truth contract：`agentra` 无参数和 `--help` 统一由 Cobra 注册树生成，英文/中文顶层命令清单与 21 个真实命令做精确集合校验；同时移除了 `git hooks install/uninstall` 的重复注册。
 - 已删除未接入产品且调用旧 API 的 Trace Web 死代码；后端 Trace API 保留为唯一现有 contract，正式 Web viewer 后续基于它重建。
+- 已完成 `M0-07` Gateway → Web 日志流：Gateway 只接受 Authorization Header 的 JWT/PAT，并要求身份是目标 workspace 的 owner/admin，再把连接绑定到该单一 workspace；协议统一为 snake_case 强类型帧，以每任务单调 `seq`、stdout/stderr 和 32 KiB content 为契约。
+- cloud task 的 dispatched/log/completed/failed 事件都会再次验证 task、cloud runtime 与 Gateway workspace 的一致性；跨租户 ID 不作为存在性 oracle。日志在服务端脱敏后写入带 `(task_id, seq)` 唯一约束的 `task_message`，重复帧成功幂等但不重复广播。
+- 容器日志使用 Docker follow 流同步回压，不建立无界队列；terminal event 只携带 256 KiB 诊断尾部。Web 初始加载与重连均读取最多 5,000 条持久化快照，live timeline、dedup set 和 terminal 都保持同一内存上限。
+- 数据库回归新增 trace lifecycle FK：删除 issue 会级联清理 execution trace，删除 agent 不再被历史 trace 阻塞；`make check` 默认使用进程级隔离的临时数据库并在退出时精确删除，失败运行不会污染下一次验证或开发数据库。
+- Gateway/Web realtime 仍保持 beta：Hub fanout 目前是单进程内存实现，多副本 sticky-free fanout 留在 `M7-02`。
 - 已接通 Memory 的 workspace 搜索、team/agent 新增与删除路径，并为 Settings 中的新增、搜索、删除交互补齐真实状态流。
 - 已修正 Compose 与宿主机 `make setup/dev/check` 的数据库连接矛盾：PostgreSQL 仅绑定 loopback，不对局域网或公网开放。
 - 已恢复 Next.js 16 的 ESLint flat config，将 lint 接入本地完整检查与 CI，并清理生产 API client 的显式 `any` 类型债务。

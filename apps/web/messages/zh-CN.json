@@ -80,7 +80,8 @@
       "no_priority": "无优先级",
       "none": "无优先级"
     },
-    "assignee": {
+    "assignee": "负责人",
+    "assigneeMenu": {
       "assignToPlaceholder": "分配给…",
       "membersSection": "成员",
       "agentsSection": "代理",

@@ -22,9 +22,17 @@ func (m *mockMembershipChecker) IsMember(_ context.Context, _, _ string) bool {
 	return true
 }
 
+func (m *mockMembershipChecker) CanConnectGateway(_ context.Context, _, _ string) bool {
+	return true
+}
+
 type rejectMembershipChecker struct{}
 
 func (m *rejectMembershipChecker) IsMember(_ context.Context, _, _ string) bool {
+	return false
+}
+
+func (m *rejectMembershipChecker) CanConnectGateway(_ context.Context, _, _ string) bool {
 	return false
 }
 
@@ -69,12 +77,12 @@ func connectWS(t *testing.T, server *httptest.Server) *websocket.Conn {
 	return conn
 }
 
-func newGatewayTestServer(t *testing.T, mc MembershipChecker) (*Hub, *httptest.Server) {
+func newGatewayTestServer(t *testing.T, authorizer GatewayAuthorizer) (*Hub, *httptest.Server) {
 	t.Helper()
 	hub := NewHub()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/gateway/connect", func(w http.ResponseWriter, r *http.Request) {
-		HandleGatewayWebSocket(hub, &mockUserAuthenticator{}, mc, w, r)
+		HandleGatewayWebSocket(hub, &mockUserAuthenticator{}, authorizer, w, r)
 	})
 	return hub, httptest.NewServer(mux)
 }

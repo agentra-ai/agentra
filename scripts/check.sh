@@ -68,7 +68,34 @@ BACKEND_PID=""
 FRONTEND_PID=""
 STARTED_BACKEND=false
 STARTED_FRONTEND=false
+EPHEMERAL_TEST_DB=false
+TEST_POSTGRES_DB=""
 EXIT_CODE=0
+
+drop_ephemeral_test_database() {
+  if [ "$EPHEMERAL_TEST_DB" != true ] || [ -z "$TEST_POSTGRES_DB" ]; then
+    return
+  fi
+
+  # This name is generated below, but validate it again immediately before
+  # the destructive operation so an environment override can never widen the
+  # target.
+  if [[ ! "$TEST_POSTGRES_DB" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    echo "    Refusing to drop invalid ephemeral database name: $TEST_POSTGRES_DB"
+    EXIT_CODE=1
+    return
+  fi
+
+  local repo_root
+  repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  local compose=(docker compose -f "$repo_root/docker-compose.yml" -f "$repo_root/docker-compose.dev.yml" --env-file "$ENV_FILE")
+  if "${compose[@]}" exec -T postgres dropdb --force --if-exists -U "$POSTGRES_USER" "$TEST_POSTGRES_DB" > /dev/null; then
+    echo "    Dropped ephemeral test database $TEST_POSTGRES_DB"
+  else
+    echo "    Failed to drop ephemeral test database $TEST_POSTGRES_DB"
+    EXIT_CODE=1
+  fi
+}
 
 # Send a signal to a process and all descendants, deepest children first.
 # pnpm and go run both spawn long-lived children; killing only their wrapper
@@ -118,6 +145,7 @@ cleanup() {
   if [ "$STARTED_FRONTEND" = true ] && [ -n "$FRONTEND_PID" ]; then
     stop_process_tree "$FRONTEND_PID" "frontend"
   fi
+  drop_ephemeral_test_database
   echo ""
   if [ "$EXIT_CODE" -eq 0 ]; then
     echo "✓ All checks passed."
@@ -167,7 +195,17 @@ bash scripts/ensure-postgres.sh "$ENV_FILE"
 if [ -n "${CHECK_TEST_DATABASE_URL:-}" ]; then
   TEST_DATABASE_URL="$CHECK_TEST_DATABASE_URL"
 else
-  TEST_POSTGRES_DB="${CHECK_TEST_POSTGRES_DB:-${POSTGRES_DB}_test}"
+  if [ -n "${CHECK_TEST_POSTGRES_DB:-}" ]; then
+    TEST_POSTGRES_DB="$CHECK_TEST_POSTGRES_DB"
+  else
+    TEST_POSTGRES_DB="${POSTGRES_DB}_check_$$"
+    EPHEMERAL_TEST_DB=true
+  fi
+  if [[ ! "$TEST_POSTGRES_DB" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    echo "Invalid test database name: $TEST_POSTGRES_DB"
+    EXIT_CODE=1
+    exit 1
+  fi
   bash scripts/ensure-postgres.sh "$ENV_FILE" "$TEST_POSTGRES_DB"
   DATABASE_URL_BASE="${DATABASE_URL%%\?*}"
   DATABASE_URL_QUERY="${DATABASE_URL#"$DATABASE_URL_BASE"}"
@@ -175,6 +213,12 @@ else
 fi
 export TEST_DATABASE_URL
 (cd server && DATABASE_URL="$TEST_DATABASE_URL" go run ./cmd/migrate up)
+
+# Every verification process below, including router integration tests and
+# temporary E2E services, must use the isolated database rather than the
+# developer's running application database.
+DATABASE_URL="$TEST_DATABASE_URL"
+export DATABASE_URL
 
 # --------------------------------------------------------------------------
 # Step 1: Self-host security contracts
@@ -223,7 +267,7 @@ pnpm test || { EXIT_CODE=1; exit 1; }
 # --------------------------------------------------------------------------
 echo ""
 echo "==> [7/9] Go tests..."
-(cd server && go test ./...) || { EXIT_CODE=1; exit 1; }
+(cd server && DATABASE_URL="$TEST_DATABASE_URL" go test ./...) || { EXIT_CODE=1; exit 1; }
 
 # --------------------------------------------------------------------------
 # Step 8: Start services for E2E (only if not already running)

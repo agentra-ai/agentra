@@ -115,6 +115,28 @@ func (q *Queries) DeleteCloudRuntime(ctx context.Context, id pgtype.UUID) error 
 	return err
 }
 
+const getCloudRuntimeByID = `-- name: GetCloudRuntimeByID :one
+SELECT id, workspace_id, gateway_url, provider, encrypted_api_key, api_key_hash, is_active, max_concurrent_tasks, created_at, updated_at FROM cloud_runtimes WHERE id = $1
+`
+
+func (q *Queries) GetCloudRuntimeByID(ctx context.Context, id pgtype.UUID) (CloudRuntime, error) {
+	row := q.db.QueryRow(ctx, getCloudRuntimeByID, id)
+	var i CloudRuntime
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.GatewayUrl,
+		&i.Provider,
+		&i.EncryptedApiKey,
+		&i.ApiKeyHash,
+		&i.IsActive,
+		&i.MaxConcurrentTasks,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getCloudRuntimeByWorkspace = `-- name: GetCloudRuntimeByWorkspace :one
 SELECT id, workspace_id, gateway_url, provider, encrypted_api_key, api_key_hash, is_active, max_concurrent_tasks, created_at, updated_at FROM cloud_runtimes WHERE workspace_id = $1 AND is_active = true
 `

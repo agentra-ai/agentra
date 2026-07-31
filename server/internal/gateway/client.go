@@ -26,7 +26,6 @@ type Client struct {
 	Conn        *websocket.Conn
 	Hub         *Hub
 	Send        chan []byte
-	mu          sync.Mutex
 }
 
 // Hub manages all gateway connections
@@ -35,13 +34,11 @@ type Hub struct {
 	clients   map[string]*Client // gatewayID -> Client
 	workspace map[string]string  // workspaceID -> gatewayID
 
-	// Task dispatch callbacks
-	OnTaskDispatch   func(gatewayID, workspaceID, taskID string, config map[string]any)
+	// Gateway-to-server task lifecycle callbacks.
 	OnTaskDispatched func(gatewayID, workspaceID, taskID, containerID string)
 	OnTaskComplete   func(gatewayID, workspaceID, taskID string, exitCode int, output string)
 	OnTaskFail       func(gatewayID, workspaceID, taskID string, error string, retryable bool)
 	OnTaskLogs       func(gatewayID, workspaceID, taskID string, seq int, stream, content string)
-	OnTaskCancel     func(gatewayID, workspaceID, taskID string)
 }
 
 func NewHub() *Hub {
@@ -103,8 +100,8 @@ func (h *Hub) GetGatewayForWorkspace(workspaceID string) string {
 // SendToGateway sends a message to a specific gateway
 func (h *Hub) SendToGateway(gatewayID string, msg []byte) error {
 	h.mu.RLock()
+	defer h.mu.RUnlock()
 	client, ok := h.clients[gatewayID]
-	h.mu.RUnlock()
 
 	if !ok {
 		return ErrGatewayNotConnected
@@ -224,8 +221,8 @@ func (c *Client) handleMessage(message []byte) error {
 		if strings.TrimSpace(event.TaskID) == "" {
 			return fmt.Errorf("task logs: task_id is required")
 		}
-		if event.Seq <= 0 {
-			return fmt.Errorf("task logs: seq must be positive")
+		if event.Seq <= 0 || int64(event.Seq) > 2147483647 {
+			return fmt.Errorf("task logs: seq must be between 1 and 2147483647")
 		}
 		if event.Stream != protocol.GatewayStreamStdout && event.Stream != protocol.GatewayStreamStderr {
 			return fmt.Errorf("task logs: unsupported stream %q", event.Stream)
@@ -241,18 +238,6 @@ func (c *Client) handleMessage(message []byte) error {
 		}
 		return nil
 
-	case protocol.EventTaskDispatch:
-		var event protocol.GatewayTaskDispatchMessage
-		if err := json.Unmarshal(message, &event); err != nil {
-			return fmt.Errorf("decode task dispatch: %w", err)
-		}
-		if strings.TrimSpace(event.TaskID) == "" {
-			return fmt.Errorf("task dispatch: task_id is required")
-		}
-		if c.Hub.OnTaskDispatch != nil {
-			c.Hub.OnTaskDispatch(c.ID, c.WorkspaceID, event.TaskID, event.Config)
-		}
-		return nil
 	default:
 		return fmt.Errorf("unsupported event type %q", envelope.Type)
 	}
@@ -269,9 +254,11 @@ func (c *Client) WritePump() {
 	for {
 		select {
 		case message, ok := <-c.Send:
-			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.Conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				return
+			}
 			if !ok {
-				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
@@ -279,14 +266,19 @@ func (c *Client) WritePump() {
 			if err != nil {
 				return
 			}
-			w.Write(message)
+			if _, err := w.Write(message); err != nil {
+				_ = w.Close()
+				return
+			}
 
 			if err := w.Close(); err != nil {
 				return
 			}
 
 		case <-ticker.C:
-			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.Conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				return
+			}
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}

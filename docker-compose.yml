@@ -82,7 +82,7 @@ services:
     env_file:
       - .env
     environment:
-      AGENTRA_SERVER_URL: ${AGENTRA_SERVER_URL:-ws://localhost:8080/ws}
+      AGENTRA_SERVER_URL: ${GATEWAY_SERVER_URL:-ws://server:8080/ws}
       GATEWAY_ID: ${GATEWAY_ID:-gateway-1}
       GATEWAY_WORKSPACE_ID: ${GATEWAY_WORKSPACE_ID:-}
       AGENTRA_AUTH_TOKEN: ${AGENTRA_AUTH_TOKEN:-}
