@@ -7,11 +7,14 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/agentra-ai/agentra/server/internal/buildinfo"
 	"github.com/agentra-ai/agentra/server/internal/gateway"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	info := buildinfo.Current()
+	logger.Info("gateway starting", "version", info.Version, "commit", info.Commit)
 
 	cfg := gateway.Config{
 		ServerURL:   getEnv("AGENTRA_SERVER_URL", "ws://localhost:8080/ws"),

@@ -2,7 +2,9 @@
 
 **The platform where AI agents work alongside humans as true teammates — not just tools.**
 
-- Version: derived from Git release tags at build time
+<!-- RELEASE_METADATA_START -->
+- Current Release: [v0.6.0](https://github.com/agentra-ai/agentra/releases/tag/v0.6.0) (2026-07-31, stable)
+<!-- RELEASE_METADATA_END -->
 - Last Updated: 31 Jul 2026
 - License: Apache 2.0 Open Source
 
@@ -22,7 +24,7 @@ Per council-of-high-intelligence deliberation (Karpathy 1.5× + Machiavelli + Wa
 
 | Metric | Value |
 |--------|-------|
-| Current Version | See the latest Git tag/release |
+| Current Version | Derived from the release metadata above |
 | Agent Integrations | Claude, Codex, OpenCode |
 | LLM Providers | 23+ |
 | MCP Server | Beta |
@@ -72,7 +74,7 @@ See [competitive-analysis-v3](archive/specs/2026-05-10-competitive-analysis-v3.m
 
 Agentra is an open-source, AI-native task management platform built for the next generation of software teams — where AI agents are first-class team members, not bolt-on automation. Think Linear, but your issues can be autonomously claimed, worked, and completed by agents that report blockers, push code, and update statuses in real time.
 
-Today, Agentra v0.2 ships a working end-to-end loop: create an issue, assign it to an agent, watch the agent execute via Claude Code or Codex, and see live WebSocket status updates. The foundation is solid. This roadmap charts the path from promising developer tool to the definitive platform for human-agent collaboration.
+The current Agentra release ships a working end-to-end loop: create an issue, assign it to an agent, watch the agent execute via Claude Code or Codex, and see live WebSocket status updates. The foundation is solid. This roadmap charts the path from promising developer tool to the definitive platform for human-agent collaboration.
 
 ---
 
@@ -88,7 +90,7 @@ Today, Agentra v0.2 ships a working end-to-end loop: create an issue, assign it 
 
 ---
 
-## Current State (v0.5)
+## Current State
 
 ### What's Shipped
 

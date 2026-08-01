@@ -18,7 +18,23 @@ type claudeBackend struct {
 	cfg Config
 }
 
+func (b *claudeBackend) Descriptor() AdapterDescriptor {
+	descriptor, _ := DescriptorFor(ProviderClaude)
+	return descriptor
+}
+
+func (b *claudeBackend) Discover(ctx context.Context) (Discovery, error) {
+	return discoverCLI(ctx, ProviderClaude, b.cfg.ExecutablePath, "claude")
+}
+
+func (b *claudeBackend) Models(context.Context) ([]Model, error) {
+	return unsupportedModels(ProviderClaude)
+}
+
 func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
+	if err := ValidateExecOptions(b.Descriptor(), opts); err != nil {
+		return nil, err
+	}
 	execPath := b.cfg.ExecutablePath
 	if execPath == "" {
 		execPath = "claude"

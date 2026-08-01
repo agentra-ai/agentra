@@ -12,7 +12,7 @@ The supply-chain workflow described here becomes public with the next `v*` tag. 
 Pushing a semantic tag triggers two independent workflows:
 
 ```text
-v0.6.0
+vX.Y.Z
   ├─ release.yml
   │    ├─ Darwin/Linux/Windows CLI archives (amd64 + arm64)
   │    ├─ SHA-256 checksums covering archives, SBOMs, and installers
@@ -32,8 +32,10 @@ Create and push a tag only after the repository checks pass:
 
 ```bash
 make check
-git tag v0.6.0
-git push origin v0.6.0
+VERSION="v$(node scripts/release_metadata.mjs --version)"
+node scripts/release_metadata.mjs --tag "$VERSION"
+git tag "$VERSION"
+git push origin "$VERSION"
 ```
 
 The container workflow uses the repository-scoped `GITHUB_TOKEN`; no personal Docker Hub credentials are required. The only cross-repository secret is `HOMEBREW_TAP_GITHUB_TOKEN`, which needs permission to update `agentra-ai/homebrew-tap`.
@@ -43,12 +45,13 @@ The container workflow uses the repository-scoped `GITHUB_TOKEN`; no personal Do
 All components share the official package `ghcr.io/agentra-ai/agentra`:
 
 ```bash
-docker pull ghcr.io/agentra-ai/agentra:server-v0.6.0
-docker pull ghcr.io/agentra-ai/agentra:gateway-v0.6.0
-docker pull ghcr.io/agentra-ai/agentra:web-v0.6.0
+VERSION=vX.Y.Z
+docker pull "ghcr.io/agentra-ai/agentra:server-$VERSION"
+docker pull "ghcr.io/agentra-ai/agentra:gateway-$VERSION"
+docker pull "ghcr.io/agentra-ai/agentra:web-$VERSION"
 
 # Stable releases also publish rolling aliases.
-docker pull ghcr.io/agentra-ai/agentra:server-v0.6
+docker pull ghcr.io/agentra-ai/agentra:server-vX.Y
 docker pull ghcr.io/agentra-ai/agentra:server-latest
 ```
 
@@ -59,7 +62,7 @@ Each tag is a multi-platform manifest for `linux/amd64` and `linux/arm64`.
 Install Cosign and GitHub CLI from their official distributions, then download the archive, checksum file, and checksum bundle from the same release. The workflow identity is intentionally pinned to this repository and tag:
 
 ```bash
-VERSION=v0.6.0
+VERSION=vX.Y.Z
 ASSET=agentra_linux_amd64.tar.gz
 BASE="https://github.com/agentra-ai/agentra/releases/download/$VERSION"
 
@@ -84,7 +87,7 @@ The shell and PowerShell installers always enforce SHA-256 integrity. Cosign and
 ## Verify a container image
 
 ```bash
-VERSION=v0.6.0
+VERSION=vX.Y.Z
 IMAGE="ghcr.io/agentra-ai/agentra:server-$VERSION"
 
 docker pull "$IMAGE"

@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/agentra-ai/agentra/server/internal/buildinfo"
 	"github.com/agentra-ai/agentra/server/internal/cli"
 )
 
@@ -17,7 +18,8 @@ var updateCmd = &cobra.Command{
 }
 
 func runUpdate(_ *cobra.Command, _ []string) error {
-	fmt.Fprintf(os.Stderr, "Current version: %s (commit: %s)\n", version, commit)
+	info := buildinfo.Current()
+	fmt.Fprintf(os.Stderr, "Current version: %s (commit: %s)\n", info.Version, info.Commit)
 	if cli.IsBrewInstall() {
 		fmt.Fprintln(os.Stderr, "This binary is managed by Homebrew. Run 'brew upgrade agentra' to update it.")
 		return nil
@@ -29,7 +31,7 @@ func runUpdate(_ *cobra.Command, _ []string) error {
 		fmt.Fprintf(os.Stderr, "Warning: could not check latest version: %v\n", err)
 	} else {
 		latestVer := strings.TrimPrefix(latest.TagName, "v")
-		currentVer := strings.TrimPrefix(version, "v")
+		currentVer := info.Version
 		if currentVer == latestVer {
 			fmt.Fprintln(os.Stderr, "Already up to date.")
 			return nil

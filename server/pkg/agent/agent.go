@@ -32,8 +32,14 @@ const (
 	MessageLog        = types.MessageLog
 )
 
-// Backend is the unified interface for executing prompts via coding agents.
+// Backend is the Runtime Adapter v1 interface for coding-agent CLIs.
 type Backend interface {
+	// Descriptor returns the complete, machine-readable capability contract.
+	Descriptor() AdapterDescriptor
+	// Discover resolves the executable and reports its installed version.
+	Discover(ctx context.Context) (Discovery, error)
+	// Models lists provider models or returns UnsupportedCapabilityError.
+	Models(ctx context.Context) ([]Model, error)
 	// Execute runs a prompt and returns a Session for streaming results.
 	// The caller should read from Session.Messages (optional) and wait on
 	// Session.Result for the final outcome.

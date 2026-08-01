@@ -1,4 +1,4 @@
-.PHONY: dev daemon cli agentra build test migrate-up migrate-down sqlc seed clean bootstrap-env env-check ensure-env setup start stop check worktree-env setup-main start-main stop-main check-main setup-worktree start-worktree stop-worktree check-worktree db-up db-down
+.PHONY: dev daemon cli agentra build release-metadata-check test migrate-up migrate-down sqlc seed clean bootstrap-env env-check ensure-env setup start stop check worktree-env setup-main start-main stop-main check-main setup-worktree start-worktree stop-worktree check-worktree db-up db-down
 
 MAIN_ENV_FILE ?= .env
 WORKTREE_ENV_FILE ?= .env.worktree
@@ -142,12 +142,17 @@ cli:
 agentra:
 	cd server && go run ./cmd/agentra $(AGENTRA_ARGS)
 
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+VERSION ?= $(shell node scripts/release_metadata.mjs --version)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILDINFO_PACKAGE := github.com/agentra-ai/agentra/server/internal/buildinfo
+BUILDINFO_LDFLAGS := -X $(BUILDINFO_PACKAGE).Version=$(VERSION) -X $(BUILDINFO_PACKAGE).Commit=$(COMMIT)
 
-build:
-	cd server && go build -o bin/server ./cmd/server
-	cd server && go build -ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT)" -o bin/agentra ./cmd/agentra
+release-metadata-check:
+	node scripts/release_metadata.mjs --check
+
+build: release-metadata-check
+	cd server && go build -ldflags "$(BUILDINFO_LDFLAGS)" -o bin/server ./cmd/server
+	cd server && go build -ldflags "$(BUILDINFO_LDFLAGS)" -o bin/agentra ./cmd/agentra
 
 test: ensure-env
 	@bash scripts/ensure-postgres.sh "$(ENV_FILE)"

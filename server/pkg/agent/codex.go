@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os/exec"
 	"strings"
 	"sync"
@@ -18,7 +17,23 @@ type codexBackend struct {
 	cfg Config
 }
 
+func (b *codexBackend) Descriptor() AdapterDescriptor {
+	descriptor, _ := DescriptorFor(ProviderCodex)
+	return descriptor
+}
+
+func (b *codexBackend) Discover(ctx context.Context) (Discovery, error) {
+	return discoverCLI(ctx, ProviderCodex, b.cfg.ExecutablePath, "codex")
+}
+
+func (b *codexBackend) Models(context.Context) ([]Model, error) {
+	return unsupportedModels(ProviderCodex)
+}
+
 func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
+	if err := ValidateExecOptions(b.Descriptor(), opts); err != nil {
+		return nil, err
+	}
 	execPath := b.cfg.ExecutablePath
 	if execPath == "" {
 		execPath = "codex"
@@ -631,24 +646,9 @@ func (c *codexClient) handleItemNotification(method string, params map[string]an
 // buildCodexTurnParams assembles the params for the codex turn/start (or
 // turn/continue) JSON-RPC method.
 //
-// As of the codex app-server protocol this code targets, there is no
-// per-turn tool restriction field on `turn/start` or `thread/start`. Tool
-// restrictions are thread-level and configured out-of-band (e.g. via the
-// sandbox + approvalPolicy combination, or by defining a profile).
-//
-// Plumbing is in place: when codex grows a per-turn tool restriction field
-// (e.g. `tools`, `allowedTools`, or a nested `config` block), the only
-// change needed is inside this function. For now opts.Tools is logged at
-// debug level and ignored so the agent falls back to the full default
-// tool set.
+// ValidateExecOptions rejects unsupported tool restrictions before this helper
+// is called, so the JSON-RPC payload cannot silently weaken the request.
 func buildCodexTurnParams(opts ExecOptions, threadID, prompt string) map[string]any {
-	if len(opts.Tools) > 0 {
-		// Top-level helper has no receiver; fall back to slog.Default() so the
-		// log line is still emitted. The per-backend Execute path uses the
-		// backend's own logger.
-		slog.Default().Debug("codex: per-stage tool restrictions requested but codex JSON-RPC API does not expose per-turn tool field; ignoring",
-			"tools", opts.Tools)
-	}
 	return map[string]any{
 		"threadId": threadID,
 		"input": []map[string]any{

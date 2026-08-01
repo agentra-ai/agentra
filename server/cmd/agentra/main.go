@@ -7,11 +7,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	version = "dev"
-	commit  = "unknown"
-)
-
 var gitCmd = &cobra.Command{
 	Use:   "git",
 	Short: "Git integration commands",

@@ -91,7 +91,7 @@ This table is the supported top-level CLI surface. Run `agentra` or `agentra --h
 | `agentra conventions` | Manage `.agentra/AGENT.md` project conventions. |
 | `agentra daemon` | Run and inspect the local agent runtime. |
 | `agentra doctor` | Diagnose installation, runtime, repository, and connectivity. |
-| `agentra eval` | Run the experimental headless evaluation smoke suite. |
+| `agentra eval` | Validate the experimental static eval fixtures; it does not run agents or act as a quality gate. |
 | `agentra git` | Install or remove Agentra Git hooks. |
 | `agentra help` | Show help for any command. |
 | `agentra issue` | Manage issues, comments, and execution history. |

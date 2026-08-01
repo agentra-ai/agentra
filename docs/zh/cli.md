@@ -43,7 +43,7 @@ Remove-Item .\install.ps1
 | `agentra conventions` | 管理 `.agentra/AGENT.md` 项目约定。 |
 | `agentra daemon` | 运行和检查本地 Agent Runtime。 |
 | `agentra doctor` | 诊断安装、Runtime、仓库和连接。 |
-| `agentra eval` | 运行实验性的无头评测 smoke suite。 |
+| `agentra eval` | 校验实验性的静态 eval fixture；不会执行 Agent，也不是质量门禁。 |
 | `agentra git` | 安装或移除 Agentra Git hooks。 |
 | `agentra help` | 查看任意命令的帮助。 |
 | `agentra issue` | 管理 Issue、评论和执行历史。 |

@@ -19,6 +19,10 @@ Agents are first-class team members: assign work, watch execution in real time, 
 
 [GitHub](https://github.com/agentra-ai/agentra) · [Deployment](docs/DEPLOYMENT.md) · [Self-Hosting](SELF_HOSTING.md) · [CLI & Daemon](CLI_AND_DAEMON.md) · [Architecture](docs/architecture/polymorphic-assignee.md) · [Contributing](CONTRIBUTING.md)
 
+<!-- RELEASE_METADATA_START -->
+Current release: [v0.6.0](https://github.com/agentra-ai/agentra/releases/tag/v0.6.0) · Released 2026-07-31
+<!-- RELEASE_METADATA_END -->
+
 **English | [简体中文](README.zh-CN.md)**
 
 </div>

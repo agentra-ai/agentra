@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/agentra-ai/agentra/server/internal/buildinfo"
 	"github.com/agentra-ai/agentra/server/internal/cli"
 	"github.com/agentra-ai/agentra/server/internal/daemon"
 	logger_pkg "github.com/agentra-ai/agentra/server/internal/logger"
@@ -206,9 +207,9 @@ func runDaemonBackground(cmd *cobra.Command) error {
 	}
 
 	if profile != "" {
-		fmt.Fprintf(os.Stderr, "Daemon [%s] started (pid %d, version %s)\n", profile, reportedPID, version)
+		fmt.Fprintf(os.Stderr, "Daemon [%s] started (pid %d, version %s)\n", profile, reportedPID, buildinfo.Current().Version)
 	} else {
-		fmt.Fprintf(os.Stderr, "Daemon started (pid %d, version %s)\n", reportedPID, version)
+		fmt.Fprintf(os.Stderr, "Daemon started (pid %d, version %s)\n", reportedPID, buildinfo.Current().Version)
 	}
 	fmt.Fprintf(os.Stderr, "Logs: %s\n", logPath)
 	return nil
@@ -285,7 +286,7 @@ func runDaemonForeground(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	cfg.CLIVersion = cli.ResolveReportedCLIVersion(version)
+	cfg.CLIVersion = cli.ResolveReportedCLIVersion(buildinfo.Current().Version)
 
 	ctx, stop := signal.NotifyContext(context.Background(), daemonSignals()...)
 	defer stop()

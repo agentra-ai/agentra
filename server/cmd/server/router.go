@@ -128,6 +128,7 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 	})
 	r.Get("/livez", livenessHandler)
 	r.Get("/readyz", readinessHandler(readiness))
+	r.Get("/api/version", versionHandler)
 
 	// WebSocket
 	mc := &membershipChecker{queries: queries}

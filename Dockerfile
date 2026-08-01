@@ -1,5 +1,11 @@
+ARG VERSION=dev
+ARG COMMIT=unknown
+
 # --- Server build stage ---
 FROM golang:1.26-alpine AS server-builder
+
+ARG VERSION
+ARG COMMIT
 
 RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/main" > /etc/apk/repositories && \
     echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories && \
@@ -10,16 +16,16 @@ WORKDIR /src
 COPY server/ ./server/
 RUN cd server && go mod download
 
-ARG VERSION=dev
-ARG COMMIT=unknown
-
-RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/server ./cmd/server
-RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o bin/agentra ./cmd/agentra
+RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w -X github.com/agentra-ai/agentra/server/internal/buildinfo.Version=${VERSION} -X github.com/agentra-ai/agentra/server/internal/buildinfo.Commit=${COMMIT}" -o bin/server ./cmd/server
+RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w -X github.com/agentra-ai/agentra/server/internal/buildinfo.Version=${VERSION} -X github.com/agentra-ai/agentra/server/internal/buildinfo.Commit=${COMMIT}" -o bin/agentra ./cmd/agentra
 RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/migrate ./cmd/migrate
-RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/gateway ./cmd/gateway
+RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w -X github.com/agentra-ai/agentra/server/internal/buildinfo.Version=${VERSION} -X github.com/agentra-ai/agentra/server/internal/buildinfo.Commit=${COMMIT}" -o bin/gateway ./cmd/gateway
 
 # --- Frontend build stage ---
 FROM node:22-alpine AS web-builder
+
+ARG VERSION
+ARG COMMIT
 
 RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/main" > /etc/apk/repositories && \
     echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories && \
@@ -28,6 +34,8 @@ RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/main" > /etc/apk/repositor
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_PUBLIC_AGENTRA_VERSION=${VERSION}
+ENV NEXT_PUBLIC_AGENTRA_COMMIT=${COMMIT}
 
 RUN corepack enable
 

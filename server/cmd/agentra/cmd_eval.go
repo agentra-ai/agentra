@@ -4,84 +4,113 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/agentra-ai/agentra/server/internal/eval/seed"
 )
 
-func init() {
-	// Wire the headless-mode answer lookup so `agentra eval run` works without
-	// a daemon. Safe to call in all CLI subcommands; is a no-op on subsequent calls.
-	seed.RegisterLookup()
-}
-
 var evalCmd = &cobra.Command{
 	Use:   "eval",
-	Short: "Run the Agentra-Eval benchmark suite (Issue #13)",
+	Short: "Inspect the experimental evaluation fixture contract",
 }
 
-var evalRunCmd = &cobra.Command{
-	Use:   "run",
-	Short: "Execute the golden dataset in headless smoke mode",
-	Long: `Scores the v0 golden dataset (20 cases) against canned answers.
-No daemon, no GitHub access required.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cases := seed.DefaultCases
-		var report struct {
-			Cases  []evalCaseResult `json:"cases"`
-			Total  int              `json:"total"`
-			Passed int              `json:"passed"`
-			Failed int              `json:"failed"`
-			Score  float64          `json:"score"`
-		}
-		report.Total = len(cases)
+var evalValidateFixturesCmd = &cobra.Command{
+	Use:   "validate-fixtures",
+	Short: "Validate eval regex patterns against their deterministic fixtures",
+	Long: `Validates the experimental eval dataset's regex and fixture contract.
+This command does not execute an agent, measure implementation quality, persist
+a benchmark run, or act as a release gate.`,
+	Args: cobra.NoArgs,
+	RunE: runEvalValidateFixtures,
+}
 
-		for _, c := range cases {
-			output := seed.LookupAnswer(c.Slug)
-			score := scoreCase(c.ExpectedTest, output)
-			cr := evalCaseResult{
-				Slug:     c.Slug,
-				Category: c.Category,
-				Score:    score,
-				Passed:   score >= 0.5,
-			}
-			if cr.Passed {
-				report.Passed++
+type evalFixtureCaseResult struct {
+	Slug           string `json:"slug"`
+	Category       string `json:"category"`
+	PatternValid   bool   `json:"pattern_valid"`
+	FixtureDefined bool   `json:"fixture_defined"`
+	FixtureMatched bool   `json:"fixture_matched"`
+	Error          string `json:"error,omitempty"`
+}
+
+type evalFixtureReport struct {
+	Mode           string                  `json:"mode"`
+	QualityGate    bool                    `json:"quality_gate"`
+	Valid          bool                    `json:"valid"`
+	Total          int                     `json:"total"`
+	ValidPatterns  int                     `json:"valid_patterns"`
+	FixtureMatches int                     `json:"fixture_matches"`
+	Failures       int                     `json:"failures"`
+	Cases          []evalFixtureCaseResult `json:"cases"`
+}
+
+func runEvalValidateFixtures(cmd *cobra.Command, _ []string) error {
+	report := validateEvalFixtures(seed.FixtureCases, seed.FixtureAnswers)
+	encoded, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode fixture report: %w", err)
+	}
+	if _, err := fmt.Fprintln(cmd.OutOrStdout(), string(encoded)); err != nil {
+		return fmt.Errorf("write fixture report: %w", err)
+	}
+	if !report.Valid {
+		return fmt.Errorf("eval fixture contract has %d invalid case(s)", report.Failures)
+	}
+	return nil
+}
+
+func validateEvalFixtures(cases []seed.FixtureCase, answers map[string]string) evalFixtureReport {
+	report := evalFixtureReport{
+		Mode:        "fixture_contract",
+		QualityGate: false,
+		Total:       len(cases),
+		Cases:       make([]evalFixtureCaseResult, 0, len(cases)),
+	}
+
+	for _, fixtureCase := range cases {
+		result := evalFixtureCaseResult{
+			Slug:     fixtureCase.Slug,
+			Category: fixtureCase.Category,
+		}
+		var problems []string
+
+		if fixtureCase.ExpectedTest == "" {
+			problems = append(problems, "expected test is empty")
+		} else if pattern, err := regexp.Compile(fixtureCase.ExpectedTest); err != nil {
+			problems = append(problems, "invalid expected-test regex: "+err.Error())
+		} else {
+			result.PatternValid = true
+			report.ValidPatterns++
+
+			answer, exists := answers[fixtureCase.Slug]
+			result.FixtureDefined = exists
+			if !exists {
+				problems = append(problems, "fixture answer is missing")
+			} else if !pattern.MatchString(answer) {
+				problems = append(problems, "fixture answer does not match expected-test regex")
 			} else {
-				report.Failed++
+				result.FixtureMatched = true
+				report.FixtureMatches++
 			}
-			report.Cases = append(report.Cases, cr)
-		}
-		if report.Total > 0 {
-			report.Score = float64(report.Passed) / float64(report.Total) * 100.0
 		}
 
-		b, _ := json.MarshalIndent(report, "", "  ")
-		fmt.Println(string(b))
-		return nil
-	},
-}
-
-type evalCaseResult struct {
-	Slug     string  `json:"slug"`
-	Category string  `json:"category"`
-	Score    float64 `json:"score"`
-	Passed   bool    `json:"passed"`
-}
-
-func scoreCase(expected, output string) float64 {
-	if expected == "" {
-		return 1.0
+		if !result.PatternValid {
+			_, result.FixtureDefined = answers[fixtureCase.Slug]
+		}
+		if len(problems) > 0 {
+			result.Error = strings.Join(problems, "; ")
+			report.Failures++
+		}
+		report.Cases = append(report.Cases, result)
 	}
-	matched, err := regexp.MatchString(expected, output)
-	if err != nil || !matched {
-		return 0
-	}
-	return 1.0
+
+	report.Valid = report.Total > 0 && report.Failures == 0
+	return report
 }
 
 func init() {
-	evalCmd.AddCommand(evalRunCmd)
+	evalCmd.AddCommand(evalValidateFixturesCmd)
 	rootCmd.AddCommand(evalCmd)
 }

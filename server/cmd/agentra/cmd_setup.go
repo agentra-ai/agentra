@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/agentra-ai/agentra/server/internal/buildinfo"
 	"github.com/agentra-ai/agentra/server/internal/cli"
 )
 
@@ -214,7 +215,7 @@ func checkSetupEndpoint(client *http.Client, endpoint, label string) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", label, err)
 	}
-	req.Header.Set("User-Agent", "agentra-setup/"+version)
+	req.Header.Set("User-Agent", "agentra-setup/"+buildinfo.Current().Version)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("%s at %s is unreachable: %w", label, endpoint, err)

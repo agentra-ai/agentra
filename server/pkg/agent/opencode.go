@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"os/exec"
 	"strings"
 	"time"
@@ -18,7 +17,23 @@ type opencodeBackend struct {
 	cfg Config
 }
 
+func (b *opencodeBackend) Descriptor() AdapterDescriptor {
+	descriptor, _ := DescriptorFor(ProviderOpenCode)
+	return descriptor
+}
+
+func (b *opencodeBackend) Discover(ctx context.Context) (Discovery, error) {
+	return discoverCLI(ctx, ProviderOpenCode, b.cfg.ExecutablePath, "opencode")
+}
+
+func (b *opencodeBackend) Models(context.Context) ([]Model, error) {
+	return unsupportedModels(ProviderOpenCode)
+}
+
 func (b *opencodeBackend) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
+	if err := ValidateExecOptions(b.Descriptor(), opts); err != nil {
+		return nil, err
+	}
 	execPath := b.cfg.ExecutablePath
 	if execPath == "" {
 		execPath = "opencode"
@@ -33,9 +48,6 @@ func (b *opencodeBackend) Execute(ctx context.Context, prompt string, opts ExecO
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 
-	if opts.MaxTurns > 0 {
-		b.cfg.Logger.Warn("opencode does not support --max-turns; ignoring", "maxTurns", opts.MaxTurns)
-	}
 	args := buildOpencodeArgs(opts, execPath)
 	args = append(args, prompt)
 
@@ -112,15 +124,9 @@ func (b *opencodeBackend) Execute(ctx context.Context, prompt string, opts ExecO
 // `opencode run --help`). Tool sets are configured via the agent config
 // or `--agent` flag, not via the run command itself.
 //
-// Plumbing is in place: when opencode grows a per-invocation tool
-// restriction flag, the only change needed is inside this function. For
-// now opts.Tools is logged at debug level and ignored so the agent falls
-// back to the full default tool set.
-//
-// Note: opts.MaxTurns is intentionally NOT handled here — the caller
-// (Execute) emits a warning when it's set, because opencode does not
-// support it and we want a noisy log on the way through, not a silent
-// field in the helper.
+// ValidateExecOptions rejects unsupported tool restrictions and max-turn
+// limits before this helper is called, so the CLI invocation cannot silently
+// weaken the request.
 func buildOpencodeArgs(opts ExecOptions, execPath string) []string {
 	args := []string{"run", "--format", "json"}
 	if opts.Model != "" {
@@ -131,13 +137,6 @@ func buildOpencodeArgs(opts ExecOptions, execPath string) []string {
 	}
 	if opts.ResumeSessionID != "" {
 		args = append(args, "--session", opts.ResumeSessionID)
-	}
-	if len(opts.Tools) > 0 {
-		// Top-level helper has no receiver; fall back to slog.Default() so the
-		// log line is still emitted. The per-backend Execute path uses the
-		// backend's own logger.
-		slog.Default().Debug("opencode: per-stage tool restrictions requested but opencode run does not expose a per-invocation tool flag; ignoring",
-			"tools", opts.Tools)
 	}
 	return args
 }

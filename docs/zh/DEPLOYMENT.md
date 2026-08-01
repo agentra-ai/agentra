@@ -12,7 +12,7 @@ Agentra 支持两条交付路径：
 推送语义版本 tag 会并行触发两个 workflow：
 
 ```text
-v0.6.0
+vX.Y.Z
   ├─ release.yml
   │    ├─ Darwin/Linux/Windows CLI 归档（amd64 + arm64）
   │    ├─ 覆盖归档、SBOM、安装器的 SHA-256
@@ -32,8 +32,10 @@ v0.6.0
 
 ```bash
 make check
-git tag v0.6.0
-git push origin v0.6.0
+VERSION="v$(node scripts/release_metadata.mjs --version)"
+node scripts/release_metadata.mjs --tag "$VERSION"
+git tag "$VERSION"
+git push origin "$VERSION"
 ```
 
 容器 workflow 使用仓库范围的 `GITHUB_TOKEN`，不再需要个人 Docker Hub 凭据。唯一的跨仓库 secret 是 `HOMEBREW_TAP_GITHUB_TOKEN`，其权限只需覆盖 `agentra-ai/homebrew-tap`。
@@ -43,12 +45,13 @@ git push origin v0.6.0
 三个组件共用官方 package `ghcr.io/agentra-ai/agentra`：
 
 ```bash
-docker pull ghcr.io/agentra-ai/agentra:server-v0.6.0
-docker pull ghcr.io/agentra-ai/agentra:gateway-v0.6.0
-docker pull ghcr.io/agentra-ai/agentra:web-v0.6.0
+VERSION=vX.Y.Z
+docker pull "ghcr.io/agentra-ai/agentra:server-$VERSION"
+docker pull "ghcr.io/agentra-ai/agentra:gateway-$VERSION"
+docker pull "ghcr.io/agentra-ai/agentra:web-$VERSION"
 
 # 稳定版本同时提供滚动别名。
-docker pull ghcr.io/agentra-ai/agentra:server-v0.6
+docker pull ghcr.io/agentra-ai/agentra:server-vX.Y
 docker pull ghcr.io/agentra-ai/agentra:server-latest
 ```
 
@@ -59,7 +62,7 @@ docker pull ghcr.io/agentra-ai/agentra:server-latest
 从官方渠道安装 Cosign 与 GitHub CLI，然后从同一 release 下载归档、checksum 和 checksum bundle。验证时把 workflow 身份固定到本仓库与当前 tag：
 
 ```bash
-VERSION=v0.6.0
+VERSION=vX.Y.Z
 ASSET=agentra_linux_amd64.tar.gz
 BASE="https://github.com/agentra-ai/agentra/releases/download/$VERSION"
 
@@ -84,7 +87,7 @@ Shell 与 PowerShell 安装器始终强制执行 SHA-256 校验。Cosign 和 Git
 ## 验证容器镜像
 
 ```bash
-VERSION=v0.6.0
+VERSION=vX.Y.Z
 IMAGE="ghcr.io/agentra-ai/agentra:server-$VERSION"
 
 docker pull "$IMAGE"

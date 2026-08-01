@@ -216,6 +216,8 @@ Memory + Eval + Analytics feedback
 - 已清理 Projects 重复挂载和 Agent Memory 的错误 API 前缀。
 - 已确认 `cmd_eval.go` 会在自身 `init()` 中注册 CLI command；此前“CLI root 未注册”的判断不成立。
 - 已完成 `M0-08` CLI command truth contract：`agentra` 无参数和 `--help` 统一由 Cobra 注册树生成，英文/中文顶层命令清单与 21 个真实命令做精确集合校验；同时移除了 `git hooks install/uninstall` 的重复注册。
+- 已完成 `M0-09` 统一 release metadata contract：`release/metadata.json` 是版本、tag、CLI/API/Web build info、package manifests、README 与 Roadmap 的单一来源；tag workflow 会在发布前拒绝元数据不一致，直接开发构建明确标识为 `dev/unknown`。
+- `M0-10` 已删除从未挂载却宣称存在的 Eval HTTP handler、placeholder score 与未使用 evaluator；CLI 只保留 25-case 静态 fixture contract 校验，并在机器输出中固定 `quality_gate=false`，真实 agent benchmark 留待可回放 execution ledger 完成后实现。
 - 已删除未接入产品且调用旧 API 的 Trace Web 死代码；后端 Trace API 保留为唯一现有 contract，正式 Web viewer 后续基于它重建。
 - 已完成 `M0-07` Gateway → Web 日志流：Gateway 只接受 Authorization Header 的 JWT/PAT，并要求身份是目标 workspace 的 owner/admin，再把连接绑定到该单一 workspace；协议统一为 snake_case 强类型帧，以每任务单调 `seq`、stdout/stderr 和 32 KiB content 为契约。
 - cloud task 的 dispatched/log/completed/failed 事件都会再次验证 task、cloud runtime 与 Gateway workspace 的一致性；跨租户 ID 不作为存在性 oracle。日志在服务端脱敏后写入带 `(task_id, seq)` 唯一约束的 `task_message`，重复帧成功幂等但不重复广播。
@@ -226,7 +228,6 @@ Memory + Eval + Analytics feedback
 - 已修正 Compose 与宿主机 `make setup/dev/check` 的数据库连接矛盾：PostgreSQL 仅绑定 loopback，不对局域网或公网开放。
 - 已恢复 Next.js 16 的 ESLint flat config，将 lint 接入本地完整检查与 CI，并清理生产 API client 的显式 `any` 类型债务。
 - 已完成 `/projects` 正式 Web 入口：项目创建/编辑/删除、里程碑状态、issue 分配/移除和只读成员视图均使用当前 workspace store；后端拒绝通过伪造 workspace URL 访问其他 workspace 的 project ID。
-- Eval handler 仍是 placeholder/headless 评分实现，继续按 experimental 处理。
 
 ### M1 — Installable & Operable：十分钟跑通第一项任务
 

@@ -7,6 +7,7 @@ import { useTransition } from "react";
 import { AgentraIcon } from "@/components/agentra-icon";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/features/auth";
+import { buildInfo } from "@/shared/build-info";
 import { headerButtonClassName } from "./shared";
 
 // Compute the year once at module load. Calling new Date() inline in a
@@ -81,9 +82,19 @@ export function LandingFooter() {
           </nav>
 
           <div className="flex items-center gap-5">
-            <p className="text-[13px] text-white/34">
-              {t("copyright", { year: currentYear })}
-            </p>
+            <div className="flex items-center gap-2 text-[13px] text-white/34">
+              <p>{t("copyright", { year: currentYear })}</p>
+              <span aria-hidden="true">·</span>
+              <span
+                title={
+                  buildInfo.commit === "unknown"
+                    ? buildInfo.label
+                    : `${buildInfo.label} (${buildInfo.commit})`
+                }
+              >
+                {buildInfo.label}
+              </span>
+            </div>
             <div className="flex items-center rounded-full border border-white/10 bg-white/[0.04] p-1">
               {LOCALE_OPTIONS.map((opt) => (
                 <button

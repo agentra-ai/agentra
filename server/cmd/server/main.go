@@ -14,6 +14,7 @@ import (
 	stripelib "github.com/agentra-ai/agentra/server/pkg/stripe"
 
 	"github.com/agentra-ai/agentra/server/internal/auth"
+	"github.com/agentra-ai/agentra/server/internal/buildinfo"
 	"github.com/agentra-ai/agentra/server/internal/corsconfig"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/logger"
@@ -98,7 +99,8 @@ func main() {
 
 	// Graceful shutdown
 	go func() {
-		slog.Info("server starting", "port", port)
+		info := buildinfo.Current()
+		slog.Info("server starting", "port", port, "version", info.Version, "commit", info.Commit)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server error", "error", err)
 			os.Exit(1)

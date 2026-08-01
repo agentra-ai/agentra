@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { AuthInitializer } from "@/features/auth";
 import { WSProvider } from "@/features/realtime";
 import { ModalRegistry } from "@/features/modals";
+import { buildInfo } from "@/shared/build-info";
 import { getSiteUrl } from "@/shared/env";
 import "./globals.css";
 
@@ -47,6 +48,10 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
+  },
+  other: {
+    "agentra-version": buildInfo.version,
+    "agentra-commit": buildInfo.commit,
   },
 };
 

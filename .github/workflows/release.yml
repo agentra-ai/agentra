@@ -19,6 +19,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Validate release metadata
+        id: release-metadata
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="$(node scripts/release_metadata.mjs --version --tag "$RELEASE_TAG")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -28,6 +36,7 @@ jobs:
       - name: Run tests
         run: |
           bash scripts/test-installers.sh
+          node scripts/release_metadata.mjs --check
           cd server && go test ./...
 
       - name: Setup Syft

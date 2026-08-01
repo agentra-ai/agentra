@@ -30,12 +30,20 @@ jobs:
             build-args: ""
           - target: gateway-runtime
             component: gateway
-            build-args: VERSION=${{ github.ref_name }}
+            build-args: ""
           - target: web-runtime
             component: web
             build-args: REMOTE_API_URL=http://server:8080
     steps:
       - uses: actions/checkout@v6
+
+      - name: Validate release metadata
+        id: release-metadata
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="$(node scripts/release_metadata.mjs --version --tag "$RELEASE_TAG")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       # .env is gitignored (see .gitignore .env*); create a stub for the
       # web build stage which expects to find it at apps/web/.env.
@@ -73,7 +81,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ github.ref_name }}
+            VERSION=${{ steps.release-metadata.outputs.version }}
             COMMIT=${{ github.sha }}
             ${{ matrix.build-args }}
           provenance: mode=max

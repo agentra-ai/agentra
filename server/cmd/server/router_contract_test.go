@@ -18,6 +18,7 @@ func TestRouterExposesFrontendContracts(t *testing.T) {
 	want := []string{
 		"GET /livez",
 		"GET /readyz",
+		"GET /api/version",
 		"GET /api/issues/{id}/graph",
 		"PATCH /api/graph/nodes/{id}",
 		"DELETE /api/graph/nodes/{id}",

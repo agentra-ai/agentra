@@ -9,8 +9,8 @@ builds:
     binary: agentra
     ldflags:
       - -s -w
-      - -X main.version={{.Version}}
-      - -X main.commit={{.ShortCommit}}
+      - -X github.com/agentra-ai/agentra/server/internal/buildinfo.Version={{.Version}}
+      - -X github.com/agentra-ai/agentra/server/internal/buildinfo.Commit={{.ShortCommit}}
     env:
       - CGO_ENABLED=0
     goos:

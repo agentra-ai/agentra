@@ -371,119 +371,6 @@ func (q *Queries) CreateAgentTask(ctx context.Context, arg CreateAgentTaskParams
 	return i, err
 }
 
-const createEvalGoldenIssue = `-- name: CreateEvalGoldenIssue :execrows
-INSERT INTO eval_golden_issues (slug, category, workspace_id, title, description, expected_test)
-VALUES ($1, $2, $3, $4, $5, $6)
-`
-
-type CreateEvalGoldenIssueParams struct {
-	Slug         string      `json:"slug"`
-	Category     string      `json:"category"`
-	WorkspaceID  pgtype.UUID `json:"workspace_id"`
-	Title        string      `json:"title"`
-	Description  string      `json:"description"`
-	ExpectedTest pgtype.Text `json:"expected_test"`
-}
-
-func (q *Queries) CreateEvalGoldenIssue(ctx context.Context, arg CreateEvalGoldenIssueParams) (int64, error) {
-	result, err := q.db.Exec(ctx, createEvalGoldenIssue,
-		arg.Slug,
-		arg.Category,
-		arg.WorkspaceID,
-		arg.Title,
-		arg.Description,
-		arg.ExpectedTest,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const createEvalRun = `-- name: CreateEvalRun :one
-INSERT INTO eval_runs (workspace_id, status, total_cases, passed, failed, score, prev_score, regression, summary)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, workspace_id, started_at, finished_at, status, total_cases, passed, failed, score, prev_score, regression, summary
-`
-
-type CreateEvalRunParams struct {
-	WorkspaceID pgtype.UUID    `json:"workspace_id"`
-	Status      string         `json:"status"`
-	TotalCases  int32          `json:"total_cases"`
-	Passed      int32          `json:"passed"`
-	Failed      int32          `json:"failed"`
-	Score       pgtype.Numeric `json:"score"`
-	PrevScore   pgtype.Numeric `json:"prev_score"`
-	Regression  bool           `json:"regression"`
-	Summary     []byte         `json:"summary"`
-}
-
-func (q *Queries) CreateEvalRun(ctx context.Context, arg CreateEvalRunParams) (EvalRun, error) {
-	row := q.db.QueryRow(ctx, createEvalRun,
-		arg.WorkspaceID,
-		arg.Status,
-		arg.TotalCases,
-		arg.Passed,
-		arg.Failed,
-		arg.Score,
-		arg.PrevScore,
-		arg.Regression,
-		arg.Summary,
-	)
-	var i EvalRun
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.StartedAt,
-		&i.FinishedAt,
-		&i.Status,
-		&i.TotalCases,
-		&i.Passed,
-		&i.Failed,
-		&i.Score,
-		&i.PrevScore,
-		&i.Regression,
-		&i.Summary,
-	)
-	return i, err
-}
-
-const detectEvalRegression = `-- name: DetectEvalRegression :one
-WITH latest AS (
-    SELECT score
-    FROM eval_runs
-    WHERE eval_runs.workspace_id = $1
-    ORDER BY started_at DESC
-    LIMIT 1
-),
-prev AS (
-    SELECT score
-    FROM eval_runs
-    WHERE eval_runs.workspace_id = $1
-    ORDER BY started_at DESC
-    OFFSET 1 LIMIT 1
-)
-SELECT
-    l.score AS latest_score,
-    p.score AS prev_score,
-    (p.score IS NOT NULL AND l.score < p.score) AS regressed
-FROM latest l
-LEFT JOIN prev p ON true
-`
-
-type DetectEvalRegressionRow struct {
-	LatestScore pgtype.Numeric `json:"latest_score"`
-	PrevScore   pgtype.Numeric `json:"prev_score"`
-	Regressed   pgtype.Bool    `json:"regressed"`
-}
-
-func (q *Queries) DetectEvalRegression(ctx context.Context, workspaceID pgtype.UUID) (DetectEvalRegressionRow, error) {
-	row := q.db.QueryRow(ctx, detectEvalRegression, workspaceID)
-	var i DetectEvalRegressionRow
-	err := row.Scan(&i.LatestScore, &i.PrevScore, &i.Regressed)
-	return i, err
-}
-
 const failAgentTask = `-- name: FailAgentTask :one
 UPDATE agent_task_queue
 SET status = 'failed', completed_at = now(), error = $2
@@ -680,35 +567,6 @@ func (q *Queries) GetAgentTask(ctx context.Context, id pgtype.UUID) (AgentTaskQu
 	return i, err
 }
 
-const getEvalGoldenIssueBySlug = `-- name: GetEvalGoldenIssueBySlug :one
-SELECT id, slug, category, workspace_id, issue_id, title, description, expected_test, max_duration_ms, created_at
-FROM eval_golden_issues
-WHERE slug = $1 AND workspace_id = $2
-`
-
-type GetEvalGoldenIssueBySlugParams struct {
-	Slug        string      `json:"slug"`
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-}
-
-func (q *Queries) GetEvalGoldenIssueBySlug(ctx context.Context, arg GetEvalGoldenIssueBySlugParams) (EvalGoldenIssue, error) {
-	row := q.db.QueryRow(ctx, getEvalGoldenIssueBySlug, arg.Slug, arg.WorkspaceID)
-	var i EvalGoldenIssue
-	err := row.Scan(
-		&i.ID,
-		&i.Slug,
-		&i.Category,
-		&i.WorkspaceID,
-		&i.IssueID,
-		&i.Title,
-		&i.Description,
-		&i.ExpectedTest,
-		&i.MaxDurationMs,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const getLastTaskSession = `-- name: GetLastTaskSession :one
 SELECT session_id, work_dir FROM agent_task_queue
 WHERE agent_id = $1 AND issue_id = $2 AND status = 'completed' AND session_id IS NOT NULL
@@ -732,34 +590,6 @@ func (q *Queries) GetLastTaskSession(ctx context.Context, arg GetLastTaskSession
 	row := q.db.QueryRow(ctx, getLastTaskSession, arg.AgentID, arg.IssueID)
 	var i GetLastTaskSessionRow
 	err := row.Scan(&i.SessionID, &i.WorkDir)
-	return i, err
-}
-
-const getLatestEvalRun = `-- name: GetLatestEvalRun :one
-SELECT id, workspace_id, started_at, finished_at, status, total_cases, passed, failed, score, prev_score, regression, summary
-FROM eval_runs
-WHERE eval_runs.workspace_id = $1
-ORDER BY started_at DESC
-LIMIT 1
-`
-
-func (q *Queries) GetLatestEvalRun(ctx context.Context, workspaceID pgtype.UUID) (EvalRun, error) {
-	row := q.db.QueryRow(ctx, getLatestEvalRun, workspaceID)
-	var i EvalRun
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.StartedAt,
-		&i.FinishedAt,
-		&i.Status,
-		&i.TotalCases,
-		&i.Passed,
-		&i.Failed,
-		&i.Score,
-		&i.PrevScore,
-		&i.Regression,
-		&i.Summary,
-	)
 	return i, err
 }
 
@@ -998,44 +828,6 @@ func (q *Queries) ListAllAgents(ctx context.Context, workspaceID pgtype.UUID) ([
 			&i.Provider,
 			&i.ModelOverride,
 			&i.ProviderConfig,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listEvalGoldenIssues = `-- name: ListEvalGoldenIssues :many
-SELECT id, slug, category, workspace_id, issue_id, title, description, expected_test, max_duration_ms, created_at
-FROM eval_golden_issues
-WHERE workspace_id = $1
-ORDER BY id
-`
-
-func (q *Queries) ListEvalGoldenIssues(ctx context.Context, workspaceID pgtype.UUID) ([]EvalGoldenIssue, error) {
-	rows, err := q.db.Query(ctx, listEvalGoldenIssues, workspaceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []EvalGoldenIssue{}
-	for rows.Next() {
-		var i EvalGoldenIssue
-		if err := rows.Scan(
-			&i.ID,
-			&i.Slug,
-			&i.Category,
-			&i.WorkspaceID,
-			&i.IssueID,
-			&i.Title,
-			&i.Description,
-			&i.ExpectedTest,
-			&i.MaxDurationMs,
-			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

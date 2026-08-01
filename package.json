@@ -1,6 +1,6 @@
 {
   "name": "agentra",
-  "version": "0.2.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,8 +9,10 @@
     "typecheck": "pnpm --filter @agentra/web typecheck",
     "test": "pnpm --filter @agentra/web test",
     "test:capabilities": "node scripts/test_capability_manifest.mjs",
+    "test:release-metadata": "node scripts/release_metadata.mjs --check && node scripts/test_release_metadata.mjs",
     "test:self-host": "bash scripts/test-bootstrap-env.sh && node scripts/test_compose_security.mjs",
-    "test:installers": "bash scripts/test-installers.sh && node scripts/test_release_contract.mjs",
+    "test:installers": "bash scripts/test-installers.sh && node scripts/release_metadata.mjs --check && node scripts/test_release_metadata.mjs && node scripts/test_release_contract.mjs",
+    "sync:release-metadata": "node scripts/release_metadata.mjs --sync",
     "lint": "pnpm --filter @agentra/web lint",
     "clean": "pnpm --filter @agentra/web clean && rm -rf node_modules"
   },
