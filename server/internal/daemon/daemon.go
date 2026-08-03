@@ -902,7 +902,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 
 	// Inject runtime-specific config (meta skill) so the agent discovers .agent_context/.
 	if err := execenv.InjectRuntimeConfig(env.WorkDir, provider, taskCtx); err != nil {
-		d.logger.Warn("execenv: inject runtime config failed (non-fatal)", "error", err)
+		return TaskResult{}, fmt.Errorf("inject runtime config for %s: %w", provider, err)
 	}
 	// NOTE: No cleanup — workdir is preserved for reuse by future tasks on
 	// the same (agent, issue) pair. The work_dir path is stored in DB on

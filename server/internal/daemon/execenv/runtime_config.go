@@ -30,8 +30,7 @@ func InjectRuntimeConfig(workDir, provider string, ctx TaskContextForEnv) error 
 	case "codex", "opencode":
 		return os.WriteFile(filepath.Join(workDir, "AGENTS.md"), []byte(content), 0o644)
 	default:
-		// Unknown provider — skip config injection, prompt-only mode.
-		return nil
+		return fmt.Errorf("unsupported runtime config provider %q", provider)
 	}
 }
 
@@ -256,4 +255,3 @@ func writeDNASummary(b *strings.Builder, d *dna.DNA) {
 	}
 	b.WriteString("\n```\n\n</details>\n")
 }
-

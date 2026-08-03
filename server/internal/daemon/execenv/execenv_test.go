@@ -587,9 +587,9 @@ func TestInjectRuntimeConfigUnknownProvider(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	// Unknown provider should be a no-op.
-	if err := InjectRuntimeConfig(dir, "unknown", TaskContextForEnv{}); err != nil {
-		t.Fatalf("expected no error for unknown provider, got: %v", err)
+	err := InjectRuntimeConfig(dir, "unknown", TaskContextForEnv{})
+	if err == nil || !strings.Contains(err.Error(), "unsupported runtime config provider") {
+		t.Fatalf("expected unsupported-provider error, got %v", err)
 	}
 
 	// No files should be created.

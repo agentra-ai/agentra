@@ -224,6 +224,7 @@ Memory + Eval + Analytics feedback
 - `M0-10` 已删除零生产引用、无测试且自身依赖声明不完整的 `server/pkg/github` 嵌套模块；真实可达的 GitHub OAuth、workspace installation 与 issue git-link 路由继续保留在主 server 模块，PR/webhook durable sync 仍由 `M6-01`–`M6-03` 实现。
 - `M0-10` 已删除非 production 环境固定接受 `888888` 的 OTP master code；本地 `console` 邮件模式继续返回每次随机生成的真实 OTP，development 环境也必须通过数据库中的限时验证码与尝试次数校验。
 - `M0-10` 已删除 Engineering Loop 的错误 prompt 回退：review/fix 缺失真实 branch/iteration、stage template 构建失败或出现未知 `loop_*` task type 时，daemon 现在明确失败队列任务，不再猜测分支或降级成 standard prompt 后报告阶段成功。
+- `M0-10` 已把 runtime config 注入改为执行前置条件：写入 `CLAUDE.md`/`AGENTS.md` 失败或 provider 不受支持时任务明确失败，不再在缺失 agent identity、workspace/repo context 与 Agentra CLI 约束的情况下继续执行。
 - 已删除未接入产品且调用旧 API 的 Trace Web 死代码；后端 Trace API 保留为唯一现有 contract，正式 Web viewer 后续基于它重建。
 - 已完成 `M0-07` Gateway → Web 日志流：Gateway 只接受 Authorization Header 的 JWT/PAT，并要求身份是目标 workspace 的 owner/admin，再把连接绑定到该单一 workspace；协议统一为 snake_case 强类型帧，以每任务单调 `seq`、stdout/stderr 和 32 KiB content 为契约。
 - cloud task 的 dispatched/log/completed/failed 事件都会再次验证 task、cloud runtime 与 Gateway workspace 的一致性；跨租户 ID 不作为存在性 oracle。日志在服务端脱敏后写入带 `(task_id, seq)` 唯一约束的 `task_message`，重复帧成功幂等但不重复广播。
