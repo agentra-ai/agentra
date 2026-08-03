@@ -219,6 +219,7 @@ Memory + Eval + Analytics feedback
 - 已完成 `M0-09` 统一 release metadata contract：`release/metadata.json` 是版本、tag、CLI/API/Web build info、package manifests、README 与 Roadmap 的单一来源；tag workflow 会在发布前拒绝元数据不一致，直接开发构建明确标识为 `dev/unknown`。
 - `M0-10` 已删除从未挂载却宣称存在的 Eval HTTP handler、placeholder score 与未使用 evaluator；CLI 只保留 25-case 静态 fixture contract 校验，并在机器输出中固定 `quality_gate=false`，真实 agent benchmark 留待可回放 execution ledger 完成后实现。
 - `M0-10` 已删除完全没有生产调用的 Memory service/hooks/semantic+graph+temporal/RRF 平行架构及其专用 SQL；保留真实可达的 agent/team CRUD、Web viewer 与 workspace BM25 搜索，并把 embedding/RAG/provenance 明确列为未完成。
+- `M0-10` 已删除无法构建且未接入认证的 MCP 嵌套模块：原入口从未调用 authenticator，工具上下文为空，issue 读写可接受任意 workspace/resource ID，且实际只注册 issue 工具却宣称六类工具。MCP 重新标记为 planned，正式实现由 `M6-05` 的 scoped PAT、resource authorization、tool audit 和 policy contract 驱动。
 - 已删除未接入产品且调用旧 API 的 Trace Web 死代码；后端 Trace API 保留为唯一现有 contract，正式 Web viewer 后续基于它重建。
 - 已完成 `M0-07` Gateway → Web 日志流：Gateway 只接受 Authorization Header 的 JWT/PAT，并要求身份是目标 workspace 的 owner/admin，再把连接绑定到该单一 workspace；协议统一为 snake_case 强类型帧，以每任务单调 `seq`、stdout/stderr 和 32 KiB content 为契约。
 - cloud task 的 dispatched/log/completed/failed 事件都会再次验证 task、cloud runtime 与 Gateway workspace 的一致性；跨租户 ID 不作为存在性 oracle。日志在服务端脱敏后写入带 `(task_id, seq)` 唯一约束的 `task_message`，重复帧成功幂等但不重复广播。

@@ -5,7 +5,7 @@
 <!-- RELEASE_METADATA_START -->
 - Current Release: [v0.6.0](https://github.com/agentra-ai/agentra/releases/tag/v0.6.0) (2026-07-31, stable)
 <!-- RELEASE_METADATA_END -->
-- Last Updated: 31 Jul 2026
+- Last Updated: 3 Aug 2026
 - License: Apache 2.0 Open Source
 
 > [!IMPORTANT]
@@ -27,7 +27,7 @@ Per council-of-high-intelligence deliberation (Karpathy 1.5× + Machiavelli + Wa
 | Current Version | Derived from the release metadata above |
 | Agent Integrations | Claude, Codex, OpenCode |
 | LLM Providers | 23+ |
-| MCP Server | Beta |
+| MCP Server | Planned |
 | Target Team Size | 2–10 |
 | Roadmap Horizon | 18 months (Q2 2025 → Q3 2026) |
 
@@ -50,7 +50,7 @@ Per council-of-high-intelligence deliberation (Karpathy 1.5× + Machiavelli + Wa
 | Spatial/Visual | voicetree | 826 | Obsidian-like graph for agent orchestration |
 | Task Management UI | Tasuku, Overseer, crewboard-oss | 11–223 | Lightweight but no agent runtime |
 
-**Phase 2.5 completed gaps**: ✅ Multi-Provider (7), ✅ Task Graph Handoff, ✅ Execution Traces, ✅ MCP Server
+**Phase 2.5 completed gaps**: ✅ Multi-Provider (7), ✅ Task Graph Handoff, ✅ Execution Traces
 
 **Current Priority Gaps (v3)**:
 | Gap | Competitor | Priority | Timeframe |
@@ -224,14 +224,15 @@ Give each agent a scoped, explainable memory store.
 - 📋 Strategy evaluation before adding semantic, graph, temporal, or fusion retrieval
 - 📋 Team conventions synthesis from merged PRs and completed tasks
 
-#### 2.2 Model Context Protocol (MCP) Integration — ✅ DONE
+#### 2.2 Model Context Protocol (MCP) Integration — 📋 PLANNED
 
-Expose Agentra's full data model as MCP tools.
+Expose Agentra's data model as authenticated, workspace-scoped MCP tools.
 
-- Agentra MCP Server: issues, comments, skills, memory as tools
-- External MCP registry integration (GitHub, Jira, Slack, web search)
-- Tool call audit log on issue timeline
-- Per-tool permission scoping (workspace admin controls)
+- 📋 Agentra MCP Server: issues, comments, skills, and memory as tools
+- 📋 PAT scopes and workspace/resource authorization on every tool call
+- 📋 Tool call audit log on issue timeline
+- 📋 Per-tool permission policy controlled by workspace admins
+- 📋 External MCP registry integration (GitHub, Jira, Slack, web search)
 
 #### 2.3 Multi-Agent Task Graphs — 🚧 IN PROGRESS
 
@@ -267,7 +268,7 @@ Expand beyond Claude/Codex/OpenCode to match swarmclaw's 23+ providers.
 |---------|-------------|----------|-------|--------|
 | Agent Memory Store | Persistent agent/team CRUD, BM25 search, and UI viewer. | P0 | Platform | 🧪 Experimental |
 | RAG Context Injection | Automatic, provenance-visible memory retrieval at task start. | P0 | Platform | Planned |
-| Agentra MCP Server | Expose issues, skills, memory as MCP tools to agents. | P0 | Platform | ✅ Done |
+| Agentra MCP Server | Expose workspace-scoped issues, skills, and memory with auditable authorization. | P0 | Platform | Planned |
 | External MCP Registry | GitHub, Slack, web search tools via standard MCP protocol. | P1 | Platform | 📐 Designed ([spec](archive/specs/2026-05-10-external-mcp-registry-design.md)) |
 | Sub-Task Trees | Decompose issues into ordered / parallel child tasks. | P0 | Product | ✅ Done (Phase 2.5) |
 | Multi-Agent Planner | Planner agent role that decomposes and delegates work. | P0 | Platform | ✅ Done (Phase 2.5) |
@@ -501,7 +502,7 @@ Continuous investments in platform reliability, performance, and maintainability
 | Goal → DAG auto-decomposition | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Multi-agent orchestration | ✅ (Task Graph) | ✅ | ✅ (plugins) | ✅ | ❌ | ✅ | ✅ |
 | LLM Providers | 7 | 10 | 185 | Multi | 1 | Multi | Multi |
-| MCP Server | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| MCP Server | 📋 | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | Persistent Agent Memory | 🧪 (CRUD + BM25) | ✅ (pluggable) | ❌ | ❌ | ❌ | ✅ (multi-tier) | ❌ |
 | Human-in-the-loop approvals | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Skills / workflow templates | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -524,7 +525,7 @@ See [competitive-analysis-v2.md](archive/specs/2026-05-10-competitive-analysis-v
 - **Multi-agent Task Graph**: DAG-based agent handoff with human review gates (most competitors lack handoff + approval combo)
 - **Cloud Runtime + Self-hosted**: Managed execution + PostgreSQL-backed multi-tenancy (no competitor offers both)
 - **Human-in-the-Loop**: Approval gates for sensitive agent actions — uniquely Agentra, no competitor has this
-- **MCP Server**: 6+ tool categories exposed (issues, skills, memory, comments, agents, inbox) — more tools than agent-tasks or open-multi-agent
+- **MCP interoperability roadmap**: ship only after PAT scopes, per-resource authorization, audit attribution, and conformance tests are enforced end to end
 
 ### New Competitive Threats (v3)
 

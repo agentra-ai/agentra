@@ -54,7 +54,7 @@ Define a **portable convention file** format that any project can drop into `.ag
 ## Agent-Specific Tools
 - Frontend template: nextjs.org/docs, shadcn/ui
 - Backend template: chirouter documentation, sqlc.yaml
-- MCP tools: issues, comments, skills, memory
+- Planned MCP tools: issues, comments, skills, memory
 ```
 
 ## Field Spec

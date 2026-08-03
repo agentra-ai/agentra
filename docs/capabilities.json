@@ -153,13 +153,11 @@
     {
       "id": "mcp-server",
       "name": "MCP server",
-      "status": "beta",
+      "status": "planned",
       "surfaces": ["cli", "mcp"],
-      "summary": "MCP tools expose Agentra work operations to compatible agent clients.",
-      "limitations": ["Remote deployment, scoped tool policy, and complete audit attribution are not stable."],
+      "summary": "A policy-scoped MCP server will expose Agentra work operations to compatible agent clients.",
       "evidence": {
-        "files": ["server/pkg/mcp"],
-        "tests": ["server/pkg/mcp/integration_test.go", "server/pkg/mcp/auth_test.go"]
+        "files": []
       }
     },
     {
