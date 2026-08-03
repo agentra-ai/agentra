@@ -647,6 +647,35 @@ func TestVerifyCodeWrongCode(t *testing.T) {
 	}
 }
 
+func TestVerifyCodeRejectsLegacyMasterCodeInDevelopment(t *testing.T) {
+	const email = "legacy-master-code-test@agentra.ai"
+	ctx := context.Background()
+	t.Setenv("APP_ENV", "development")
+
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM verification_code WHERE email = $1`, email)
+	})
+
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO verification_code (email, code, expires_at)
+		VALUES ($1, '123456', now() + interval '10 minutes')
+	`, email); err != nil {
+		t.Fatalf("create verification code: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(
+		"POST",
+		"/auth/verify-code",
+		strings.NewReader(`{"email":"`+email+`","code":"888888"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	testHandler.VerifyCode(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("VerifyCode (legacy master code): expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestVerifyCodeBruteForceProtection(t *testing.T) {
 	const email = "bruteforce-test@agentra.ai"
 	ctx := context.Background()
