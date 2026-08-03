@@ -94,11 +94,16 @@
       "name": "Agent and team memory",
       "status": "experimental",
       "surfaces": ["api", "web"],
-      "summary": "pgvector-backed agent and team memories with multi-strategy retrieval.",
-      "limitations": ["Embedding generation/backfill is incomplete.", "Provenance, TTL, confidence, and prompt-injection policy are incomplete."],
+      "summary": "Workspace-scoped agent and team memory CRUD with a Web viewer and BM25 search across team plus non-private agent records.",
+      "limitations": [
+        "Create flows currently store zero-vector placeholders; semantic/vector retrieval is not a supported surface.",
+        "There is no wired graph, temporal, RRF, or automatic task-context injection path.",
+        "BM25 currently uses PostgreSQL's english text-search configuration; multilingual recall quality is not yet a supported contract.",
+        "Provenance, TTL, confidence, PII handling, and prompt-injection policy are incomplete."
+      ],
       "evidence": {
-        "files": ["server/internal/handler/memory.go", "server/pkg/memory", "apps/web/features/memory"],
-        "tests": ["apps/web/features/memory/api/memoryApi.test.ts", "server/cmd/server/integration_test.go"]
+        "files": ["server/internal/handler/memory.go", "server/pkg/db/queries/memory.sql", "apps/web/features/memory"],
+        "tests": ["server/internal/handler/memory_test.go", "apps/web/features/memory/api/memoryApi.test.ts", "server/cmd/server/integration_test.go"]
       }
     },
     {

@@ -26,8 +26,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/pgvector/pgvector-go v0.3.0
 	github.com/resend/resend-go/v3 v3.12.0
-	github.com/sashabaranov/go-openai v1.41.2
-	github.com/stretchr/testify v1.11.1
 	github.com/stripe/stripe-go/v76 v76.25.0
 )
 
@@ -53,7 +51,6 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/docker v27.5.0+incompatible // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
@@ -85,7 +82,6 @@ require (
 	github.com/opencontainers/image-spec v1.1.0 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
@@ -104,7 +100,6 @@ require (
 	golang.org/x/text v0.35.0 // indirect
 	google.golang.org/grpc v1.58.3 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 replace github.com/agentra-ai/agentra/pkg/taskgraph => ./pkg/taskgraph

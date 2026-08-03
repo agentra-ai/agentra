@@ -50,7 +50,7 @@ Per council-of-high-intelligence deliberation (Karpathy 1.5× + Machiavelli + Wa
 | Spatial/Visual | voicetree | 826 | Obsidian-like graph for agent orchestration |
 | Task Management UI | Tasuku, Overseer, crewboard-oss | 11–223 | Lightweight but no agent runtime |
 
-**Phase 2.5 completed gaps**: ✅ Multi-Provider (7), ✅ Memory RRF (4-strategy), ✅ Task Graph Handoff, ✅ Execution Traces, ✅ MCP Server
+**Phase 2.5 completed gaps**: ✅ Multi-Provider (7), ✅ Task Graph Handoff, ✅ Execution Traces, ✅ MCP Server
 
 **Current Priority Gaps (v3)**:
 | Gap | Competitor | Priority | Timeframe |
@@ -113,7 +113,7 @@ The current Agentra release ships a working end-to-end loop: create an issue, as
 
 | Feature | Description | Priority | Status |
 |---------|-------------|----------|--------|
-| Agent Memory (RAG) | pgvector-backed with 4-strategy RRF retrieval | P0 | ✅ Done |
+| Agent and Team Memory | Persistent CRUD, Web viewer, and workspace BM25 search | P0 | 🧪 Experimental; semantic/RAG paths are not wired |
 | Agent-to-Agent Handoff | Task Graph with DAG execution + handoff protocol | P0 | ✅ Done |
 | Multi-Provider Support | 7 providers (3 CLI + 4 API) via Backend Facade | P0 | ✅ Done |
 | Execution Traces | execution_traces table + TaskService integration | P1 | ✅ Done |
@@ -211,15 +211,18 @@ Unlock agents that get smarter over time. Persistent memory, MCP tool integratio
 
 ### Milestones
 
-#### 2.1 Persistent Agent Memory (RAG) — ✅ DONE
+#### 2.1 Persistent Agent Memory (RAG) — 🚧 IN PROGRESS
 
-Give each agent a scoped memory store powered by pgvector.
+Give each agent a scoped, explainable memory store.
 
-- Per-agent + per-workspace memory store (pgvector embeddings)
-- Automatic retrieval-augmented context injection at task start
-- Memory viewer UI — browse, edit, delete agent memories
-- Multi-strategy retrieval: semantic + keyword + graph + temporal (benchmarking against hindsight)
-- Team conventions doc auto-synthesized from merged PRs and completed tasks
+- ✅ Per-agent and per-workspace persisted records
+- ✅ Memory viewer UI for browse, create, and delete flows
+- 🧪 Workspace-scoped BM25 search across team and non-private agent records
+- 📋 Real embedding generation and backfill; current create flows store zero vectors
+- 📋 Automatic retrieval-augmented context injection at task start
+- 📋 Provenance, scope, TTL, confidence, PII, and prompt-injection policy
+- 📋 Strategy evaluation before adding semantic, graph, temporal, or fusion retrieval
+- 📋 Team conventions synthesis from merged PRs and completed tasks
 
 #### 2.2 Model Context Protocol (MCP) Integration — ✅ DONE
 
@@ -262,8 +265,8 @@ Expand beyond Claude/Codex/OpenCode to match swarmclaw's 23+ providers.
 
 | Feature | Description | Priority | Owner | Status |
 |---------|-------------|----------|-------|--------|
-| Agent Memory Store | pgvector-backed per-agent memory with UI viewer. | P0 | Platform | ✅ Done (Phase 2.5) |
-| RAG Context Injection | Automatic memory retrieval surfaced to agents at task start. | P0 | Platform | ✅ Done (Phase 2.5) |
+| Agent Memory Store | Persistent agent/team CRUD, BM25 search, and UI viewer. | P0 | Platform | 🧪 Experimental |
+| RAG Context Injection | Automatic, provenance-visible memory retrieval at task start. | P0 | Platform | Planned |
 | Agentra MCP Server | Expose issues, skills, memory as MCP tools to agents. | P0 | Platform | ✅ Done |
 | External MCP Registry | GitHub, Slack, web search tools via standard MCP protocol. | P1 | Platform | 📐 Designed ([spec](archive/specs/2026-05-10-external-mcp-registry-design.md)) |
 | Sub-Task Trees | Decompose issues into ordered / parallel child tasks. | P0 | Product | ✅ Done (Phase 2.5) |
@@ -499,7 +502,7 @@ Continuous investments in platform reliability, performance, and maintainability
 | Multi-agent orchestration | ✅ (Task Graph) | ✅ | ✅ (plugins) | ✅ | ❌ | ✅ | ✅ |
 | LLM Providers | 7 | 10 | 185 | Multi | 1 | Multi | Multi |
 | MCP Server | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
-| Persistent Agent Memory | ✅ (4-strategy) | ✅ (pluggable) | ❌ | ❌ | ❌ | ✅ (multi-tier) | ❌ |
+| Persistent Agent Memory | 🧪 (CRUD + BM25) | ✅ (pluggable) | ❌ | ❌ | ❌ | ✅ (multi-tier) | ❌ |
 | Human-in-the-loop approvals | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Skills / workflow templates | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Self-hostable & open source | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -518,7 +521,6 @@ See [competitive-analysis-v2.md](archive/specs/2026-05-10-competitive-analysis-v
 ### Differentiation (Updated v3)
 
 - **Real-time WebSocket + Persistent UI**: Only platform with both live agent status and full CRUD task management (0 of 40+ competitors have both)
-- **4-Strategy Memory + RRF**: Multi-strategy retrieval (semantic + keyword + graph + temporal) with RRF fusion — competitive with SOTA (hindsight)
 - **Multi-agent Task Graph**: DAG-based agent handoff with human review gates (most competitors lack handoff + approval combo)
 - **Cloud Runtime + Self-hosted**: Managed execution + PostgreSQL-backed multi-tenancy (no competitor offers both)
 - **Human-in-the-Loop**: Approval gates for sensitive agent actions — uniquely Agentra, no competitor has this

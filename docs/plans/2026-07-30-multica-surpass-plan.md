@@ -31,13 +31,13 @@ Agentra 与 Multica 已处于同一产品赛道，但当前成熟度差异很清
 - 55 个 up migrations，88 个 Go/TypeScript/E2E 测试文件。
 - Web 已有 Issues、Board、Inbox、My Issues、Agents、Runtimes、Skills、Loops、Settings 等入口。
 - Backend 已有 Issues、Comments、Reactions、Subscribers、Attachments、Agents、Runtimes、Cloud Runtime、Billing、Memory、Projects、Git hooks、Loops、Auto Decompose 等 handler 或 route。
-- 独有能力源码包括：Task Graph、Goal auto-decomposition、Engineering Loop、Memory RRF、MCP Server、Eval harness、Execution Trace、Repo-DNA、API-provider facade。
+- 独有能力源码包括：Task Graph、Goal auto-decomposition、Engineering Loop、Memory CRUD/BM25、MCP Server、Eval fixture contract、Execution Trace、Repo-DNA、API-provider facade。
 
 同时确认的收口问题：
 
 - Task Graph 前端调用 `/api/issues/:id/graph` 和 `/api/graph/nodes/:id`，主 Router 未挂载这些路径。
 - Trace 前端调用 `/api/tasks/:id/trace` 等路径，主 Router 暴露的是另一组路径。
-- Eval 和 Metrics handler 存在，但主 Router 未注册。
+- 初始审计发现 Metrics handler 未挂载、Eval handler 未挂载且返回 canned score；前者已正式挂载，后者已删除。
 - Projects 路由在主 Router 中重复声明，其中一组嵌套路径不正确；Web 只有少量 project components，没有完整页面入口。
 - Gateway log callback 仍是 TODO，README 宣称的实时日志需要端到端证明。
 - README、Roadmap、package version、tag 和实际可用能力之间存在版本与状态漂移。
@@ -218,6 +218,7 @@ Memory + Eval + Analytics feedback
 - 已完成 `M0-08` CLI command truth contract：`agentra` 无参数和 `--help` 统一由 Cobra 注册树生成，英文/中文顶层命令清单与 21 个真实命令做精确集合校验；同时移除了 `git hooks install/uninstall` 的重复注册。
 - 已完成 `M0-09` 统一 release metadata contract：`release/metadata.json` 是版本、tag、CLI/API/Web build info、package manifests、README 与 Roadmap 的单一来源；tag workflow 会在发布前拒绝元数据不一致，直接开发构建明确标识为 `dev/unknown`。
 - `M0-10` 已删除从未挂载却宣称存在的 Eval HTTP handler、placeholder score 与未使用 evaluator；CLI 只保留 25-case 静态 fixture contract 校验，并在机器输出中固定 `quality_gate=false`，真实 agent benchmark 留待可回放 execution ledger 完成后实现。
+- `M0-10` 已删除完全没有生产调用的 Memory service/hooks/semantic+graph+temporal/RRF 平行架构及其专用 SQL；保留真实可达的 agent/team CRUD、Web viewer 与 workspace BM25 搜索，并把 embedding/RAG/provenance 明确列为未完成。
 - 已删除未接入产品且调用旧 API 的 Trace Web 死代码；后端 Trace API 保留为唯一现有 contract，正式 Web viewer 后续基于它重建。
 - 已完成 `M0-07` Gateway → Web 日志流：Gateway 只接受 Authorization Header 的 JWT/PAT，并要求身份是目标 workspace 的 owner/admin，再把连接绑定到该单一 workspace；协议统一为 snake_case 强类型帧，以每任务单调 `seq`、stdout/stderr 和 32 KiB content 为契约。
 - cloud task 的 dispatched/log/completed/failed 事件都会再次验证 task、cloud runtime 与 Gateway workspace 的一致性；跨租户 ID 不作为存在性 oracle。日志在服务端脱敏后写入带 `(task_id, seq)` 唯一约束的 `task_message`，重复帧成功幂等但不重复广播。
