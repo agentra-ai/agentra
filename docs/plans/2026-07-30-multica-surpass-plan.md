@@ -304,6 +304,13 @@ Memory + Eval + Analytics feedback
 - 同一 conformance suite 可在本地和 CI 运行；Windows 有真实 shell/process regression。
 - provider 不支持某能力时，配置保存或 dispatch 返回明确错误。
 
+当前实施进度（2026-08-03）：
+
+- 已落地 `M2-01` 的 Runtime Adapter v1 类型契约和首个自动化 conformance matrix：Claude、Codex、OpenCode 必须完整声明 14 项能力、保持稳定 provider 顺序，并由测试锁定 native/adapter/unsupported 等级。
+- 三个 backend 的 descriptor 与中心 registry 由回归测试逐一比对；model listing 等未支持能力必须返回结构化 `UnsupportedCapabilityError`，descriptor 返回值也已验证无法反向修改 registry。
+- 执行参数在子进程查找和启动前统一校验；Codex/OpenCode 对 `max_turns` 和 `tool_restrictions` 的拒绝路径已有 pre-launch 回归，负 timeout、负 max turns 和空工具名返回结构化参数错误。
+- fixture child、真实 cancel/timeout/resume、process-tree cleanup、跨平台 CI 和 dispatch/UI 保存前校验尚未完成，因此 `M2-02` 至 `M2-05` 仍保持进行前状态，不能将三个 adapter 提升为 stable。
+
 ### M3 — Agentra Intelligence：形成真正差异化的编排闭环
 
 目标：让 Goal → Plan → Parallel Work → Review → Learning 成为 Agentra 的核心产品，而不是孤立 demo。

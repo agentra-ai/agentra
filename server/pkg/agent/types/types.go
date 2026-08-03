@@ -49,10 +49,8 @@ type ExecOptions struct {
 
 	// Tools restricts the agent's tool set to the given list. When empty (the
 	// default for non-loop tasks), the agent CLI uses its full default tool
-	// set. When non-empty, behavior depends on the provider:
-	//   - Claude: passed as --allowedTools (comma-joined)
-	//   - Codex:  included in the turn/start JSON-RPC params (provider-specific)
-	//   - Opencode: included in the run command flags (provider-specific)
+	// set. A non-empty value is accepted only when the adapter declares the
+	// tool_restrictions capability; unsupported adapters reject it before launch.
 	Tools []string
 }
 
