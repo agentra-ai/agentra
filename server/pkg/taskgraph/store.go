@@ -119,23 +119,6 @@ func (s *GraphStore) UpdateNode(ctx context.Context, id string, params *UpdateNo
 	return nodeFromDB(&row), nil
 }
 
-// GetReadyNodes returns pending nodes whose dependencies are all satisfied.
-func (s *GraphStore) GetReadyNodes(ctx context.Context, issueID string) ([]GraphNode, error) {
-	issUUID, err := parseUUID(issueID)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := s.queries.GetReadyNodes(ctx, issUUID)
-	if err != nil {
-		return nil, fmt.Errorf("get ready nodes: %w", err)
-	}
-	nodes := make([]GraphNode, len(rows))
-	for i, r := range rows {
-		nodes[i] = *nodeFromDB(&r)
-	}
-	return nodes, nil
-}
-
 // CreateEdge inserts a new edge between two nodes.
 func (s *GraphStore) CreateEdge(ctx context.Context, from, to string, edgeType EdgeType, metadata []byte) (*GraphEdge, error) {
 	fromUUID, err := parseUUID(from)

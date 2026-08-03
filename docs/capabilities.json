@@ -59,10 +59,10 @@
       "status": "beta",
       "surfaces": ["api", "web"],
       "summary": "Issue-scoped DAG visualization, persisted nodes and edges, and node mutation APIs.",
-      "limitations": ["Scheduler recovery, graph mutation integration tests, and execution idempotency need deeper coverage."],
+      "limitations": ["Task graph nodes are planning artifacts; Agentra does not automatically schedule, execute, recover, or hand off graph nodes."],
       "evidence": {
         "files": ["server/pkg/taskgraph", "server/internal/handler/task_graph.go", "apps/web/features/taskgraph"],
-        "tests": ["server/cmd/server/router_contract_test.go", "apps/web/features/taskgraph/hooks/useTaskGraph.test.ts"]
+        "tests": ["server/cmd/server/router_contract_test.go", "server/cmd/server/integration_test.go", "apps/web/features/taskgraph/hooks/useTaskGraph.test.ts"]
       }
     },
     {

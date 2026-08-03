@@ -21,18 +21,6 @@ UPDATE task_graph_nodes SET
 WHERE id = $1
 RETURNING *;
 
--- name: GetReadyNodes :many
--- Returns pending nodes whose all dependencies (from_edges) are completed
-SELECT n.* FROM task_graph_nodes n
-WHERE n.issue_id = $1 AND n.status = 'pending'
-  AND NOT EXISTS (
-    SELECT 1 FROM task_graph_edges e
-    JOIN task_graph_nodes dep ON dep.id = e.from_node_id
-    WHERE e.to_node_id = n.id
-      AND e.edge_type = 'depends_on'
-      AND dep.status != 'completed'
-  );
-
 -- name: CreateTaskEdge :one
 INSERT INTO task_graph_edges (from_node_id, to_node_id, edge_type, metadata)
 VALUES ($1, $2, $3, $4)

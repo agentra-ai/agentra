@@ -129,53 +129,6 @@ func (q *Queries) DeleteTaskNode(ctx context.Context, id pgtype.UUID) (TaskGraph
 	return i, err
 }
 
-const getReadyNodes = `-- name: GetReadyNodes :many
-SELECT n.id, n.workspace_id, n.issue_id, n.agent_id, n.node_type, n.status, n.context, n.result, n.position_x, n.position_y, n.depth, n.created_at, n.updated_at FROM task_graph_nodes n
-WHERE n.issue_id = $1 AND n.status = 'pending'
-  AND NOT EXISTS (
-    SELECT 1 FROM task_graph_edges e
-    JOIN task_graph_nodes dep ON dep.id = e.from_node_id
-    WHERE e.to_node_id = n.id
-      AND e.edge_type = 'depends_on'
-      AND dep.status != 'completed'
-  )
-`
-
-// Returns pending nodes whose all dependencies (from_edges) are completed
-func (q *Queries) GetReadyNodes(ctx context.Context, issueID pgtype.UUID) ([]TaskGraphNode, error) {
-	rows, err := q.db.Query(ctx, getReadyNodes, issueID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []TaskGraphNode{}
-	for rows.Next() {
-		var i TaskGraphNode
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.IssueID,
-			&i.AgentID,
-			&i.NodeType,
-			&i.Status,
-			&i.Context,
-			&i.Result,
-			&i.PositionX,
-			&i.PositionY,
-			&i.Depth,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getTaskNode = `-- name: GetTaskNode :one
 SELECT id, workspace_id, issue_id, agent_id, node_type, status, context, result, position_x, position_y, depth, created_at, updated_at FROM task_graph_nodes WHERE id = $1
 `

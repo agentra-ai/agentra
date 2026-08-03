@@ -50,7 +50,7 @@ Per council-of-high-intelligence deliberation (Karpathy 1.5× + Machiavelli + Wa
 | Spatial/Visual | voicetree | 826 | Obsidian-like graph for agent orchestration |
 | Task Management UI | Tasuku, Overseer, crewboard-oss | 11–223 | Lightweight but no agent runtime |
 
-**Phase 2.5 completed gaps**: ✅ Multi-Provider (7), ✅ Task Graph Handoff, ✅ Execution Traces
+**Phase 2.5 completed gaps**: ✅ Multi-Provider (7), ✅ Task Graph persistence/visualization, ✅ Execution Traces
 
 **Current Priority Gaps (v3)**:
 | Gap | Competitor | Priority | Timeframe |
@@ -114,10 +114,10 @@ The current Agentra release ships a working end-to-end loop: create an issue, as
 | Feature | Description | Priority | Status |
 |---------|-------------|----------|--------|
 | Agent and Team Memory | Persistent CRUD, Web viewer, and workspace BM25 search | P0 | 🧪 Experimental; semantic/RAG paths are not wired |
-| Agent-to-Agent Handoff | Task Graph with DAG execution + handoff protocol | P0 | ✅ Done |
+| Agent-to-Agent Handoff | Runtime dispatch, dependency-aware execution, and artifact/context transfer | P0 | Planned |
 | Multi-Provider Support | 7 providers (3 CLI + 4 API) via Backend Facade | P0 | ✅ Done |
 | Execution Traces | execution_traces table + TaskService integration | P1 | ✅ Done |
-| Goal → DAG Auto-decomposition | LLM auto-decompose issue into task graph (open-multi-agent has this) | P0 | ✅ Done ([spec](archive/specs/2026-05-10-goal-to-dag-auto-decomposition-design.md)) |
+| Goal → DAG Auto-decomposition | LLM auto-decompose issue into a persisted task graph | P0 | 🧪 Beta ([spec](archive/specs/2026-05-10-goal-to-dag-auto-decomposition-design.md)) |
 | One-Command Install | Homebrew Cask, checksum-verifying shell/PowerShell installers, and idempotent `agentra setup` | P0 | 🧪 Beta; signed assets on next tag |
 | GitHub Integration | GitHub OAuth App + webhooks + PR/commit linking | P1 | 🚧 In Progress |
 | Git-Native Hooks | Auto-link commits via prepare-commit-msg + post-merge hooks (agent-tasks has this) | P1 | ✅ Done ([spec](archive/specs/2026-05-10-git-native-hooks-design.md)) |
@@ -238,11 +238,11 @@ Expose Agentra's data model as authenticated, workspace-scoped MCP tools.
 
 Complex tasks decompose into sub-tasks, each assigned to specialist agents.
 
-- Sub-task tree model: issues can have typed child tasks
-- Planner agent role: decomposes parent task into ordered steps
-- Parallel execution of independent sub-tasks
-- Agent handoff protocol: context + artifacts passed between agents
-- Visual task graph UI — DAG view showing agent chains
+- ✅ Persisted issue-scoped DAG nodes and typed dependency edges
+- 🧪 Planner decomposes an issue goal and assigns persisted graph nodes
+- ✅ Visual task graph UI for inspection and manual status/layout updates
+- 📋 Dependency-aware dispatch and parallel/sequential execution
+- 📋 Agent handoff protocol with context, artifacts, recovery, and idempotency
 
 #### 2.4 Analytics & Insights Dashboard
 
@@ -270,14 +270,14 @@ Expand beyond Claude/Codex/OpenCode to match swarmclaw's 23+ providers.
 | RAG Context Injection | Automatic, provenance-visible memory retrieval at task start. | P0 | Platform | Planned |
 | Agentra MCP Server | Expose workspace-scoped issues, skills, and memory with auditable authorization. | P0 | Platform | Planned |
 | External MCP Registry | GitHub, Slack, web search tools via standard MCP protocol. | P1 | Platform | 📐 Designed ([spec](archive/specs/2026-05-10-external-mcp-registry-design.md)) |
-| Sub-Task Trees | Decompose issues into ordered / parallel child tasks. | P0 | Product | ✅ Done (Phase 2.5) |
-| Multi-Agent Planner | Planner agent role that decomposes and delegates work. | P0 | Platform | ✅ Done (Phase 2.5) |
-| Agent-to-Agent Handoff | Context + artifacts passed between agents during delegation. | P0 | Platform | ✅ Done (Phase 2.5) |
-| Task Graph Visualization | DAG view of multi-agent execution chains. | P1 | Product | ✅ Done (Phase 2.5) |
+| Task Graph Persistence | Persist issue-scoped nodes, dependencies, assignments, status, and layout. | P0 | Product | 🧪 Beta |
+| Goal Planner | Decompose an issue goal and assign persisted graph nodes. | P0 | Platform | 🧪 Beta |
+| Agent-to-Agent Handoff | Dispatch graph nodes and transfer context/artifacts during delegation. | P0 | Platform | Planned |
+| Task Graph Visualization | DAG view for persisted planning nodes and edges. | P1 | Product | 🧪 Beta |
 | Execution Traces | Structured logging: steps, tools, tokens, cost per task. | P1 | Platform | ✅ Done (Phase 2.5) |
 | Multi-Provider Support | 7 providers (3 CLI + 4 API) via Backend Facade. | P0 | Platform | ✅ Done (Phase 2.5) |
 | Analytics Dashboard | Agent perf, cycle time, cost, velocity charts. | P1 | Product | Pending |
-| Goal → DAG Auto-Decomposition | LLM auto-decomposes issue into task graph (learn from open-multi-agent). | P0 | Platform | ✅ Done ([spec](archive/specs/2026-05-10-goal-to-dag-auto-decomposition-design.md)) |
+| Goal → DAG Auto-Decomposition | LLM auto-decomposes an issue into a persisted task graph. | P0 | Platform | 🧪 Beta ([spec](archive/specs/2026-05-10-goal-to-dag-auto-decomposition-design.md)) |
 | One-Command Install | Homebrew/shell/PowerShell install plus `agentra setup`; signed SBOM/provenance release contract. | P0 | DX | 🧪 Beta; public assets on next tag |
 | Git-Native Hooks | Auto-link commits to tasks; `post-merge` auto-completes tasks. | P1 | Platform | ✅ Done ([spec](archive/specs/2026-05-10-git-native-hooks-design.md)) |
 
@@ -499,8 +499,8 @@ Continuous investments in platform reliability, performance, and maintainability
 |-----------|---------|-----------------|-----------------|-------|-------------|-------|--------|
 | Agent-native task assignment | ✅ | ✅ | ❌ (plugins) | ✅ | ✅ | ✅ | ❌ |
 | Real-time agent status (WebSocket) | ✅ | ❌ (events) | N/A | ❌ (poll) | ❌ (stdio) | ❌ | ❌ |
-| Goal → DAG auto-decomposition | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Multi-agent orchestration | ✅ (Task Graph) | ✅ | ✅ (plugins) | ✅ | ❌ | ✅ | ✅ |
+| Goal → DAG auto-decomposition | 🧪 | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Multi-agent orchestration | 📋 (persisted DAG only) | ✅ | ✅ (plugins) | ✅ | ❌ | ✅ | ✅ |
 | LLM Providers | 7 | 10 | 185 | Multi | 1 | Multi | Multi |
 | MCP Server | 📋 | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | Persistent Agent Memory | 🧪 (CRUD + BM25) | ✅ (pluggable) | ❌ | ❌ | ❌ | ✅ (multi-tier) | ❌ |
@@ -513,16 +513,16 @@ Continuous investments in platform reliability, performance, and maintainability
 | One-command install | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Multi-workspace | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
-### Key Insight: Goal → DAG Gap
+### Key Insight: DAG Execution Gap
 
-`open-multi-agent` (6k stars, MIT) has **Goal → DAG auto-decomposition** — give it a goal string, the Coordinator agent decomposes into a task DAG automatically. Agentra's Task Graph requires manual node/edge creation. This is the #1 competitive gap to close.
+Agentra can decompose a goal into a persisted DAG and render it in the Web UI. It does not yet dispatch those graph nodes through a dependency-aware runtime or transfer verified handoff context and artifacts. Closing that execution gap is the next orchestration milestone.
 
 See [competitive-analysis-v2.md](archive/specs/2026-05-10-competitive-analysis-v2.md) for full analysis.
 
 ### Differentiation (Updated v3)
 
 - **Real-time WebSocket + Persistent UI**: Only platform with both live agent status and full CRUD task management (0 of 40+ competitors have both)
-- **Multi-agent Task Graph**: DAG-based agent handoff with human review gates (most competitors lack handoff + approval combo)
+- **Task graph foundation**: persisted, workspace-scoped DAG planning and visualization; runtime delegation and handoff remain planned
 - **Cloud Runtime + Self-hosted**: Managed execution + PostgreSQL-backed multi-tenancy (no competitor offers both)
 - **Human-in-the-Loop**: Approval gates for sensitive agent actions — uniquely Agentra, no competitor has this
 - **MCP interoperability roadmap**: ship only after PAT scopes, per-resource authorization, audit attribution, and conformance tests are enforced end to end
