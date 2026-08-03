@@ -101,26 +101,27 @@ func TestBuildPromptForStage_FixUsesRealBranchAndIteration(t *testing.T) {
 		ID:         "task-1",
 		IssueID:    "issue-42",
 		IssueTitle: "Real branch threading",
-		Branch:     "loop/issue-42",
+		Branch:     "feature/real-fix-branch",
 		Iteration:  2,
 		LoopID:     "loop-uuid",
 	}
-	userPrompt, _, _, _ := buildPromptForStage("loop_fix", task, "/tmp/work")
+	userPrompt, _, _, _, err := buildPromptForStage("loop_fix", task, "/tmp/work")
+	if err != nil {
+		t.Fatalf("buildPromptForStage: %v", err)
+	}
 
 	if userPrompt == "" {
 		t.Fatal("expected non-empty user prompt for loop_fix")
 	}
-	if !strings.Contains(userPrompt, "loop/issue-42") {
-		t.Errorf("expected user prompt to mention real branch %q, got %q", "loop/issue-42", userPrompt)
+	if !strings.Contains(userPrompt, "feature/real-fix-branch") {
+		t.Errorf("expected user prompt to mention real branch %q, got %q", "feature/real-fix-branch", userPrompt)
 	}
 	if !strings.Contains(userPrompt, "iteration 2") && !strings.Contains(userPrompt, "iteration %d") {
 		t.Errorf("expected user prompt to mention iteration 2, got %q", userPrompt)
 	}
-	// And it must NOT mention the placeholder branch "loop/issue-42"
-	// from a previous fix that hard-coded fmt.Sprintf — actually
-	// "loop/issue-42" happens to look identical to the placeholder in
-	// this test because the test uses that exact name. The stronger
-	// assertion is that iteration is 2, not 1.
+	if strings.Contains(userPrompt, "loop/issue-42") {
+		t.Errorf("expected user prompt not to use the derived placeholder branch, got %q", userPrompt)
+	}
 	if strings.Contains(userPrompt, "iteration 1") {
 		t.Errorf("expected user prompt to use real iteration 2, not the placeholder 1, got %q", userPrompt)
 	}
@@ -139,7 +140,10 @@ func TestBuildPromptForStage_ReviewUsesRealBranch(t *testing.T) {
 		Iteration: 3,
 		LoopID:    "loop-uuid-2",
 	}
-	userPrompt, systemPrompt, _, _ := buildPromptForStage("loop_review", task, "/tmp/work")
+	userPrompt, systemPrompt, _, _, err := buildPromptForStage("loop_review", task, "/tmp/work")
+	if err != nil {
+		t.Fatalf("buildPromptForStage: %v", err)
+	}
 
 	if userPrompt == "" {
 		t.Fatal("expected non-empty user prompt for loop_review")
@@ -158,15 +162,9 @@ func TestBuildPromptForStage_ReviewUsesRealBranch(t *testing.T) {
 	}
 }
 
-// TestBuildPromptForStage_FixFallsBackWhenBranchEmpty verifies the
-// safety net: if the claim handler somehow returns an empty Branch
-// (e.g. the loop row's branch_name is empty because develop never
-// completed), buildPromptForStage must still emit a well-formed prompt
-// using a placeholder rather than panic or produce an empty branch in
-// the user prompt. This is the last-line-of-defence guard — the
-// warning log gives operators a signal, the placeholder keeps the
-// executor unblocked.
-func TestBuildPromptForStage_FixFallsBackWhenBranchEmpty(t *testing.T) {
+// TestBuildPromptForStage_FixRejectsEmptyBranch verifies that a fix task
+// cannot run against a guessed branch and then report false success.
+func TestBuildPromptForStage_FixRejectsEmptyBranch(t *testing.T) {
 	t.Parallel()
 
 	task := Task{
@@ -176,15 +174,33 @@ func TestBuildPromptForStage_FixFallsBackWhenBranchEmpty(t *testing.T) {
 		Iteration: 1,
 		LoopID:    "loop-uuid-3",
 	}
-	userPrompt, _, _, _ := buildPromptForStage("loop_fix", task, "/tmp/work")
+	_, _, _, _, err := buildPromptForStage("loop_fix", task, "/tmp/work")
+	if err == nil || !strings.Contains(err.Error(), "no persisted branch") {
+		t.Fatalf("expected missing-branch error, got %v", err)
+	}
+}
 
-	if userPrompt == "" {
-		t.Fatal("expected non-empty user prompt even with empty Branch (fallback)")
-	}
-	// The fallback uses "loop/<IssueID>".
-	if !strings.Contains(userPrompt, "loop/issue-99") {
-		t.Errorf("expected fallback user prompt to mention placeholder branch, got %q", userPrompt)
-	}
+func TestBuildPromptForStage_RejectsInvalidLoopContext(t *testing.T) {
+	t.Parallel()
+
+	t.Run("non-positive review iteration", func(t *testing.T) {
+		_, _, _, _, err := buildPromptForStage("loop_review", Task{
+			ID:        "task-invalid-iteration",
+			IssueID:   "issue-100",
+			Branch:    "feature/real-branch",
+			Iteration: 0,
+		}, "/tmp/work")
+		if err == nil || !strings.Contains(err.Error(), "invalid iteration") {
+			t.Fatalf("expected invalid-iteration error, got %v", err)
+		}
+	})
+
+	t.Run("unknown loop task type", func(t *testing.T) {
+		_, _, _, _, err := buildPromptForStage("loop_publish", Task{ID: "task-unknown"}, "/tmp/work")
+		if err == nil || !strings.Contains(err.Error(), "unknown loop task type") {
+			t.Fatalf("expected unknown-loop-type error, got %v", err)
+		}
+	})
 }
 
 // TestBuildPromptForStage_PlanAndDevelopUsePlaceholder confirms the
@@ -200,7 +216,10 @@ func TestBuildPromptForStage_PlanAndDevelopUsePlaceholder(t *testing.T) {
 			// Branch and Iteration intentionally empty — these
 			// stages run before the develop branch exists.
 		}
-		userPrompt, _, _, _ := buildPromptForStage(taskType, task, "/tmp/work")
+		userPrompt, _, _, _, err := buildPromptForStage(taskType, task, "/tmp/work")
+		if err != nil {
+			t.Fatalf("%s: buildPromptForStage: %v", taskType, err)
+		}
 
 		if userPrompt == "" {
 			t.Fatalf("%s: expected non-empty user prompt", taskType)
