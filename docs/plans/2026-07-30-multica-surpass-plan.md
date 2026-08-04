@@ -312,7 +312,8 @@ Memory + Eval + Analytics feedback
 - 已启动 `M2-02`：加入由测试期间原生编译的 hermetic fake CLI，同一个 fixture 覆盖 Claude JSONL、Codex JSON-RPC 和 OpenCode JSONL，并故意将每帧拆成多次 pipe write，验证 partial JSON framing。
 - 三个 adapter 已通过真实子进程 success、stderr、非零退出、bounded timeout、主动 cancel 和 resume miss 回归；Codex 成功结果现在保留可恢复的 thread ID，adapter stderr 在进入结构化日志前执行 secret redaction。
 - hermetic runtime contract 已加入独立的 Ubuntu、macOS、Windows CI matrix，Linux 额外启用 race detector；真实 hosted runner 结果仍须在提交推送后确认。
-- token usage/artifact fixture、真实 provider binary、descendant process-tree cleanup 和 dispatch/UI 保存前校验尚未完成，因此 `M2-02` 至 `M2-05` 仍处于进行中，不能将三个 adapter 提升为 stable。
+- Linux/macOS runtime 现在运行在独立 process group，Windows 使用系统 tree termination；三种 adapter 均通过 heartbeat 孙进程回归证明 cancel 后不再继续执行，等待上限固定为 2 秒。Windows hosted runner 结果仍须在推送后确认。
+- token usage/artifact fixture、真实 provider binary、crash resume 和 dispatch/UI 保存前校验尚未完成，因此 `M2-02` 至 `M2-05` 仍处于进行中，不能将三个 adapter 提升为 stable。
 
 ### M3 — Agentra Intelligence：形成真正差异化的编排闭环
 

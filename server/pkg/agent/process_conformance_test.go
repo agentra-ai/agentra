@@ -212,6 +212,37 @@ func TestRuntimeFixtureCancellationTerminatesProcess(t *testing.T) {
 	}
 }
 
+func TestRuntimeFixtureCancellationKillsDescendants(t *testing.T) {
+	t.Parallel()
+
+	for _, provider := range []ProviderType{ProviderClaude, ProviderCodex, ProviderOpenCode} {
+		provider := provider
+		t.Run(string(provider), func(t *testing.T) {
+			t.Parallel()
+
+			heartbeatPath := filepath.Join(t.TempDir(), "descendant-heartbeat")
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			backend := newFixtureBackendWithEnv(t, provider, "hang_with_child", nil, map[string]string{
+				"AGENTRA_RUNTIME_FIXTURE_HEARTBEAT": heartbeatPath,
+			})
+			session, err := backend.Execute(ctx, "fixture prompt", ExecOptions{Timeout: 10 * time.Second})
+			if err != nil {
+				t.Fatalf("Execute() error: %v", err)
+			}
+
+			_ = waitForRunning(t, session)
+			waitForHeartbeat(t, heartbeatPath)
+			cancel()
+			_, result := collectSession(t, session)
+			if result.Status != "aborted" {
+				t.Fatalf("status = %q, want aborted (error = %q)", result.Status, result.Error)
+			}
+			assertHeartbeatStopped(t, heartbeatPath)
+		})
+	}
+}
+
 func TestRuntimeFixtureResumeMissFailsExplicitly(t *testing.T) {
 	t.Parallel()
 
@@ -241,16 +272,69 @@ func TestRuntimeFixtureResumeMissFailsExplicitly(t *testing.T) {
 
 func newFixtureBackend(t *testing.T, provider ProviderType, scenario string, logger *slog.Logger) Backend {
 	t.Helper()
+	return newFixtureBackendWithEnv(t, provider, scenario, logger, nil)
+}
 
+func newFixtureBackendWithEnv(
+	t *testing.T,
+	provider ProviderType,
+	scenario string,
+	logger *slog.Logger,
+	extraEnv map[string]string,
+) Backend {
+	t.Helper()
+
+	env := make(map[string]string, len(extraEnv)+1)
+	env[fixtureScenarioEnv] = scenario
+	for key, value := range extraEnv {
+		env[key] = value
+	}
 	backend, err := New(string(provider), Config{
 		ExecutablePath: runtimeFixturePath,
-		Env:            map[string]string{fixtureScenarioEnv: scenario},
+		Env:            env,
 		Logger:         logger,
 	})
 	if err != nil {
 		t.Fatalf("New(%q) error: %v", provider, err)
 	}
 	return backend
+}
+
+func waitForHeartbeat(t *testing.T, path string) {
+	t.Helper()
+
+	deadline := time.Now().Add(5 * time.Second)
+	previous := ""
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(path)
+		if err == nil {
+			current := string(data)
+			if previous != "" && current != previous {
+				return
+			}
+			previous = current
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("descendant did not write heartbeat at %s", path)
+}
+
+func assertHeartbeatStopped(t *testing.T, path string) {
+	t.Helper()
+
+	time.Sleep(100 * time.Millisecond)
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read descendant heartbeat after cancellation: %v", err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read descendant heartbeat after cleanup window: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("descendant survived cancellation: heartbeat changed from %q to %q", before, after)
+	}
 }
 
 func collectSession(t *testing.T, session *Session) ([]Message, Result) {

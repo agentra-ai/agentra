@@ -281,7 +281,7 @@ var adapterDescriptors = map[ProviderType]AdapterDescriptor{
 		},
 		[]Capability{CapabilityDiscover, CapabilityCancel, CapabilitySkills},
 		map[Capability]string{
-			CapabilityCancel: "context cancellation terminates the CLI process; descendant process cleanup is not yet guaranteed",
+			CapabilityCancel: "context cancellation terminates the CLI process tree with a bounded wait",
 			CapabilitySkills: "skills are installed into the per-task .claude/skills directory before launch",
 		},
 	),
@@ -296,7 +296,7 @@ var adapterDescriptors = map[ProviderType]AdapterDescriptor{
 		},
 		[]Capability{CapabilityDiscover, CapabilityCancel, CapabilitySkills},
 		map[Capability]string{
-			CapabilityCancel: "context cancellation terminates app-server; descendant process cleanup is not yet guaranteed",
+			CapabilityCancel: "context cancellation terminates the app-server process tree with a bounded wait",
 			CapabilitySkills: "skills are installed into the isolated per-task CODEX_HOME before launch",
 		},
 	),
@@ -311,7 +311,7 @@ var adapterDescriptors = map[ProviderType]AdapterDescriptor{
 		},
 		[]Capability{CapabilityDiscover, CapabilityCancel, CapabilitySkills},
 		map[Capability]string{
-			CapabilityCancel: "context cancellation terminates the CLI process; descendant process cleanup is not yet guaranteed",
+			CapabilityCancel: "context cancellation terminates the CLI process tree with a bounded wait",
 			CapabilitySkills: "skills are installed into the per-task .config/opencode/skills directory before launch",
 		},
 	),

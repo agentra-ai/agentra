@@ -24,9 +24,10 @@
       "status": "beta",
       "surfaces": ["api", "cli", "daemon"],
       "summary": "Local daemon claims tasks and runs supported coding-agent CLIs.",
-      "limitations": ["Provider capability conformance and deeper Windows process-tree cancellation tests are not yet release gates."],
+      "limitations": ["Hermetic conformance does not replace compatibility tests against real provider binaries.", "Hosted Windows process-tree results, crash resume, usage, and artifact reporting are not yet verified release gates."],
       "evidence": {
-        "files": ["server/internal/daemon", "server/pkg/agent"]
+        "files": ["server/internal/daemon", "server/pkg/agent"],
+        "tests": ["server/pkg/agent/contract_test.go", "server/pkg/agent/process_conformance_test.go"]
       }
     },
     {

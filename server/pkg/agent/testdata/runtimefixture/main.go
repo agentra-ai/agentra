@@ -8,18 +8,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 )
 
 const (
-	scenarioEnv = "AGENTRA_RUNTIME_FIXTURE_SCENARIO"
-	secret      = "sk-agentra-runtime-fixture-secret-1234567890"
+	scenarioEnv  = "AGENTRA_RUNTIME_FIXTURE_SCENARIO"
+	heartbeatEnv = "AGENTRA_RUNTIME_FIXTURE_HEARTBEAT"
+	secret       = "sk-agentra-runtime-fixture-secret-1234567890"
 )
 
 func main() {
 	if hasArg("--version") {
 		fmt.Println("agentra-runtime-fixture 1.0.0")
+		return
+	}
+	if hasArg("--fixture-child") {
+		runHeartbeatChild()
 		return
 	}
 
@@ -56,12 +62,13 @@ func provider() string {
 
 func runClaude(scenario string) {
 	fmt.Fprintf(os.Stderr, "fixture stderr token=%s\n", secret)
+	startDescendantIfRequested(scenario)
 	writeJSON(map[string]any{
 		"type":       "system",
 		"session_id": "fixture-claude-session",
 	})
 
-	if scenario == "hang" {
+	if scenario == "hang" || scenario == "hang_with_child" {
 		hang()
 	}
 	if scenario == "resume_miss" {
@@ -92,12 +99,13 @@ func runClaude(scenario string) {
 
 func runOpenCode(scenario string) {
 	fmt.Fprintf(os.Stderr, "fixture stderr token=%s\n", secret)
+	startDescendantIfRequested(scenario)
 	writeJSON(map[string]any{
 		"type":      "step_start",
 		"sessionID": "fixture-opencode-session",
 	})
 
-	if scenario == "hang" {
+	if scenario == "hang" || scenario == "hang_with_child" {
 		hang()
 	}
 	if scenario == "resume_miss" {
@@ -125,6 +133,7 @@ func runOpenCode(scenario string) {
 
 func runCodex(scenario string) {
 	fmt.Fprintf(os.Stderr, "fixture stderr token=%s\n", secret)
+	startDescendantIfRequested(scenario)
 
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
@@ -159,7 +168,7 @@ func runCodex(scenario string) {
 					"turn": map[string]any{"id": "fixture-codex-turn", "status": "inProgress"},
 				},
 			})
-			if scenario == "hang" {
+			if scenario == "hang" || scenario == "hang_with_child" {
 				hang()
 			}
 			writeJSON(map[string]any{
@@ -233,6 +242,37 @@ func argValue(name string) string {
 		}
 	}
 	return ""
+}
+
+func startDescendantIfRequested(scenario string) {
+	if scenario != "hang_with_child" {
+		return
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	child := exec.Command(executable, "--fixture-child")
+	child.Env = os.Environ()
+	child.Stdout = os.Stderr
+	child.Stderr = os.Stderr
+	if err := child.Start(); err != nil {
+		panic(err)
+	}
+}
+
+func runHeartbeatChild() {
+	path := os.Getenv(heartbeatEnv)
+	if path == "" {
+		panic("runtime fixture heartbeat path is required")
+	}
+	for {
+		value := fmt.Sprintf("%d", time.Now().UnixNano())
+		if err := os.WriteFile(path, []byte(value), 0o600); err != nil {
+			panic(err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 func hang() {

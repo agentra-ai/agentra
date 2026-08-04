@@ -52,6 +52,7 @@ func (b *opencodeBackend) Execute(ctx context.Context, prompt string, opts ExecO
 	args = append(args, prompt)
 
 	cmd := exec.CommandContext(runCtx, execPath, args...)
+	configureProcessTree(cmd)
 	if opts.Cwd != "" {
 		cmd.Dir = opts.Cwd
 	}

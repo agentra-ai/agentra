@@ -55,6 +55,7 @@ func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 	args = append(args, "-p", prompt)
 
 	cmd := exec.CommandContext(runCtx, execPath, args...)
+	configureProcessTree(cmd)
 	if opts.Cwd != "" {
 		cmd.Dir = opts.Cwd
 	}
@@ -405,6 +406,7 @@ func buildEnv(extra map[string]string) []string {
 
 func detectCLIVersion(ctx context.Context, execPath string) (string, error) {
 	cmd := exec.CommandContext(ctx, execPath, "--version")
+	configureProcessTree(cmd)
 	data, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("detect version for %s: %w", execPath, err)
