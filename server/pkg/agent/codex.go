@@ -200,6 +200,7 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 			b.cfg.Logger.Info("codex thread started", "thread_id", threadID)
 		}
 		c.threadID = threadID
+		trySend(msgCh, Message{Type: MessageSession, SessionID: threadID})
 
 		// 3. Send turn and wait for completion
 		turnParams := buildCodexTurnParams(opts, threadID, prompt)

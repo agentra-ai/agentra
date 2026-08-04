@@ -286,6 +286,11 @@ Memory + Eval + Analytics feedback
 
 目标：先把 3 个核心 backend 做到稳定，再以协议化方式扩展。
 
+执行拆分：M2 是长期路线中的一个阶段，不作为单次、无限范围的执行目标。当前只验收
+`M2A Core Conformance`（`M2-01` 至 `M2-05`）；`M2-06`/`M2-08` 进入后续
+`M2B Isolation & SDK`，`M2-07` 进入 `M2C Provider Expansion`。当前门槛、证据和
+授权边界见 [M2 Runtime Conformance 检查点](./2026-08-04-m2-runtime-conformance-checkpoint.md)。
+
 工作包：
 
 - `M2-01` 定义 Runtime Adapter v1：discover、models、execute、stream、resume、cancel、skills、MCP、usage、artifacts。
@@ -314,7 +319,8 @@ Memory + Eval + Analytics feedback
 - hermetic runtime contract 已加入独立的 Ubuntu、macOS、Windows CI matrix，Linux 额外启用 race detector；真实 hosted runner 结果仍须在提交推送后确认。
 - Linux/macOS runtime 现在运行在独立 process group，Windows 使用系统 tree termination；三种 adapter 均通过 heartbeat 孙进程回归证明 cancel 后不再继续执行，等待上限固定为 2 秒。Windows hosted runner 结果仍须在推送后确认。
 - 已启动 `M2-04` 的服务端闭环：daemon 只允许注册已声明的本地 provider；Agent 保存时从 runtime 派生 provider 并拒绝冲突值；Engineering Loop 创建前验证 stage 所需的 max-turn/tool 能力；daemon ping 与 task launch 都按 descriptor 校验选项。
-- token usage/artifact fixture、真实 provider binary、crash resume、通用 pre-claim 过滤和 UI capability 展示尚未完成，因此 `M2-02` 至 `M2-05` 仍处于进行中，不能将三个 adapter 提升为 stable。
+- 已完成 crash-resume 的本地闭环：三个 adapter 在 provider session 建立后、执行结束前发出 checkpoint；server 只允许 workspace 成员为运行中 task 持久化 session/workdir；同一稳定 daemon identity 的新进程 instance 重新注册时在 retry budget 内自动重排队，同一 instance 的重复注册保持幂等，并在重新 claim 同一 task 时优先恢复该 checkpoint。adapter、client、数据库恢复和跨租户拒绝均有回归。
+- token usage/artifact fixture、真实 provider binary、通用 pre-claim 过滤和 UI capability 展示尚未完成，因此 `M2-02` 至 `M2-04` 仍处于进行中，不能将三个 adapter 提升为 stable。
 
 ### M3 — Agentra Intelligence：形成真正差异化的编排闭环
 

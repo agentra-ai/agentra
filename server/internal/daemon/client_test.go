@@ -46,3 +46,30 @@ func TestReportTaskMessagesSplitsBoundedBatches(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckpointTaskSessionRequest(t *testing.T) {
+	var path string
+	var body map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	if err := client.CheckpointTaskSession(context.Background(), "task-1", "session-1", "/tmp/worktree-1"); err != nil {
+		t.Fatal(err)
+	}
+	if path != "/api/daemon/tasks/task-1/session" {
+		t.Fatalf("path = %q", path)
+	}
+	if body["session_id"] != "session-1" || body["work_dir"] != "/tmp/worktree-1" {
+		t.Fatalf("body = %#v", body)
+	}
+}

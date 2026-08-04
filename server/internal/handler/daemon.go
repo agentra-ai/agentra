@@ -60,6 +60,7 @@ func (h *Handler) reconcileAgentsForWorkspace(workspaceID string) {
 type DaemonRegisterRequest struct {
 	WorkspaceID string `json:"workspace_id"`
 	DaemonID    string `json:"daemon_id"`
+	InstanceID  string `json:"instance_id"`
 	DeviceName  string `json:"device_name"`
 	CLIVersion  string `json:"cli_version"` // agentra CLI version
 	Runtimes    []struct {
@@ -79,6 +80,7 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 
 	req.WorkspaceID = strings.TrimSpace(req.WorkspaceID)
 	req.DaemonID = strings.TrimSpace(req.DaemonID)
+	req.InstanceID = strings.TrimSpace(req.InstanceID)
 	req.DeviceName = strings.TrimSpace(req.DeviceName)
 
 	if req.DaemonID == "" {
@@ -133,9 +135,27 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 		if runtime.Status == "offline" {
 			status = "offline"
 		}
+		// Registration is retry-safe: only a new process instance may recover
+		// orphaned tasks. Older daemons without instance_id remain compatible,
+		// but do not activate crash recovery until upgraded.
+		shouldRecover := false
+		if req.InstanceID != "" {
+			if previous, lookupErr := h.Queries.GetAgentRuntimeByIdentity(r.Context(), db.GetAgentRuntimeByIdentityParams{
+				WorkspaceID: parseUUID(req.WorkspaceID),
+				DaemonID:    strToText(req.DaemonID),
+				Provider:    provider,
+			}); lookupErr == nil {
+				var previousMetadata struct {
+					InstanceID string `json:"instance_id"`
+				}
+				_ = json.Unmarshal(previous.Metadata, &previousMetadata)
+				shouldRecover = previousMetadata.InstanceID != req.InstanceID
+			}
+		}
 		metadata, _ := json.Marshal(map[string]any{
 			"version":     runtime.Version,
 			"cli_version": req.CLIVersion,
+			"instance_id": req.InstanceID,
 		})
 
 		registered, err := h.Queries.UpsertAgentRuntime(r.Context(), db.UpsertAgentRuntimeParams{
@@ -151,6 +171,17 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to register runtime: "+err.Error())
 			return
+		}
+		if status == "online" && shouldRecover {
+			requeued, failed, err := h.TaskService.RecoverTasksForRuntime(r.Context(), registered.ID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to recover runtime tasks: "+err.Error())
+				return
+			}
+			if requeued > 0 || failed > 0 {
+				slog.Info("recovered tasks after daemon registration",
+					"runtime_id", uuidToString(registered.ID), "requeued", requeued, "failed", failed)
+			}
 		}
 		resp = append(resp, runtimeToResponse(registered))
 	}
@@ -320,9 +351,15 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Look up the prior session for this (agent, issue) pair so the daemon
-	// can resume the Claude Code conversation context.
-	if prior, err := h.Queries.GetLastTaskSession(r.Context(), db.GetLastTaskSessionParams{
+	// A checkpoint on this task takes precedence after a daemon crash/retry.
+	// Otherwise, continue the most recent completed conversation for the same
+	// (agent, issue) pair.
+	if task.SessionID.Valid {
+		resp.PriorSessionID = task.SessionID.String
+		if task.WorkDir.Valid {
+			resp.PriorWorkDir = task.WorkDir.String
+		}
+	} else if prior, err := h.Queries.GetLastTaskSession(r.Context(), db.GetLastTaskSessionParams{
 		AgentID: task.AgentID,
 		IssueID: task.IssueID,
 	}); err == nil && prior.SessionID.Valid {
@@ -457,6 +494,49 @@ type TaskCompleteRequest struct {
 	Output    string `json:"output"`
 	SessionID string `json:"session_id"` // Claude session ID for future resumption
 	WorkDir   string `json:"work_dir"`   // working directory used during execution
+}
+
+type TaskSessionCheckpointRequest struct {
+	SessionID string `json:"session_id"`
+	WorkDir   string `json:"work_dir"`
+}
+
+// CheckpointTaskSession records resumable state before provider execution
+// completes, so a fresh daemon process can continue an interrupted task.
+func (h *Handler) CheckpointTaskSession(w http.ResponseWriter, r *http.Request) {
+	taskID := chi.URLParam(r, "taskId")
+	var req TaskSessionCheckpointRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16*1024)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	req.SessionID = strings.TrimSpace(req.SessionID)
+	req.WorkDir = strings.TrimSpace(req.WorkDir)
+	if req.SessionID == "" || req.WorkDir == "" {
+		writeError(w, http.StatusBadRequest, "session_id and work_dir are required")
+		return
+	}
+	taskRecord, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	issue, err := h.Queries.GetIssue(r.Context(), taskRecord.IssueID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	if _, ok := h.requireWorkspaceMember(w, r, uuidToString(issue.WorkspaceID), "task not found"); !ok {
+		return
+	}
+
+	task, err := h.TaskService.CheckpointTaskSession(r.Context(), parseUUID(taskID), req.SessionID, req.WorkDir)
+	if err != nil {
+		slog.Warn("checkpoint task session failed", "task_id", taskID, "error", err)
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, taskToResponse(*task))
 }
 
 func (h *Handler) CompleteTask(w http.ResponseWriter, r *http.Request) {

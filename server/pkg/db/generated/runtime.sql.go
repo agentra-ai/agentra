@@ -74,6 +74,37 @@ func (q *Queries) GetAgentRuntime(ctx context.Context, id pgtype.UUID) (AgentRun
 	return i, err
 }
 
+const getAgentRuntimeByIdentity = `-- name: GetAgentRuntimeByIdentity :one
+SELECT id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at FROM agent_runtime
+WHERE workspace_id = $1 AND daemon_id = $2 AND provider = $3
+`
+
+type GetAgentRuntimeByIdentityParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	DaemonID    pgtype.Text `json:"daemon_id"`
+	Provider    string      `json:"provider"`
+}
+
+func (q *Queries) GetAgentRuntimeByIdentity(ctx context.Context, arg GetAgentRuntimeByIdentityParams) (AgentRuntime, error) {
+	row := q.db.QueryRow(ctx, getAgentRuntimeByIdentity, arg.WorkspaceID, arg.DaemonID, arg.Provider)
+	var i AgentRuntime
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.DaemonID,
+		&i.Name,
+		&i.RuntimeMode,
+		&i.Provider,
+		&i.Status,
+		&i.DeviceInfo,
+		&i.Metadata,
+		&i.LastSeenAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getAgentRuntimeForWorkspace = `-- name: GetAgentRuntimeForWorkspace :one
 SELECT id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at FROM agent_runtime
 WHERE id = $1 AND workspace_id = $2
@@ -166,6 +197,82 @@ func (q *Queries) MarkStaleRuntimesOffline(ctx context.Context, staleSeconds flo
 	for rows.Next() {
 		var i MarkStaleRuntimesOfflineRow
 		if err := rows.Scan(&i.ID, &i.WorkspaceID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const recoverTasksForRuntime = `-- name: RecoverTasksForRuntime :many
+UPDATE agent_task_queue
+SET status = CASE
+        WHEN retry_count < max_retries THEN 'queued'
+        ELSE 'failed'
+    END,
+    completed_at = CASE
+        WHEN retry_count < max_retries THEN NULL
+        ELSE now()
+    END,
+    error = CASE
+        WHEN retry_count < max_retries THEN NULL
+        ELSE 'runtime restarted and retry budget was exhausted'
+    END,
+    retry_count = CASE
+        WHEN retry_count < max_retries THEN retry_count + 1
+        ELSE retry_count
+    END,
+    dispatched_at = NULL,
+    started_at = NULL
+WHERE runtime_id = $1
+  AND runtime_type = 'local'
+  AND (
+      status IN ('dispatched', 'running')
+      OR (status = 'failed' AND error = 'runtime went offline')
+  )
+RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id
+`
+
+// A daemon registration represents a fresh process for this stable runtime
+// identity. Requeue orphaned work within its retry budget so the new process
+// can resume from the in-flight session checkpoint; fail closed once the
+// budget is exhausted.
+func (q *Queries) RecoverTasksForRuntime(ctx context.Context, runtimeID pgtype.UUID) ([]AgentTaskQueue, error) {
+	rows, err := q.db.Query(ctx, recoverTasksForRuntime, runtimeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AgentTaskQueue{}
+	for rows.Next() {
+		var i AgentTaskQueue
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.IssueID,
+			&i.Status,
+			&i.Priority,
+			&i.DispatchedAt,
+			&i.StartedAt,
+			&i.CompletedAt,
+			&i.Result,
+			&i.Error,
+			&i.CreatedAt,
+			&i.Context,
+			&i.RuntimeID,
+			&i.SessionID,
+			&i.WorkDir,
+			&i.TriggerCommentID,
+			&i.RuntimeType,
+			&i.CloudRuntimeID,
+			&i.RetryCount,
+			&i.MaxRetries,
+			&i.TaskType,
+			&i.LoopID,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -179,6 +179,7 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 		r.Post("/tasks/{taskId}/start", h.StartTask)
 		r.Post("/tasks/{taskId}/progress", h.ReportTaskProgress)
 		r.Post("/tasks/{taskId}/stage", h.ReportAgentStage)
+		r.Post("/tasks/{taskId}/session", h.CheckpointTaskSession)
 		r.Post("/tasks/{taskId}/complete", h.CompleteTask)
 		r.Post("/tasks/{taskId}/fail", h.FailTask)
 		r.Post("/tasks/{taskId}/messages", h.ReportTaskMessages)

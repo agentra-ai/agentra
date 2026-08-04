@@ -28,6 +28,7 @@ const (
 	MessageToolUse    = types.MessageToolUse
 	MessageToolResult = types.MessageToolResult
 	MessageStatus     = types.MessageStatus
+	MessageSession    = types.MessageSession
 	MessageError      = types.MessageError
 	MessageLog        = types.MessageLog
 )

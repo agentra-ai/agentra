@@ -113,6 +113,15 @@ func (c *Client) ReportTaskMessages(ctx context.Context, taskID string, messages
 	return nil
 }
 
+// CheckpointTaskSession persists resumable provider state before execution
+// finishes so a daemon restart can continue the same task.
+func (c *Client) CheckpointTaskSession(ctx context.Context, taskID, sessionID, workDir string) error {
+	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/session", taskID), map[string]string{
+		"session_id": sessionID,
+		"work_dir":   workDir,
+	}, nil)
+}
+
 func (c *Client) CompleteTask(ctx context.Context, taskID, output, branchName, sessionID, workDir string) error {
 	body := map[string]any{"output": output}
 	if branchName != "" {

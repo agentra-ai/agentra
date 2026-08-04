@@ -21,6 +21,8 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/realtime"
+	"github.com/agentra-ai/agentra/server/internal/util"
+	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	stripelib "github.com/agentra-ai/agentra/server/pkg/stripe"
 )
 
@@ -1074,6 +1076,136 @@ func TestTaskMessagesAreRedactedIdempotentAndCursorBounded(t *testing.T) {
 	}
 }
 
+func TestTaskSessionCheckpointSurvivesRuntimeRecovery(t *testing.T) {
+	requireIntegrationDB(t)
+	_, taskID := createTaskMessageFixture(t, "running", "local", "")
+
+	resp := authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/session", map[string]string{
+		"session_id": "session-before-crash",
+		"work_dir":   "/tmp/agentra-checkpoint-worktree",
+	})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("checkpoint session: status = %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	var runtimeID, sessionID, workDir string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT runtime_id, session_id, work_dir
+		FROM agent_task_queue
+		WHERE id = $1
+	`, taskID).Scan(&runtimeID, &sessionID, &workDir); err != nil {
+		t.Fatal(err)
+	}
+	if sessionID != "session-before-crash" || workDir != "/tmp/agentra-checkpoint-worktree" {
+		t.Fatalf("checkpoint = (%q, %q)", sessionID, workDir)
+	}
+	// Reproduce the long-crash path: after three missed heartbeats, the runtime
+	// sweeper marks the orphan failed before the daemon can register again.
+	if _, err := testPool.Exec(context.Background(), `
+		UPDATE agent_task_queue
+		SET status = 'failed', completed_at = now(), error = 'runtime went offline'
+		WHERE id = $1
+	`, taskID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testPool.Exec(context.Background(), `
+		UPDATE agent_runtime
+		SET daemon_id = 'crash-resume-daemon', provider = 'claude',
+		    metadata = '{"instance_id":"previous-instance"}'::jsonb
+		WHERE id = $1
+	`, runtimeID); err != nil {
+		t.Fatal(err)
+	}
+
+	queries := db.New(testPool)
+	registration := map[string]any{
+		"workspace_id": testWorkspaceID,
+		"daemon_id":    "crash-resume-daemon",
+		"instance_id":  "replacement-instance",
+		"device_name":  "Crash Resume Test",
+		"cli_version":  "test",
+		"runtimes": []map[string]string{{
+			"name": "Claude Crash Resume Test", "type": "claude", "version": "test", "status": "online",
+		}},
+	}
+	resp = authRequest(t, http.MethodPost, "/api/daemon/register", registration)
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("register replacement daemon: status = %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	recovered, err := queries.GetAgentTask(context.Background(), util.ParseUUID(taskID))
+	if err != nil {
+		t.Fatalf("load recovered task: %v", err)
+	}
+	if recovered.Status != "queued" || recovered.RetryCount != 1 {
+		t.Fatalf("recovered status = %q, retry_count = %d", recovered.Status, recovered.RetryCount)
+	}
+	if recovered.SessionID.String != "session-before-crash" || recovered.WorkDir.String != "/tmp/agentra-checkpoint-worktree" {
+		t.Fatalf("recovery lost checkpoint: session = %q, work_dir = %q", recovered.SessionID.String, recovered.WorkDir.String)
+	}
+
+	resp = authRequest(t, http.MethodPost, "/api/daemon/runtimes/"+runtimeID+"/tasks/claim", map[string]any{})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("claim recovered task: status = %d: %s", resp.StatusCode, body)
+	}
+	var claim struct {
+		Task struct {
+			ID             string `json:"id"`
+			PriorSessionID string `json:"prior_session_id"`
+			PriorWorkDir   string `json:"prior_work_dir"`
+		} `json:"task"`
+	}
+	readJSON(t, resp, &claim)
+	if claim.Task.ID != taskID || claim.Task.PriorSessionID != "session-before-crash" || claim.Task.PriorWorkDir != "/tmp/agentra-checkpoint-worktree" {
+		t.Fatalf("claim did not resume current task checkpoint: %#v", claim.Task)
+	}
+
+	// Retrying registration from the same process instance is idempotent and
+	// must not steal the task back from its active execution.
+	resp = authRequest(t, http.MethodPost, "/api/daemon/register", registration)
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("repeat daemon registration: status = %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+	idempotent, err := queries.GetAgentTask(context.Background(), util.ParseUUID(taskID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if idempotent.Status != "dispatched" || idempotent.RetryCount != 1 {
+		t.Fatalf("repeat registration changed task: status = %q, retry_count = %d", idempotent.Status, idempotent.RetryCount)
+	}
+
+	// Recovery is bounded: once the retry budget is exhausted, another crash
+	// fails closed instead of creating an infinite restart loop.
+	if _, err := testPool.Exec(context.Background(), `
+		UPDATE agent_task_queue
+		SET status = 'running', retry_count = max_retries, started_at = now()
+		WHERE id = $1
+	`, taskID); err != nil {
+		t.Fatal(err)
+	}
+	exhausted, err := queries.RecoverTasksForRuntime(context.Background(), util.ParseUUID(runtimeID))
+	if err != nil {
+		t.Fatalf("recover exhausted runtime task: %v", err)
+	}
+	if len(exhausted) != 1 || exhausted[0].Status != "failed" || exhausted[0].RetryCount != exhausted[0].MaxRetries {
+		t.Fatalf("exhausted recovery = %#v", exhausted)
+	}
+	if exhausted[0].Error.String != "runtime restarted and retry budget was exhausted" {
+		t.Fatalf("exhausted recovery error = %q", exhausted[0].Error.String)
+	}
+}
+
 func TestTaskMessagesRejectCrossWorkspaceReads(t *testing.T) {
 	requireIntegrationDB(t)
 	var otherWorkspaceID string
@@ -1108,10 +1240,21 @@ func TestTaskMessagesRejectCrossWorkspaceReads(t *testing.T) {
 	}
 
 	resp := authRequest(t, http.MethodGet, "/api/daemon/tasks/"+taskID+"/messages", nil)
+	if resp.StatusCode != http.StatusNotFound {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("cross-workspace read status = %d, want 404: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	resp = authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/session", map[string]string{
+		"session_id": "foreign-session",
+		"work_dir":   "/tmp/foreign-worktree",
+	})
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("cross-workspace read status = %d, want 404: %s", resp.StatusCode, body)
+		t.Fatalf("cross-workspace checkpoint status = %d, want 404: %s", resp.StatusCode, body)
 	}
 }
 

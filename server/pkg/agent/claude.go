@@ -117,10 +117,14 @@ func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 			case "system":
 				if msg.SessionID != "" {
 					sessionID = msg.SessionID
+					trySend(msgCh, Message{Type: MessageSession, SessionID: sessionID})
 				}
 				trySend(msgCh, Message{Type: MessageStatus, Status: "running"})
 			case "result":
-				sessionID = msg.SessionID
+				if msg.SessionID != "" && msg.SessionID != sessionID {
+					sessionID = msg.SessionID
+					trySend(msgCh, Message{Type: MessageSession, SessionID: sessionID})
+				}
 				if msg.ResultText != "" {
 					output.Reset()
 					output.WriteString(msg.ResultText)

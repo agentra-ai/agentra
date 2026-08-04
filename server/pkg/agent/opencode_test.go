@@ -527,24 +527,28 @@ func TestOpencodeProcessEventsHappyPath(t *testing.T) {
 		msgs = append(msgs, m)
 	}
 
-	// Expected: status(running), text, tool-use, tool-result, text, = 5 messages
-	if len(msgs) != 5 {
-		t.Fatalf("expected 5 messages, got %d: %+v", len(msgs), msgs)
+	// Expected: session checkpoint, status(running), text, tool-use,
+	// tool-result, text = 6 messages.
+	if len(msgs) != 6 {
+		t.Fatalf("expected 6 messages, got %d: %+v", len(msgs), msgs)
 	}
-	if msgs[0].Type != MessageStatus || msgs[0].Status != "running" {
-		t.Errorf("msg[0]: got %+v, want status=running", msgs[0])
+	if msgs[0].Type != MessageSession || msgs[0].SessionID != "ses_happy" {
+		t.Errorf("msg[0]: got %+v, want session checkpoint", msgs[0])
 	}
-	if msgs[1].Type != MessageText || msgs[1].Content != "Analyzing the issue..." {
-		t.Errorf("msg[1]: got %+v", msgs[1])
+	if msgs[1].Type != MessageStatus || msgs[1].Status != "running" {
+		t.Errorf("msg[1]: got %+v, want status=running", msgs[1])
 	}
-	if msgs[2].Type != MessageToolUse || msgs[2].Tool != "bash" {
-		t.Errorf("msg[2]: got %+v, want tool-use(bash)", msgs[2])
+	if msgs[2].Type != MessageText || msgs[2].Content != "Analyzing the issue..." {
+		t.Errorf("msg[2]: got %+v", msgs[2])
 	}
-	if msgs[3].Type != MessageToolResult || msgs[3].Output != "file1.go\nfile2.go\n" {
-		t.Errorf("msg[3]: got %+v, want tool-result", msgs[3])
+	if msgs[3].Type != MessageToolUse || msgs[3].Tool != "bash" {
+		t.Errorf("msg[3]: got %+v, want tool-use(bash)", msgs[3])
 	}
-	if msgs[4].Type != MessageText || msgs[4].Content != " Done." {
-		t.Errorf("msg[4]: got %+v", msgs[4])
+	if msgs[4].Type != MessageToolResult || msgs[4].Output != "file1.go\nfile2.go\n" {
+		t.Errorf("msg[4]: got %+v, want tool-result", msgs[4])
+	}
+	if msgs[5].Type != MessageText || msgs[5].Content != " Done." {
+		t.Errorf("msg[5]: got %+v", msgs[5])
 	}
 }
 
@@ -681,8 +685,8 @@ func TestOpencodeProcessEventsEmptyLines(t *testing.T) {
 	for m := range ch {
 		msgs = append(msgs, m)
 	}
-	if len(msgs) != 1 || msgs[0].Type != MessageText {
-		t.Errorf("expected 1 text message, got %d: %+v", len(msgs), msgs)
+	if len(msgs) != 2 || msgs[0].Type != MessageSession || msgs[1].Type != MessageText {
+		t.Errorf("expected session and text messages, got %d: %+v", len(msgs), msgs)
 	}
 }
 

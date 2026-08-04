@@ -112,6 +112,52 @@ func (q *Queries) CancelAgentTasksByIssue(ctx context.Context, issueID pgtype.UU
 	return err
 }
 
+const checkpointAgentTaskSession = `-- name: CheckpointAgentTaskSession :one
+UPDATE agent_task_queue
+SET session_id = $2, work_dir = $3
+WHERE id = $1 AND status = 'running'
+RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id
+`
+
+type CheckpointAgentTaskSessionParams struct {
+	ID        pgtype.UUID `json:"id"`
+	SessionID pgtype.Text `json:"session_id"`
+	WorkDir   pgtype.Text `json:"work_dir"`
+}
+
+// Persists resumable state as soon as the provider creates a session. The
+// running-state guard prevents a late daemon callback from mutating a task
+// that has already completed, failed, or been cancelled.
+func (q *Queries) CheckpointAgentTaskSession(ctx context.Context, arg CheckpointAgentTaskSessionParams) (AgentTaskQueue, error) {
+	row := q.db.QueryRow(ctx, checkpointAgentTaskSession, arg.ID, arg.SessionID, arg.WorkDir)
+	var i AgentTaskQueue
+	err := row.Scan(
+		&i.ID,
+		&i.AgentID,
+		&i.IssueID,
+		&i.Status,
+		&i.Priority,
+		&i.DispatchedAt,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.Result,
+		&i.Error,
+		&i.CreatedAt,
+		&i.Context,
+		&i.RuntimeID,
+		&i.SessionID,
+		&i.WorkDir,
+		&i.TriggerCommentID,
+		&i.RuntimeType,
+		&i.CloudRuntimeID,
+		&i.RetryCount,
+		&i.MaxRetries,
+		&i.TaskType,
+		&i.LoopID,
+	)
+	return i, err
+}
+
 const claimAgentTask = `-- name: ClaimAgentTask :one
 UPDATE agent_task_queue
 SET status = 'dispatched', dispatched_at = now()

@@ -22,20 +22,22 @@ const (
 	MessageToolUse    MessageType = "tool-use"
 	MessageToolResult MessageType = "tool-result"
 	MessageStatus     MessageType = "status"
+	MessageSession    MessageType = "session"
 	MessageError      MessageType = "error"
 	MessageLog        MessageType = "log"
 )
 
 // Message is a unified event emitted by an agent during execution.
 type Message struct {
-	Type    MessageType
-	Content string         // text content (Text, Error, Log)
-	Tool    string         // tool name (ToolUse, ToolResult)
-	CallID  string         // tool call ID (ToolUse, ToolResult)
-	Input   map[string]any // tool input (ToolUse)
-	Output  string         // tool output (ToolResult)
-	Status  string         // agent status string (Status)
-	Level   string         // log level (Log)
+	Type      MessageType
+	Content   string         // text content (Text, Error, Log)
+	Tool      string         // tool name (ToolUse, ToolResult)
+	CallID    string         // tool call ID (ToolUse, ToolResult)
+	Input     map[string]any // tool input (ToolUse)
+	Output    string         // tool output (ToolResult)
+	Status    string         // agent status string (Status)
+	SessionID string         // resumable provider session ID (Session)
+	Level     string         // log level (Log)
 }
 
 // ExecOptions configures a single execution.

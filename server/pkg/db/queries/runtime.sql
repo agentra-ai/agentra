@@ -11,6 +11,10 @@ WHERE id = $1;
 SELECT * FROM agent_runtime
 WHERE id = $1 AND workspace_id = $2;
 
+-- name: GetAgentRuntimeByIdentity :one
+SELECT * FROM agent_runtime
+WHERE workspace_id = $1 AND daemon_id = $2 AND provider = $3;
+
 -- name: UpsertAgentRuntime :one
 INSERT INTO agent_runtime (
     workspace_id,
@@ -62,3 +66,35 @@ WHERE status IN ('dispatched', 'running')
     SELECT id FROM agent_runtime WHERE status = 'offline'
   )
 RETURNING id, agent_id, issue_id;
+
+-- name: RecoverTasksForRuntime :many
+-- A daemon registration represents a fresh process for this stable runtime
+-- identity. Requeue orphaned work within its retry budget so the new process
+-- can resume from the in-flight session checkpoint; fail closed once the
+-- budget is exhausted.
+UPDATE agent_task_queue
+SET status = CASE
+        WHEN retry_count < max_retries THEN 'queued'
+        ELSE 'failed'
+    END,
+    completed_at = CASE
+        WHEN retry_count < max_retries THEN NULL
+        ELSE now()
+    END,
+    error = CASE
+        WHEN retry_count < max_retries THEN NULL
+        ELSE 'runtime restarted and retry budget was exhausted'
+    END,
+    retry_count = CASE
+        WHEN retry_count < max_retries THEN retry_count + 1
+        ELSE retry_count
+    END,
+    dispatched_at = NULL,
+    started_at = NULL
+WHERE runtime_id = $1
+  AND runtime_type = 'local'
+  AND (
+      status IN ('dispatched', 'running')
+      OR (status = 'failed' AND error = 'runtime went offline')
+  )
+RETURNING *;

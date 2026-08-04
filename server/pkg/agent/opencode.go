@@ -175,7 +175,10 @@ func (b *opencodeBackend) processEvents(r io.Reader, ch chan<- Message) eventRes
 		}
 
 		if event.SessionID != "" {
-			sessionID = event.SessionID
+			if event.SessionID != sessionID {
+				sessionID = event.SessionID
+				trySend(ch, Message{Type: MessageSession, SessionID: sessionID})
+			}
 		}
 
 		switch event.Type {

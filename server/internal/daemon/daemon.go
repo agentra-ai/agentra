@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/agentra-ai/agentra/server/internal/cli"
 	"github.com/agentra-ai/agentra/server/internal/daemon/execenv"
 	"github.com/agentra-ai/agentra/server/internal/daemon/repocache"
@@ -36,6 +38,7 @@ type Daemon struct {
 	workspaces   map[string]*workspaceState
 	runtimeIndex map[string]Runtime // runtimeID -> Runtime for provider lookups
 	reloading    sync.Mutex         // prevents concurrent reloadWorkspaces
+	instanceID   string             // unique to this daemon process; registration retries reuse it
 
 	cancelFunc    context.CancelFunc // set by Run(); called by triggerRestart
 	restartBinary string             // non-empty after a successful update; path to the new binary
@@ -52,6 +55,7 @@ func New(cfg Config, logger *slog.Logger) *Daemon {
 		logger:       logger,
 		workspaces:   make(map[string]*workspaceState),
 		runtimeIndex: make(map[string]Runtime),
+		instanceID:   uuid.NewString(),
 	}
 }
 
@@ -254,6 +258,7 @@ func (d *Daemon) registerRuntimesForWorkspace(ctx context.Context, workspaceID s
 	req := map[string]any{
 		"workspace_id": workspaceID,
 		"daemon_id":    d.cfg.DaemonID,
+		"instance_id":  d.instanceID,
 		"device_name":  d.cfg.DeviceName,
 		"cli_version":  d.cfg.CLIVersion,
 		"runtimes":     runtimes,
@@ -985,6 +990,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		var pendingText strings.Builder
 		var pendingThinking strings.Builder
 		var batch []TaskMessageData
+		var checkpointedSessionID string
 		callIDToTool := map[string]string{} // track callID → tool name for tool_result
 		appendContentLocked := func(messageType, content string) {
 			for _, chunk := range splitTaskMessageContent(content) {
@@ -1040,6 +1046,19 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 
 		for msg := range session.Messages {
 			switch msg.Type {
+			case agent.MessageSession:
+				sessionID := strings.TrimSpace(msg.SessionID)
+				if sessionID == "" || sessionID == checkpointedSessionID {
+					continue
+				}
+				checkpointCtx, checkpointCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				if err := d.client.CheckpointTaskSession(checkpointCtx, task.ID, sessionID, env.WorkDir); err != nil {
+					taskLog.Warn("failed to checkpoint provider session", "error", err)
+				} else {
+					checkpointedSessionID = sessionID
+					taskLog.Info("provider session checkpointed", "session_id", sessionID)
+				}
+				checkpointCancel()
 			case agent.MessageToolUse:
 				n := toolCount.Add(1)
 				taskLog.Info(fmt.Sprintf("tool #%d: %s", n, msg.Tool))

@@ -212,6 +212,66 @@ func TestRuntimeFixtureCancellationTerminatesProcess(t *testing.T) {
 	}
 }
 
+func TestRuntimeFixtureEmitsSessionCheckpointBeforeCompletion(t *testing.T) {
+	t.Parallel()
+
+	expectedSessionIDs := map[ProviderType]string{
+		ProviderClaude:   "fixture-claude-session",
+		ProviderCodex:    "fixture-codex-thread",
+		ProviderOpenCode: "fixture-opencode-session",
+	}
+
+	for _, provider := range []ProviderType{ProviderClaude, ProviderCodex, ProviderOpenCode} {
+		provider := provider
+		t.Run(string(provider), func(t *testing.T) {
+			t.Parallel()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			backend := newFixtureBackend(t, provider, "hang", nil)
+			session, err := backend.Execute(ctx, "fixture prompt", ExecOptions{Timeout: 10 * time.Second})
+			if err != nil {
+				t.Fatalf("Execute() error: %v", err)
+			}
+
+			timer := time.NewTimer(5 * time.Second)
+			defer timer.Stop()
+			checkpoint := ""
+			running := false
+			for checkpoint == "" || !running {
+				select {
+				case message, ok := <-session.Messages:
+					if !ok {
+						t.Fatal("message channel closed before session checkpoint")
+					}
+					if message.Type == MessageSession {
+						checkpoint = message.SessionID
+					}
+					if message.Type == MessageStatus && message.Status == "running" {
+						running = true
+					}
+				case result, ok := <-session.Result:
+					if !ok {
+						t.Fatal("result channel closed before session checkpoint")
+					}
+					t.Fatalf("session completed before checkpoint: %#v", result)
+				case <-timer.C:
+					t.Fatal("session checkpoint and running status were not emitted within 5s")
+				}
+			}
+
+			if checkpoint != expectedSessionIDs[provider] {
+				t.Fatalf("session checkpoint = %q, want %q", checkpoint, expectedSessionIDs[provider])
+			}
+			cancel()
+			_, result := collectSession(t, session)
+			if result.Status != "aborted" {
+				t.Fatalf("status = %q, want aborted (error = %q)", result.Status, result.Error)
+			}
+		})
+	}
+}
+
 func TestRuntimeFixtureCancellationKillsDescendants(t *testing.T) {
 	t.Parallel()
 

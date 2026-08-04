@@ -124,6 +124,15 @@ SET status = 'completed', completed_at = now(), result = $2, session_id = $3, wo
 WHERE id = $1 AND status = 'running'
 RETURNING *;
 
+-- name: CheckpointAgentTaskSession :one
+-- Persists resumable state as soon as the provider creates a session. The
+-- running-state guard prevents a late daemon callback from mutating a task
+-- that has already completed, failed, or been cancelled.
+UPDATE agent_task_queue
+SET session_id = $2, work_dir = $3
+WHERE id = $1 AND status = 'running'
+RETURNING *;
+
 -- name: GetLastTaskSession :one
 -- Returns the session_id and work_dir from the most recent completed task
 -- for a given (agent_id, issue_id) pair, used for session resumption.

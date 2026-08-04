@@ -306,6 +306,48 @@ func (s *TaskService) StartTask(ctx context.Context, taskID pgtype.UUID) (*db.Ag
 	return &task, nil
 }
 
+// CheckpointTaskSession persists the provider session and execution directory
+// while a task is running. A daemon restart can then resume the same task
+// instead of falling back to the last completed task on the issue.
+func (s *TaskService) CheckpointTaskSession(ctx context.Context, taskID pgtype.UUID, sessionID, workDir string) (*db.AgentTaskQueue, error) {
+	task, err := s.Queries.CheckpointAgentTaskSession(ctx, db.CheckpointAgentTaskSessionParams{
+		ID:        taskID,
+		SessionID: pgtype.Text{String: sessionID, Valid: sessionID != ""},
+		WorkDir:   pgtype.Text{String: workDir, Valid: workDir != ""},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("checkpoint task session: %w", err)
+	}
+	return &task, nil
+}
+
+// RecoverTasksForRuntime handles orphaned dispatched/running tasks when a
+// stable runtime identity registers from a fresh daemon process. Retryable
+// tasks return to the queue with their session checkpoint intact; exhausted
+// tasks fail explicitly instead of remaining stuck forever.
+func (s *TaskService) RecoverTasksForRuntime(ctx context.Context, runtimeID pgtype.UUID) (requeued, failed int, err error) {
+	tasks, err := s.Queries.RecoverTasksForRuntime(ctx, runtimeID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("recover tasks for runtime: %w", err)
+	}
+	for _, task := range tasks {
+		switch task.Status {
+		case "queued":
+			requeued++
+			s.finalizeTrace(ctx, task.ID, task.AgentID, "failed", "runtime restarted; task queued for resume", 0, 0, 0, "")
+			s.endExecutionTrace(ctx, task.ID, "failed")
+			s.broadcastTaskEvent(ctx, protocol.EventTaskRetry, task)
+			s.broadcastTaskDispatch(ctx, task)
+		case "failed":
+			failed++
+			s.finalizeTrace(ctx, task.ID, task.AgentID, "failed", task.Error.String, 0, 0, 0, "")
+			s.endExecutionTrace(ctx, task.ID, "failed")
+			s.broadcastTaskEvent(ctx, protocol.EventTaskFailed, task)
+		}
+	}
+	return requeued, failed, nil
+}
+
 // resolveAgentProvider looks up the provider and model for an agent.
 func (s *TaskService) resolveAgentProvider(ctx context.Context, agentID pgtype.UUID) (provider, model string) {
 	agent, err := s.Queries.GetAgent(ctx, agentID)
