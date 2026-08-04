@@ -135,11 +135,22 @@ SET status = 'failed', completed_at = now(), error = $2
 WHERE id = $1 AND status = 'queued'
 RETURNING *;
 
--- name: StartAgentTask :one
-UPDATE agent_task_queue
-SET status = 'running', started_at = now()
-WHERE id = $1 AND status = 'dispatched'
-RETURNING *;
+-- name: StartAgentTaskRun :one
+-- The Work Item transition and Run creation are one database statement: a
+-- caller can never observe running without an attempt identity.
+WITH started_task AS (
+    UPDATE agent_task_queue
+    SET status = 'running', started_at = now()
+    WHERE agent_task_queue.id = $1 AND agent_task_queue.status = 'dispatched'
+    RETURNING agent_task_queue.id, agent_task_queue.agent_id
+), started_run AS (
+    INSERT INTO task_runs (task_id, agent_id, status, started_at)
+    SELECT started_task.id, started_task.agent_id, 'running', now()
+    FROM started_task
+    RETURNING task_runs.id, task_runs.task_id
+)
+SELECT started_run.task_id, started_run.id AS run_id
+FROM started_run;
 
 -- name: CompleteAgentTask :one
 UPDATE agent_task_queue

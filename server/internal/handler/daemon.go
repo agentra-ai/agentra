@@ -420,15 +420,17 @@ func (h *Handler) ListPendingTasksByRuntime(w http.ResponseWriter, r *http.Reque
 func (h *Handler) StartTask(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "taskId")
 
-	task, err := h.TaskService.StartTask(r.Context(), parseUUID(taskID))
+	started, err := h.TaskService.StartTask(r.Context(), parseUUID(taskID))
 	if err != nil {
 		slog.Warn("start task failed", "task_id", taskID, "error", err)
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	slog.Info("task started", "task_id", taskID, "agent_id", uuidToString(task.AgentID))
-	writeJSON(w, http.StatusOK, taskToResponse(*task))
+	resp := taskToResponse(started.Task)
+	resp.RunID = uuidToString(started.RunID)
+	slog.Info("task started", "task_id", taskID, "run_id", resp.RunID, "agent_id", uuidToString(started.Task.AgentID))
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // ReportTaskProgress broadcasts a progress update.
@@ -649,6 +651,7 @@ type TaskMessageRequest struct {
 }
 
 type TaskMessageBatchRequest struct {
+	RunID    string               `json:"run_id"`
 	Messages []TaskMessageRequest `json:"messages"`
 }
 
@@ -691,7 +694,7 @@ func validateTaskMessage(msg TaskMessageRequest) error {
 // persistTaskMessage is the single task-output ledger path for both local
 // daemons and cloud gateways. It publishes only after a successful insert;
 // duplicate cursors are accepted but never broadcast twice.
-func (h *Handler) persistTaskMessage(ctx context.Context, task db.AgentTaskQueue, workspaceID, traceID string, msg TaskMessageRequest) (bool, error) {
+func (h *Handler) persistTaskMessage(ctx context.Context, task db.AgentTaskQueue, runID pgtype.UUID, workspaceID, traceID string, msg TaskMessageRequest) (bool, error) {
 	msg.Content = redact.Text(msg.Content)
 	msg.Output = redact.Text(msg.Output)
 	msg.Input = redact.InputMap(msg.Input)
@@ -707,6 +710,7 @@ func (h *Handler) persistTaskMessage(ctx context.Context, task db.AgentTaskQueue
 
 	inserted, err := h.Queries.CreateTaskMessage(ctx, db.CreateTaskMessageParams{
 		TaskID:  task.ID,
+		RunID:   runID,
 		Seq:     int32(msg.Seq),
 		Type:    msg.Type,
 		Tool:    pgtype.Text{String: msg.Tool, Valid: msg.Tool != ""},
@@ -726,6 +730,7 @@ func (h *Handler) persistTaskMessage(ctx context.Context, task db.AgentTaskQueue
 	}
 	h.publish(protocol.EventTaskMessage, workspaceID, "system", "", protocol.TaskMessagePayload{
 		TaskID:  uuidToString(task.ID),
+		RunID:   uuidToString(runID),
 		IssueID: uuidToString(task.IssueID),
 		Seq:     msg.Seq,
 		Type:    msg.Type,
@@ -759,7 +764,17 @@ func (h *Handler) RecordGatewayTaskLog(ctx context.Context, workspaceID, taskID 
 	if err := validateTaskMessage(msg); err != nil {
 		return err
 	}
-	_, err = h.persistTaskMessage(ctx, task, workspaceID, "", msg)
+	run, err := h.Queries.GetLatestRunningTaskRun(ctx, task.ID)
+	if err != nil {
+		return fmt.Errorf("cloud gateway task has no active run: %w", err)
+	}
+	traceID := ""
+	if h.TraceService != nil && h.TraceService.TraceService != nil {
+		if trace, lookupErr := h.TraceService.GetTraceByRun(ctx, uuidToString(run.ID)); lookupErr == nil {
+			traceID = trace.ID
+		}
+	}
+	_, err = h.persistTaskMessage(ctx, task, run.ID, workspaceID, traceID, msg)
 	return err
 }
 
@@ -774,6 +789,12 @@ func (h *Handler) ReportTaskMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Messages) == 0 {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
+	req.RunID = strings.TrimSpace(req.RunID)
+	runID := parseUUID(req.RunID)
+	if !runID.Valid {
+		writeError(w, http.StatusBadRequest, "run_id is required")
 		return
 	}
 	if len(req.Messages) > protocol.TaskMessageBatchSize {
@@ -802,17 +823,24 @@ func (h *Handler) ReportTaskMessages(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.requireWorkspaceMember(w, r, workspaceID, "task not found"); !ok {
 		return
 	}
+	if _, err := h.Queries.GetActiveTaskRun(r.Context(), db.GetActiveTaskRunParams{
+		TaskID: task.ID,
+		ID:     runID,
+	}); err != nil {
+		writeError(w, http.StatusConflict, "run_id is not the active run for this task")
+		return
+	}
 
 	// Look up execution trace for recording steps (best-effort).
 	traceID := ""
 	if h.TraceService != nil && h.TraceService.TraceService != nil {
-		if trace, lookupErr := h.TraceService.GetTraceByTask(r.Context(), taskID); lookupErr == nil {
+		if trace, lookupErr := h.TraceService.GetTraceByRun(r.Context(), req.RunID); lookupErr == nil {
 			traceID = trace.ID
 		}
 	}
 
 	for _, msg := range req.Messages {
-		if _, err := h.persistTaskMessage(r.Context(), task, workspaceID, traceID, msg); err != nil {
+		if _, err := h.persistTaskMessage(r.Context(), task, runID, workspaceID, traceID, msg); err != nil {
 			slog.Error("report task messages: persist failed", "task_id", taskID, "error", err)
 			writeError(w, http.StatusInternalServerError, "failed to persist task messages")
 			return
@@ -882,6 +910,7 @@ func (h *Handler) ListTaskMessages(w http.ResponseWriter, r *http.Request) {
 		}
 		resp[i] = protocol.TaskMessagePayload{
 			TaskID:  taskID,
+			RunID:   uuidToString(m.RunID),
 			IssueID: issueID,
 			Seq:     int(m.Seq),
 			Type:    m.Type,

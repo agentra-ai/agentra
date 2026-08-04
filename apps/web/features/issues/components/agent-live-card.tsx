@@ -137,6 +137,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const seenSeqs = useRef(new Set<string>());
+  const activeRunID = useRef<string | null>(null);
 
   // Check for active task on mount
   useEffect(() => {
@@ -149,8 +150,9 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
             if (!cancelled) {
               const timeline = buildTimeline(msgs);
               setItems(timeline);
+              activeRunID.current = msgs[0]?.run_id ?? null;
               seenSeqs.current.clear();
-              for (const m of msgs) rememberSeen(seenSeqs.current, `${m.task_id}:${m.seq}`);
+              for (const m of msgs) rememberSeen(seenSeqs.current, `${m.run_id}:${m.seq}`);
             }
           }).catch(console.error);
         }
@@ -166,7 +168,12 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
     useCallback((payload: unknown) => {
       const msg = payload as TaskMessagePayload;
       if (msg.issue_id !== issueId) return;
-      const key = `${msg.task_id}:${msg.seq}`;
+      const key = `${msg.run_id}:${msg.seq}`;
+      const changedRun = activeRunID.current !== msg.run_id;
+      if (changedRun) {
+        activeRunID.current = msg.run_id;
+        seenSeqs.current.clear();
+      }
       if (seenSeqs.current.has(key)) return;
       rememberSeen(seenSeqs.current, key);
 
@@ -179,7 +186,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
           input: msg.input,
           output: msg.output,
         };
-        return mergeTimeline(prev, [item]);
+        return changedRun ? [item] : mergeTimeline(prev, [item]);
       });
     }, [issueId]),
   );
@@ -193,15 +200,19 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
         setActiveTask(null);
         setItems([]);
         seenSeqs.current.clear();
+        activeRunID.current = null;
         return;
       }
       const sameTask = activeTask?.id === task.id;
       setActiveTask(task);
       api.listTaskMessages(task.id, { limit: MAX_TIMELINE_ITEMS }).then((messages) => {
         const snapshot = buildTimeline(messages);
-        setItems((current) => sameTask ? mergeTimeline(snapshot, current) : snapshot);
+        const snapshotRunID = messages[0]?.run_id ?? null;
+        const sameRun = sameTask && activeRunID.current === snapshotRunID;
+        activeRunID.current = snapshotRunID;
+        setItems((current) => sameRun ? mergeTimeline(snapshot, current) : snapshot);
         seenSeqs.current.clear();
-        for (const message of messages) rememberSeen(seenSeqs.current, `${message.task_id}:${message.seq}`);
+        for (const message of messages) rememberSeen(seenSeqs.current, `${message.run_id}:${message.seq}`);
       }).catch(console.error);
     }).catch(console.error);
   }, [activeTask?.id, issueId]));
@@ -215,6 +226,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
       setActiveTask(null);
       setItems([]);
       seenSeqs.current.clear();
+      activeRunID.current = null;
       setCancelling(false);
       setAgentStage("idle");
     }, [issueId]),
@@ -228,6 +240,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
       setActiveTask(null);
       setItems([]);
       seenSeqs.current.clear();
+      activeRunID.current = null;
       setCancelling(false);
       setAgentStage("idle");
     }, [issueId]),
@@ -241,6 +254,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
       setActiveTask(null);
       setItems([]);
       seenSeqs.current.clear();
+      activeRunID.current = null;
       setCancelling(false);
       setAgentStage("idle");
     }, [issueId]),
@@ -258,6 +272,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
           setActiveTask(task);
           setItems([]);
           seenSeqs.current.clear();
+          activeRunID.current = null;
           setAgentStage("idle");
         }
       }).catch(console.error);

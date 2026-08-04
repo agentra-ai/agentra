@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { TaskMessagePayload } from "@/shared/types/events";
 import { mergeLogEntries, taskMessagesToLogEntries } from "./use-streaming-logs";
 
-function message(seq: number, content?: string, output?: string): TaskMessagePayload {
-  return { task_id: "task-1", issue_id: "issue-1", seq, type: "text", content, output };
+function message(seq: number, content?: string, output?: string, runId = "run-1"): TaskMessagePayload {
+  return { task_id: "task-1", run_id: runId, issue_id: "issue-1", seq, type: "text", content, output };
 }
 
 describe("streaming log snapshots", () => {
@@ -27,5 +27,17 @@ describe("streaming log snapshots", () => {
     ]);
 
     expect(mergeLogEntries([], entries, 2).map((entry) => entry.text)).toEqual(["two", "three"]);
+  });
+
+  it("does not collapse the same cursor from different runs", () => {
+    const entries = taskMessagesToLogEntries([
+      message(1, "first attempt", undefined, "run-1"),
+      message(1, "second attempt", undefined, "run-2"),
+    ]);
+
+    expect(mergeLogEntries([], entries).map((entry) => entry.text)).toEqual([
+      "first attempt",
+      "second attempt",
+    ]);
   });
 });

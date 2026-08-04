@@ -46,8 +46,8 @@ FROM task_runs
 WHERE agent_id = $1 AND created_at > NOW() - $2::interval;
 
 -- name: CreateExecutionTrace :one
-INSERT INTO execution_traces (task_id, agent_id, issue_id, provider, model, status, start_time)
-VALUES ($1, $2, $3, $4, $5, 'running', NOW())
+INSERT INTO execution_traces (run_id, task_id, agent_id, issue_id, provider, model, status, start_time)
+VALUES ($1, $2, $3, $4, $5, $6, 'running', NOW())
 RETURNING *;
 
 -- name: GetExecutionTrace :one
@@ -55,6 +55,9 @@ SELECT * FROM execution_traces WHERE id = $1;
 
 -- name: GetExecutionTraceByTask :one
 SELECT * FROM execution_traces WHERE task_id = $1 ORDER BY created_at DESC LIMIT 1;
+
+-- name: GetExecutionTraceByRun :one
+SELECT * FROM execution_traces WHERE run_id = $1;
 
 -- name: ListExecutionTracesByIssue :many
 SELECT * FROM execution_traces WHERE issue_id = $1 ORDER BY start_time DESC;

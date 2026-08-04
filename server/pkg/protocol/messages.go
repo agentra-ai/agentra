@@ -56,6 +56,7 @@ type TaskArtifact struct {
 // TaskMessagePayload represents a single agent execution message (tool call, text, etc.)
 type TaskMessagePayload struct {
 	TaskID  string         `json:"task_id"`
+	RunID   string         `json:"run_id"`
 	IssueID string         `json:"issue_id,omitempty"`
 	Seq     int            `json:"seq"`
 	Type    string         `json:"type"`              // "text", "tool_use", "tool_result", "error"

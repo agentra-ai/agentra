@@ -168,6 +168,7 @@ export interface ActivityCreatedPayload {
 
 export interface TaskMessagePayload {
   task_id: string;
+  run_id: string;
   issue_id: string;
   seq: number;
   type: "text" | "thinking" | "tool_use" | "tool_result" | "error";

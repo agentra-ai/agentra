@@ -26,15 +26,16 @@ func NewTraceService(pool *pgxpool.Pool) *TraceService {
 }
 
 // StartTrace creates a new execution trace in "running" state and returns it.
-func (s *TraceService) StartTrace(ctx context.Context, taskID, agentID, issueID, provider, model string) (*ExecutionTrace, error) {
+func (s *TraceService) StartTrace(ctx context.Context, runID, taskID, agentID, issueID, provider, model string) (*ExecutionTrace, error) {
 	id := uuid.New()
 
 	row := s.pool.QueryRow(ctx, `
-		INSERT INTO execution_traces (id, task_id, agent_id, issue_id, provider, model, status, start_time)
-		VALUES ($1, $2, $3, $4, $5, $6, 'running', $7)
-		RETURNING id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at
+		INSERT INTO execution_traces (id, run_id, task_id, agent_id, issue_id, provider, model, status, start_time)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 'running', $8)
+		RETURNING id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at, run_id
 	`,
 		id,
+		parseUUIDString(runID),
 		parseUUIDString(taskID),
 		parseUUIDString(agentID),
 		parseUUIDString(issueID),
@@ -134,7 +135,7 @@ func (s *TraceService) EndTrace(ctx context.Context, traceID, status string) err
 // GetTrace retrieves a single execution trace by ID, including all steps and tools.
 func (s *TraceService) GetTrace(ctx context.Context, traceID string) (*ExecutionTrace, error) {
 	row := s.pool.QueryRow(ctx, `
-		SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at
+		SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at, run_id
 		FROM execution_traces
 		WHERE id = $1
 	`, parseUUIDString(traceID))
@@ -150,7 +151,7 @@ func (s *TraceService) GetTrace(ctx context.Context, traceID string) (*Execution
 // GetTraceByTask retrieves the most recent execution trace for a task.
 func (s *TraceService) GetTraceByTask(ctx context.Context, taskID string) (*ExecutionTrace, error) {
 	row := s.pool.QueryRow(ctx, `
-		SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at
+		SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at, run_id
 		FROM execution_traces
 		WHERE task_id = $1
 		ORDER BY created_at DESC
@@ -165,10 +166,27 @@ func (s *TraceService) GetTraceByTask(ctx context.Context, taskID string) (*Exec
 	return dbToExecutionTrace(&dbRow), nil
 }
 
+// GetTraceByRun retrieves the trace for one execution attempt. run_id is the
+// authoritative join; callers must not guess an attempt by selecting the
+// newest trace for a Work Item.
+func (s *TraceService) GetTraceByRun(ctx context.Context, runID string) (*ExecutionTrace, error) {
+	row := s.pool.QueryRow(ctx, `
+		SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at, run_id
+		FROM execution_traces
+		WHERE run_id = $1
+	`, parseUUIDString(runID))
+
+	var dbRow ExecutionTraceDB
+	if err := scanExecutionTrace(row, &dbRow); err != nil {
+		return nil, fmt.Errorf("get trace by run: %w", err)
+	}
+	return dbToExecutionTrace(&dbRow), nil
+}
+
 // ListTraces retrieves all execution traces for an issue, ordered by start time descending.
 func (s *TraceService) ListTraces(ctx context.Context, issueID string) ([]*ExecutionTrace, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at
+		SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at, run_id
 		FROM execution_traces
 		WHERE issue_id = $1
 		ORDER BY start_time DESC
@@ -221,6 +239,7 @@ func scanExecutionTrace(row pgx.Row, t *ExecutionTraceDB) error {
 		&t.Status,
 		&t.CreatedAt,
 		&t.UpdatedAt,
+		&t.RunID,
 	)
 }
 
@@ -242,6 +261,7 @@ func scanExecutionTraceRows(rows pgx.Rows, t *ExecutionTraceDB) error {
 		&t.Status,
 		&t.CreatedAt,
 		&t.UpdatedAt,
+		&t.RunID,
 	)
 }
 
@@ -249,6 +269,7 @@ func scanExecutionTraceRows(rows pgx.Rows, t *ExecutionTraceDB) error {
 func dbToExecutionTrace(db *ExecutionTraceDB) *ExecutionTrace {
 	t := &ExecutionTrace{
 		ID:       formatUUID(db.ID),
+		RunID:    formatUUID(db.RunID),
 		TaskID:   formatUUID(db.TaskID),
 		AgentID:  formatUUID(db.AgentID),
 		IssueID:  formatUUID(db.IssueID),

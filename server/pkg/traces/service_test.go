@@ -52,6 +52,7 @@ func TestDBToExecutionTrace(t *testing.T) {
 
 	db := &ExecutionTraceDB{
 		ID:        mustParseUUID("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"),
+		RunID:     mustParseUUID("44444444-5555-4666-8777-888888888888"),
 		TaskID:    mustParseUUID("11111111-2222-4333-8444-555555555555"),
 		AgentID:   mustParseUUID("22222222-3333-4444-8555-666666666666"),
 		IssueID:   mustParseUUID("33333333-4444-5555-8666-777777777777"),
@@ -64,6 +65,9 @@ func TestDBToExecutionTrace(t *testing.T) {
 	trace := dbToExecutionTrace(db)
 	if trace.ID != "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" {
 		t.Errorf("unexpected ID: %s", trace.ID)
+	}
+	if trace.RunID != "44444444-5555-4666-8777-888888888888" {
+		t.Errorf("unexpected RunID: %s", trace.RunID)
 	}
 	if trace.Provider != "claude" {
 		t.Errorf("unexpected provider: %s", trace.Provider)

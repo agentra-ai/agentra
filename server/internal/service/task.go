@@ -33,6 +33,13 @@ type TaskService struct {
 	TraceService *TraceService
 }
 
+// StartedTask is the atomic result of starting a Work Item. RunID identifies
+// this execution attempt and must accompany attempt-scoped daemon callbacks.
+type StartedTask struct {
+	Task  db.AgentTaskQueue
+	RunID pgtype.UUID
+}
+
 // ErrGatewayTaskNotAuthorized intentionally hides whether a task exists in a
 // different workspace. Gateway callers must never be able to use task IDs as a
 // cross-tenant oracle.
@@ -343,30 +350,25 @@ func (s *TaskService) rejectQueuedTask(ctx context.Context, taskID pgtype.UUID, 
 
 // StartTask transitions a dispatched task to running.
 // Issue status is NOT changed here — the agent manages it via the CLI.
-func (s *TaskService) StartTask(ctx context.Context, taskID pgtype.UUID) (*db.AgentTaskQueue, error) {
-	task, err := s.Queries.StartAgentTask(ctx, taskID)
+func (s *TaskService) StartTask(ctx context.Context, taskID pgtype.UUID) (*StartedTask, error) {
+	started, err := s.Queries.StartAgentTaskRun(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("start task: %w", err)
 	}
+	task, err := s.Queries.GetAgentTask(ctx, started.TaskID)
+	if err != nil {
+		return nil, fmt.Errorf("load started task: %w", err)
+	}
 
 	slog.Info("task started", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
-
-	// Create trace recording for this task run (existing task_runs table).
-	run, err := s.Queries.CreateTaskRun(ctx, db.CreateTaskRunParams{
-		TaskID:  task.ID,
-		AgentID: task.AgentID,
-	})
-	if err != nil {
-		slog.Warn("start task: failed to create trace run", "task_id", util.UUIDToString(task.ID), "error", err)
-	} else {
-		slog.Info("trace run created", "run_id", util.UUIDToString(run.ID), "task_id", util.UUIDToString(task.ID))
-	}
+	slog.Info("task run created", "run_id", util.UUIDToString(started.RunID), "task_id", util.UUIDToString(task.ID))
 
 	// Create execution trace (new execution_traces table).
 	if s.TraceService != nil && s.TraceService.TraceService != nil {
 		provider, model := s.resolveAgentProvider(ctx, task.AgentID)
 		_, err := s.TraceService.StartTrace(
 			ctx,
+			util.UUIDToString(started.RunID),
 			util.UUIDToString(task.ID),
 			util.UUIDToString(task.AgentID),
 			util.UUIDToString(task.IssueID),
@@ -378,7 +380,7 @@ func (s *TaskService) StartTask(ctx context.Context, taskID pgtype.UUID) (*db.Ag
 		}
 	}
 
-	return &task, nil
+	return &StartedTask{Task: task, RunID: started.RunID}, nil
 }
 
 // CheckpointTaskSession persists the provider session and execution directory

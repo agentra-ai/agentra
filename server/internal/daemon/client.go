@@ -73,8 +73,17 @@ func (c *Client) ClaimTask(ctx context.Context, runtimeID string) (*Task, error)
 	return resp.Task, nil
 }
 
-func (c *Client) StartTask(ctx context.Context, taskID string) error {
-	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/start", taskID), map[string]any{}, nil)
+func (c *Client) StartTask(ctx context.Context, taskID string) (string, error) {
+	var resp struct {
+		RunID string `json:"run_id"`
+	}
+	if err := c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/start", taskID), map[string]any{}, &resp); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(resp.RunID) == "" {
+		return "", fmt.Errorf("start task response is missing run_id")
+	}
+	return resp.RunID, nil
 }
 
 func (c *Client) ReportProgress(ctx context.Context, taskID, summary string, step, total int) error {
@@ -101,10 +110,11 @@ type TaskMessageData struct {
 	Output  string         `json:"output,omitempty"`
 }
 
-func (c *Client) ReportTaskMessages(ctx context.Context, taskID string, messages []TaskMessageData) error {
+func (c *Client) ReportTaskMessages(ctx context.Context, taskID, runID string, messages []TaskMessageData) error {
 	for start := 0; start < len(messages); start += protocol.TaskMessageBatchSize {
 		end := min(start+protocol.TaskMessageBatchSize, len(messages))
 		if err := c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/messages", taskID), map[string]any{
+			"run_id":   runID,
 			"messages": messages[start:end],
 		}, nil); err != nil {
 			return err

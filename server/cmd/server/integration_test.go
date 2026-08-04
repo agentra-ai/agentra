@@ -23,6 +23,7 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/realtime"
 	"github.com/agentra-ai/agentra/server/internal/util"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
+	"github.com/agentra-ai/agentra/server/pkg/protocol"
 	stripelib "github.com/agentra-ai/agentra/server/pkg/stripe"
 )
 
@@ -269,6 +270,24 @@ func createTaskMessageFixture(t *testing.T, status, runtimeType, cloudRuntimeID 
 		t.Fatalf("create task fixture: %v", err)
 	}
 	return issueID, taskID
+}
+
+func startTaskFixture(t *testing.T, taskID string) string {
+	t.Helper()
+	resp := authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/start", map[string]any{})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("start task: status = %d: %s", resp.StatusCode, body)
+	}
+	var started struct {
+		RunID string `json:"run_id"`
+	}
+	readJSON(t, resp, &started)
+	if started.RunID == "" {
+		t.Fatal("start task returned an empty run_id")
+	}
+	return started.RunID
 }
 
 // ---- Health ----
@@ -1020,10 +1039,12 @@ func TestInvalidRequestBodies(t *testing.T) {
 
 func TestTaskMessagesAreRedactedIdempotentAndCursorBounded(t *testing.T) {
 	requireIntegrationDB(t)
-	_, taskID := createTaskMessageFixture(t, "running", "local", "")
+	_, taskID := createTaskMessageFixture(t, "dispatched", "local", "")
+	runID := startTaskFixture(t, taskID)
 	path := "/api/daemon/tasks/" + taskID + "/messages"
 
 	resp := authRequest(t, http.MethodPost, path, map[string]any{
+		"run_id": runID,
 		"messages": []map[string]any{
 			{"seq": 1, "type": "text", "content": "OPENAI_API_KEY=super-secret"},
 			{"seq": 2, "type": "text", "content": "second"},
@@ -1039,6 +1060,7 @@ func TestTaskMessagesAreRedactedIdempotentAndCursorBounded(t *testing.T) {
 	// Replaying a cursor is a successful no-op and must not replace or duplicate
 	// the original durable message.
 	resp = authRequest(t, http.MethodPost, path, map[string]any{
+		"run_id":   runID,
 		"messages": []map[string]any{{"seq": 2, "type": "text", "content": "duplicate"}},
 	})
 	if resp.StatusCode != http.StatusOK {
@@ -1073,6 +1095,90 @@ func TestTaskMessagesAreRedactedIdempotentAndCursorBounded(t *testing.T) {
 	}
 	if strings.Contains(firstContent, "super-secret") || !strings.Contains(firstContent, "REDACTED") {
 		t.Fatalf("secret was not redacted: %q", firstContent)
+	}
+}
+
+func TestTaskRunIdentityIsolatesRetryMessages(t *testing.T) {
+	requireIntegrationDB(t)
+	_, taskID := createTaskMessageFixture(t, "dispatched", "local", "")
+	path := "/api/daemon/tasks/" + taskID + "/messages"
+
+	run1 := startTaskFixture(t, taskID)
+	resp := authRequest(t, http.MethodPost, path, map[string]any{
+		"run_id":   run1,
+		"messages": []map[string]any{{"seq": 1, "type": "text", "content": "first attempt"}},
+	})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("report first-run message: status = %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	ctx := context.Background()
+	if _, err := testPool.Exec(ctx, `
+		UPDATE task_runs
+		SET status = 'failed', completed_at = now(), error = 'retry fixture'
+		WHERE id = $1
+	`, run1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testPool.Exec(ctx, `
+		UPDATE agent_task_queue
+		SET status = 'dispatched', started_at = NULL, completed_at = NULL, error = NULL
+		WHERE id = $1
+	`, taskID); err != nil {
+		t.Fatal(err)
+	}
+
+	run2 := startTaskFixture(t, taskID)
+	if run2 == run1 {
+		t.Fatalf("retry reused run_id %q", run1)
+	}
+	resp = authRequest(t, http.MethodPost, path, map[string]any{
+		"run_id":   run2,
+		"messages": []map[string]any{{"seq": 1, "type": "text", "content": "second attempt"}},
+	})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("report second-run message: status = %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	// A delayed frame from the previous process must not contaminate the active
+	// attempt, even though its cursor is valid within that older Run.
+	resp = authRequest(t, http.MethodPost, path, map[string]any{
+		"run_id":   run1,
+		"messages": []map[string]any{{"seq": 2, "type": "text", "content": "stale frame"}},
+	})
+	if resp.StatusCode != http.StatusConflict {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("stale run status = %d, want 409: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	resp = authRequest(t, http.MethodGet, path, nil)
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("list active-run messages: status = %d: %s", resp.StatusCode, body)
+	}
+	var messages []protocol.TaskMessagePayload
+	readJSON(t, resp, &messages)
+	if len(messages) != 1 || messages[0].RunID != run2 || messages[0].Content != "second attempt" {
+		t.Fatalf("active-run messages = %#v", messages)
+	}
+
+	var persisted int
+	if err := testPool.QueryRow(ctx, `
+		SELECT count(*) FROM task_message WHERE task_id = $1 AND seq = 1
+	`, taskID).Scan(&persisted); err != nil {
+		t.Fatal(err)
+	}
+	if persisted != 2 {
+		t.Fatalf("persisted retry messages = %d, want 2", persisted)
 	}
 }
 

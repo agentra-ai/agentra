@@ -71,12 +71,13 @@ func (q *Queries) CompleteTaskRun(ctx context.Context, arg CompleteTaskRunParams
 }
 
 const createExecutionTrace = `-- name: CreateExecutionTrace :one
-INSERT INTO execution_traces (task_id, agent_id, issue_id, provider, model, status, start_time)
-VALUES ($1, $2, $3, $4, $5, 'running', NOW())
-RETURNING id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at
+INSERT INTO execution_traces (run_id, task_id, agent_id, issue_id, provider, model, status, start_time)
+VALUES ($1, $2, $3, $4, $5, $6, 'running', NOW())
+RETURNING id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at, run_id
 `
 
 type CreateExecutionTraceParams struct {
+	RunID    pgtype.UUID `json:"run_id"`
 	TaskID   pgtype.UUID `json:"task_id"`
 	AgentID  pgtype.UUID `json:"agent_id"`
 	IssueID  pgtype.UUID `json:"issue_id"`
@@ -86,6 +87,7 @@ type CreateExecutionTraceParams struct {
 
 func (q *Queries) CreateExecutionTrace(ctx context.Context, arg CreateExecutionTraceParams) (ExecutionTrace, error) {
 	row := q.db.QueryRow(ctx, createExecutionTrace,
+		arg.RunID,
 		arg.TaskID,
 		arg.AgentID,
 		arg.IssueID,
@@ -109,6 +111,7 @@ func (q *Queries) CreateExecutionTrace(ctx context.Context, arg CreateExecutionT
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RunID,
 	)
 	return i, err
 }
@@ -152,7 +155,7 @@ UPDATE execution_traces SET
     end_time = NOW(),
     updated_at = NOW()
 WHERE id = $1 AND status = 'running'
-RETURNING id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at
+RETURNING id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at, run_id
 `
 
 type EndExecutionTraceParams struct {
@@ -179,12 +182,13 @@ func (q *Queries) EndExecutionTrace(ctx context.Context, arg EndExecutionTracePa
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RunID,
 	)
 	return i, err
 }
 
 const getExecutionTrace = `-- name: GetExecutionTrace :one
-SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at FROM execution_traces WHERE id = $1
+SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at, run_id FROM execution_traces WHERE id = $1
 `
 
 func (q *Queries) GetExecutionTrace(ctx context.Context, id pgtype.UUID) (ExecutionTrace, error) {
@@ -206,12 +210,41 @@ func (q *Queries) GetExecutionTrace(ctx context.Context, id pgtype.UUID) (Execut
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RunID,
+	)
+	return i, err
+}
+
+const getExecutionTraceByRun = `-- name: GetExecutionTraceByRun :one
+SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at, run_id FROM execution_traces WHERE run_id = $1
+`
+
+func (q *Queries) GetExecutionTraceByRun(ctx context.Context, runID pgtype.UUID) (ExecutionTrace, error) {
+	row := q.db.QueryRow(ctx, getExecutionTraceByRun, runID)
+	var i ExecutionTrace
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.AgentID,
+		&i.IssueID,
+		&i.Provider,
+		&i.Model,
+		&i.Steps,
+		&i.Tools,
+		&i.Tokens,
+		&i.Cost,
+		&i.StartTime,
+		&i.EndTime,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.RunID,
 	)
 	return i, err
 }
 
 const getExecutionTraceByTask = `-- name: GetExecutionTraceByTask :one
-SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at FROM execution_traces WHERE task_id = $1 ORDER BY created_at DESC LIMIT 1
+SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at, run_id FROM execution_traces WHERE task_id = $1 ORDER BY created_at DESC LIMIT 1
 `
 
 func (q *Queries) GetExecutionTraceByTask(ctx context.Context, taskID pgtype.UUID) (ExecutionTrace, error) {
@@ -233,6 +266,7 @@ func (q *Queries) GetExecutionTraceByTask(ctx context.Context, taskID pgtype.UUI
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RunID,
 	)
 	return i, err
 }
@@ -304,7 +338,7 @@ func (q *Queries) GetTraceAnalytics(ctx context.Context, arg GetTraceAnalyticsPa
 }
 
 const listExecutionTracesByAgent = `-- name: ListExecutionTracesByAgent :many
-SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at FROM execution_traces WHERE agent_id = $1 ORDER BY start_time DESC LIMIT $2
+SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at, run_id FROM execution_traces WHERE agent_id = $1 ORDER BY start_time DESC LIMIT $2
 `
 
 type ListExecutionTracesByAgentParams struct {
@@ -337,6 +371,7 @@ func (q *Queries) ListExecutionTracesByAgent(ctx context.Context, arg ListExecut
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RunID,
 		); err != nil {
 			return nil, err
 		}
@@ -349,7 +384,7 @@ func (q *Queries) ListExecutionTracesByAgent(ctx context.Context, arg ListExecut
 }
 
 const listExecutionTracesByIssue = `-- name: ListExecutionTracesByIssue :many
-SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at FROM execution_traces WHERE issue_id = $1 ORDER BY start_time DESC
+SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at, run_id FROM execution_traces WHERE issue_id = $1 ORDER BY start_time DESC
 `
 
 func (q *Queries) ListExecutionTracesByIssue(ctx context.Context, issueID pgtype.UUID) ([]ExecutionTrace, error) {
@@ -377,6 +412,7 @@ func (q *Queries) ListExecutionTracesByIssue(ctx context.Context, issueID pgtype
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RunID,
 		); err != nil {
 			return nil, err
 		}

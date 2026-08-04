@@ -10,19 +10,20 @@ import (
 // It collects steps, tool calls, token usage, and cost into a single
 // denormalized document that can be queried by task or issue.
 type ExecutionTrace struct {
-	ID        string       `json:"id"`
-	TaskID    string       `json:"task_id"`
-	AgentID   string       `json:"agent_id"`
-	IssueID   string       `json:"issue_id"`
-	Provider  string       `json:"provider"`
-	Model     string       `json:"model"`
-	Steps     []TraceStep  `json:"steps"`
-	Tools     []ToolCall   `json:"tools"`
-	Tokens    TokenUsage   `json:"tokens"`
-	Cost      float64      `json:"cost"`
-	StartTime time.Time    `json:"start_time"`
-	EndTime   time.Time    `json:"end_time"`
-	Status    string       `json:"status"` // running, completed, failed, aborted
+	ID        string      `json:"id"`
+	RunID     string      `json:"run_id"`
+	TaskID    string      `json:"task_id"`
+	AgentID   string      `json:"agent_id"`
+	IssueID   string      `json:"issue_id"`
+	Provider  string      `json:"provider"`
+	Model     string      `json:"model"`
+	Steps     []TraceStep `json:"steps"`
+	Tools     []ToolCall  `json:"tools"`
+	Tokens    TokenUsage  `json:"tokens"`
+	Cost      float64     `json:"cost"`
+	StartTime time.Time   `json:"start_time"`
+	EndTime   time.Time   `json:"end_time"`
+	Status    string      `json:"status"` // running, completed, failed, aborted
 }
 
 // TraceStep is a single step in an execution trace (system, user, assistant, or tool).
@@ -52,6 +53,7 @@ type TokenUsage struct {
 // ExecutionTraceDB is the database row representation of an execution_trace.
 type ExecutionTraceDB struct {
 	ID        pgtype.UUID        `json:"id"`
+	RunID     pgtype.UUID        `json:"run_id"`
 	TaskID    pgtype.UUID        `json:"task_id"`
 	AgentID   pgtype.UUID        `json:"agent_id"`
 	IssueID   pgtype.UUID        `json:"issue_id"`

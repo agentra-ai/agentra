@@ -14,6 +14,7 @@ func TestReportTaskMessagesSplitsBoundedBatches(t *testing.T) {
 	var batchSizes []int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
+			RunID    string            `json:"run_id"`
 			Messages []TaskMessageData `json:"messages"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -22,6 +23,9 @@ func TestReportTaskMessagesSplitsBoundedBatches(t *testing.T) {
 			return
 		}
 		batchSizes = append(batchSizes, len(body.Messages))
+		if body.RunID != "run-1" {
+			t.Errorf("run_id = %q, want run-1", body.RunID)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
@@ -32,7 +36,7 @@ func TestReportTaskMessagesSplitsBoundedBatches(t *testing.T) {
 	for i := range messages {
 		messages[i] = TaskMessageData{Seq: i + 1, Type: "text", Content: "line"}
 	}
-	if err := client.ReportTaskMessages(context.Background(), "task-1", messages); err != nil {
+	if err := client.ReportTaskMessages(context.Background(), "task-1", "run-1", messages); err != nil {
 		t.Fatal(err)
 	}
 
@@ -44,6 +48,22 @@ func TestReportTaskMessagesSplitsBoundedBatches(t *testing.T) {
 		if batchSizes[i] != want[i] {
 			t.Fatalf("batch sizes = %v, want %v", batchSizes, want)
 		}
+	}
+}
+
+func TestStartTaskReturnsRunID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"task-1","run_id":"run-1"}`))
+	}))
+	defer server.Close()
+
+	runID, err := NewClient(server.URL).StartTask(context.Background(), "task-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runID != "run-1" {
+		t.Fatalf("run_id = %q, want run-1", runID)
 	}
 }
 

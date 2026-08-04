@@ -772,13 +772,15 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 	}
 	taskLog.Info("picked task", "issue", task.IssueID, "agent", agentName, "provider", provider)
 
-	if err := d.client.StartTask(ctx, task.ID); err != nil {
+	runID, err := d.client.StartTask(ctx, task.ID)
+	if err != nil {
 		taskLog.Error("start task failed", "error", err)
 		if failErr := d.client.FailTask(ctx, task.ID, fmt.Sprintf("start task failed: %s", err.Error())); failErr != nil {
 			taskLog.Error("fail task after start error", "error", failErr)
 		}
 		return
 	}
+	task.RunID = runID
 
 	// Report initial "reading" stage
 	_ = d.client.ReportAgentStage(ctx, task.ID, "reading")
@@ -1022,7 +1024,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 
 			if len(toSend) > 0 {
 				sendCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				if err := d.client.ReportTaskMessages(sendCtx, task.ID, toSend); err != nil {
+				if err := d.client.ReportTaskMessages(sendCtx, task.ID, task.RunID, toSend); err != nil {
 					taskLog.Debug("failed to report task messages", "error", err)
 				}
 				cancel()

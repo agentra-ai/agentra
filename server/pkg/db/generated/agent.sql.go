@@ -1155,40 +1155,33 @@ func (q *Queries) RetryAgentTask(ctx context.Context, id pgtype.UUID) (AgentTask
 	return i, err
 }
 
-const startAgentTask = `-- name: StartAgentTask :one
-UPDATE agent_task_queue
-SET status = 'running', started_at = now()
-WHERE id = $1 AND status = 'dispatched'
-RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id
+const startAgentTaskRun = `-- name: StartAgentTaskRun :one
+WITH started_task AS (
+    UPDATE agent_task_queue
+    SET status = 'running', started_at = now()
+    WHERE agent_task_queue.id = $1 AND agent_task_queue.status = 'dispatched'
+    RETURNING agent_task_queue.id, agent_task_queue.agent_id
+), started_run AS (
+    INSERT INTO task_runs (task_id, agent_id, status, started_at)
+    SELECT started_task.id, started_task.agent_id, 'running', now()
+    FROM started_task
+    RETURNING task_runs.id, task_runs.task_id
+)
+SELECT started_run.task_id, started_run.id AS run_id
+FROM started_run
 `
 
-func (q *Queries) StartAgentTask(ctx context.Context, id pgtype.UUID) (AgentTaskQueue, error) {
-	row := q.db.QueryRow(ctx, startAgentTask, id)
-	var i AgentTaskQueue
-	err := row.Scan(
-		&i.ID,
-		&i.AgentID,
-		&i.IssueID,
-		&i.Status,
-		&i.Priority,
-		&i.DispatchedAt,
-		&i.StartedAt,
-		&i.CompletedAt,
-		&i.Result,
-		&i.Error,
-		&i.CreatedAt,
-		&i.Context,
-		&i.RuntimeID,
-		&i.SessionID,
-		&i.WorkDir,
-		&i.TriggerCommentID,
-		&i.RuntimeType,
-		&i.CloudRuntimeID,
-		&i.RetryCount,
-		&i.MaxRetries,
-		&i.TaskType,
-		&i.LoopID,
-	)
+type StartAgentTaskRunRow struct {
+	TaskID pgtype.UUID `json:"task_id"`
+	RunID  pgtype.UUID `json:"run_id"`
+}
+
+// The Work Item transition and Run creation are one database statement: a
+// caller can never observe running without an attempt identity.
+func (q *Queries) StartAgentTaskRun(ctx context.Context, id pgtype.UUID) (StartAgentTaskRunRow, error) {
+	row := q.db.QueryRow(ctx, startAgentTaskRun, id)
+	var i StartAgentTaskRunRow
+	err := row.Scan(&i.TaskID, &i.RunID)
 	return i, err
 }
 

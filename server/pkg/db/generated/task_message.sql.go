@@ -12,13 +12,14 @@ import (
 )
 
 const createTaskMessage = `-- name: CreateTaskMessage :execrows
-INSERT INTO task_message (task_id, seq, type, tool, content, input, output)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-ON CONFLICT (task_id, seq) DO NOTHING
+INSERT INTO task_message (task_id, run_id, seq, type, tool, content, input, output)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (run_id, seq) DO NOTHING
 `
 
 type CreateTaskMessageParams struct {
 	TaskID  pgtype.UUID `json:"task_id"`
+	RunID   pgtype.UUID `json:"run_id"`
 	Seq     int32       `json:"seq"`
 	Type    string      `json:"type"`
 	Tool    pgtype.Text `json:"tool"`
@@ -30,6 +31,7 @@ type CreateTaskMessageParams struct {
 func (q *Queries) CreateTaskMessage(ctx context.Context, arg CreateTaskMessageParams) (int64, error) {
 	result, err := q.db.Exec(ctx, createTaskMessage,
 		arg.TaskID,
+		arg.RunID,
 		arg.Seq,
 		arg.Type,
 		arg.Tool,
@@ -53,11 +55,77 @@ func (q *Queries) DeleteTaskMessages(ctx context.Context, taskID pgtype.UUID) er
 	return err
 }
 
+const getActiveTaskRun = `-- name: GetActiveTaskRun :one
+SELECT id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at FROM task_runs
+WHERE task_id = $1 AND id = $2 AND status = 'running'
+`
+
+type GetActiveTaskRunParams struct {
+	TaskID pgtype.UUID `json:"task_id"`
+	ID     pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) GetActiveTaskRun(ctx context.Context, arg GetActiveTaskRunParams) (TaskRun, error) {
+	row := q.db.QueryRow(ctx, getActiveTaskRun, arg.TaskID, arg.ID)
+	var i TaskRun
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.AgentID,
+		&i.Status,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.DurationMs,
+		&i.ExitCode,
+		&i.TotalSteps,
+		&i.TotalTokens,
+		&i.TotalCost,
+		&i.Output,
+		&i.Error,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getLatestRunningTaskRun = `-- name: GetLatestRunningTaskRun :one
+SELECT id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at FROM task_runs
+WHERE task_id = $1 AND status = 'running'
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+func (q *Queries) GetLatestRunningTaskRun(ctx context.Context, taskID pgtype.UUID) (TaskRun, error) {
+	row := q.db.QueryRow(ctx, getLatestRunningTaskRun, taskID)
+	var i TaskRun
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.AgentID,
+		&i.Status,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.DurationMs,
+		&i.ExitCode,
+		&i.TotalSteps,
+		&i.TotalTokens,
+		&i.TotalCost,
+		&i.Output,
+		&i.Error,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listTaskMessages = `-- name: ListTaskMessages :many
-SELECT id, task_id, seq, type, tool, content, input, output, created_at
+SELECT id, task_id, seq, type, tool, content, input, output, created_at, run_id
 FROM (
-    SELECT id, task_id, seq, type, tool, content, input, output, created_at FROM task_message
-    WHERE task_id = $1
+    SELECT id, task_id, seq, type, tool, content, input, output, created_at, run_id FROM task_message
+    WHERE run_id = (
+        SELECT tr.id FROM task_runs tr
+        WHERE tr.task_id = $1
+        ORDER BY tr.created_at DESC
+        LIMIT 1
+    )
     ORDER BY seq DESC
     LIMIT $2
 ) AS recent
@@ -88,6 +156,7 @@ func (q *Queries) ListTaskMessages(ctx context.Context, arg ListTaskMessagesPara
 			&i.Input,
 			&i.Output,
 			&i.CreatedAt,
+			&i.RunID,
 		); err != nil {
 			return nil, err
 		}
@@ -100,8 +169,13 @@ func (q *Queries) ListTaskMessages(ctx context.Context, arg ListTaskMessagesPara
 }
 
 const listTaskMessagesSince = `-- name: ListTaskMessagesSince :many
-SELECT id, task_id, seq, type, tool, content, input, output, created_at FROM task_message
-WHERE task_id = $1 AND seq > $2
+SELECT id, task_id, seq, type, tool, content, input, output, created_at, run_id FROM task_message
+WHERE run_id = (
+    SELECT tr.id FROM task_runs tr
+    WHERE tr.task_id = $1
+    ORDER BY tr.created_at DESC
+    LIMIT 1
+) AND seq > $2
 ORDER BY seq ASC
 LIMIT $3
 `
@@ -131,6 +205,7 @@ func (q *Queries) ListTaskMessagesSince(ctx context.Context, arg ListTaskMessage
 			&i.Input,
 			&i.Output,
 			&i.CreatedAt,
+			&i.RunID,
 		); err != nil {
 			return nil, err
 		}

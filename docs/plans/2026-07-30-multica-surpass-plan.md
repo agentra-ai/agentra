@@ -329,6 +329,10 @@ Memory + Eval + Analytics feedback
 
 目标：让 Goal → Plan → Parallel Work → Review → Learning 成为 Agentra 的核心产品，而不是孤立 demo。
 
+当前执行检查点是 [M3A Durable Run-Aware Lifecycle Spine](./2026-08-04-m3a-durable-lifecycle-checkpoint.md)。
+M2A 的托管/真实 provider 外部证据与 M3A 本地工作并行推进，不能再把一个检查点的等待状态
+扩大成整个 M0–M8 路线的 `blocked`。
+
 工作包：
 
 - `M3-01` 统一 Issue、Task Graph、Loop 和 Task Run domain model；只保留一条 lifecycle state machine。
