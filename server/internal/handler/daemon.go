@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -490,10 +491,13 @@ func (h *Handler) ReportAgentStage(w http.ResponseWriter, r *http.Request) {
 
 // CompleteTask marks a running task as completed.
 type TaskCompleteRequest struct {
-	PRURL     string `json:"pr_url"`
-	Output    string `json:"output"`
-	SessionID string `json:"session_id"` // Claude session ID for future resumption
-	WorkDir   string `json:"work_dir"`   // working directory used during execution
+	PRURL      string                   `json:"pr_url"`
+	Output     string                   `json:"output"`
+	SessionID  string                   `json:"session_id"` // provider session ID for future resumption
+	WorkDir    string                   `json:"work_dir"`   // working directory used during execution
+	DurationMs int64                    `json:"duration_ms,omitempty"`
+	TokenUsage *protocol.TaskTokenUsage `json:"token_usage,omitempty"`
+	Artifacts  []protocol.TaskArtifact  `json:"artifacts,omitempty"`
 }
 
 type TaskSessionCheckpointRequest struct {
@@ -547,6 +551,10 @@ func (h *Handler) CompleteTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	if err := validateTaskCompletion(req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	result, _ := json.Marshal(req)
 	task, err := h.TaskService.CompleteTask(r.Context(), parseUUID(taskID), result, req.SessionID, req.WorkDir)
@@ -558,6 +566,36 @@ func (h *Handler) CompleteTask(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("task completed", "task_id", taskID, "agent_id", uuidToString(task.AgentID))
 	writeJSON(w, http.StatusOK, taskToResponse(*task))
+}
+
+func validateTaskCompletion(req TaskCompleteRequest) error {
+	if req.DurationMs < 0 {
+		return fmt.Errorf("duration_ms must not be negative")
+	}
+	if usage := req.TokenUsage; usage != nil {
+		if usage.InputTokens < 0 || usage.OutputTokens < 0 || usage.ReasoningOutputTokens < 0 ||
+			usage.CacheReadTokens < 0 || usage.CacheWriteTokens < 0 {
+			return fmt.Errorf("token_usage values must not be negative")
+		}
+	}
+	if len(req.Artifacts) > 100 {
+		return fmt.Errorf("artifacts must contain at most 100 entries")
+	}
+	for i, artifact := range req.Artifacts {
+		if strings.TrimSpace(artifact.Kind) == "" {
+			return fmt.Errorf("artifacts[%d].kind is required", i)
+		}
+		if strings.TrimSpace(artifact.Path) == "" && strings.TrimSpace(artifact.URI) == "" {
+			return fmt.Errorf("artifacts[%d] requires path or uri", i)
+		}
+		if artifact.SHA256 != "" {
+			digest, err := hex.DecodeString(artifact.SHA256)
+			if err != nil || len(digest) != 32 {
+				return fmt.Errorf("artifacts[%d].sha256 must be a 64-character hex digest", i)
+			}
+		}
+	}
+	return nil
 }
 
 // GetTaskStatus returns the current status of a task.

@@ -278,6 +278,7 @@ var adapterDescriptors = map[ProviderType]AdapterDescriptor{
 			CapabilitySystemPrompt,
 			CapabilityMaxTurns,
 			CapabilityToolRestrictions,
+			CapabilityUsage,
 		},
 		[]Capability{CapabilityDiscover, CapabilityCancel, CapabilitySkills},
 		map[Capability]string{
@@ -293,6 +294,7 @@ var adapterDescriptors = map[ProviderType]AdapterDescriptor{
 			CapabilityResume,
 			CapabilityModelSelection,
 			CapabilitySystemPrompt,
+			CapabilityUsage,
 		},
 		[]Capability{CapabilityDiscover, CapabilityCancel, CapabilitySkills},
 		map[Capability]string{
@@ -308,6 +310,7 @@ var adapterDescriptors = map[ProviderType]AdapterDescriptor{
 			CapabilityResume,
 			CapabilityModelSelection,
 			CapabilitySystemPrompt,
+			CapabilityUsage,
 		},
 		[]Capability{CapabilityDiscover, CapabilityCancel, CapabilitySkills},
 		map[Capability]string{

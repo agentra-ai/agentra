@@ -19,6 +19,7 @@ type (
 	ExecOptions = types.ExecOptions
 	Result      = types.Result
 	TokenUsage  = types.TokenUsage
+	Artifact    = types.Artifact
 )
 
 // Re-export constants.

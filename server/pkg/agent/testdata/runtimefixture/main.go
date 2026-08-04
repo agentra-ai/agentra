@@ -85,6 +85,10 @@ func runClaude(scenario string) {
 		"type": "assistant",
 		"message": map[string]any{
 			"role": "assistant",
+			"usage": map[string]any{
+				"input_tokens": 101, "output_tokens": 11,
+				"cache_read_input_tokens": 5, "cache_creation_input_tokens": 3,
+			},
 			"content": []map[string]any{
 				{"type": "text", "text": "fixture output"},
 			},
@@ -128,6 +132,12 @@ func runOpenCode(scenario string) {
 	writeJSON(map[string]any{
 		"type":      "step_finish",
 		"sessionID": "fixture-opencode-session",
+		"part": map[string]any{
+			"tokens": map[string]any{
+				"input": 202, "output": 22, "reasoning": 2,
+				"cache": map[string]any{"read": 7, "write": 4},
+			},
+		},
 	})
 }
 
@@ -180,6 +190,26 @@ func runCodex(scenario string) {
 						"type":  "agentMessage",
 						"phase": "final_answer",
 						"text":  "fixture output",
+					},
+				},
+			})
+			writeJSON(map[string]any{
+				"jsonrpc": "2.0",
+				"method":  "thread/tokenUsage/updated",
+				"params": map[string]any{
+					"threadId": "fixture-codex-thread",
+					"turnId":   "fixture-codex-turn",
+					"tokenUsage": map[string]any{
+						"total": map[string]any{
+							"inputTokens": 303, "outputTokens": 33,
+							"reasoningOutputTokens": 3, "cachedInputTokens": 9,
+							"cacheWriteInputTokens": 6, "totalTokens": 339,
+						},
+						"last": map[string]any{
+							"inputTokens": 303, "outputTokens": 33,
+							"reasoningOutputTokens": 3, "cachedInputTokens": 9,
+							"cacheWriteInputTokens": 6, "totalTokens": 339,
+						},
 					},
 				},
 			})

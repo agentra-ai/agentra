@@ -92,6 +92,8 @@ func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 		startTime := time.Now()
 		var output strings.Builder
 		var sessionID string
+		var tokenUsage TokenUsage
+		hasTokenUsage := false
 		finalStatus := "completed"
 		var finalError string
 
@@ -111,7 +113,13 @@ func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 
 			switch msg.Type {
 			case "assistant":
-				b.handleAssistant(msg, msgCh, &output)
+				if usage := b.handleAssistant(msg, msgCh, &output); usage != nil {
+					tokenUsage.InputTokens += usage.InputTokens
+					tokenUsage.OutputTokens += usage.OutputTokens
+					tokenUsage.CacheReadTokens += usage.CacheReadTokens
+					tokenUsage.CacheWriteTokens += usage.CacheWriteTokens
+					hasTokenUsage = true
+				}
 			case "user":
 				b.handleUser(msg, msgCh)
 			case "system":
@@ -163,22 +171,27 @@ func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 
 		b.cfg.Logger.Info("claude finished", "pid", cmd.Process.Pid, "status", finalStatus, "duration", duration.Round(time.Millisecond).String())
 
+		var finalTokenUsage *TokenUsage
+		if hasTokenUsage {
+			finalTokenUsage = &tokenUsage
+		}
 		resCh <- Result{
 			Status:     finalStatus,
 			Output:     output.String(),
 			Error:      finalError,
 			DurationMs: duration.Milliseconds(),
 			SessionID:  sessionID,
+			TokenUsage: finalTokenUsage,
 		}
 	}()
 
 	return &Session{Messages: msgCh, Result: resCh}, nil
 }
 
-func (b *claudeBackend) handleAssistant(msg claudeSDKMessage, ch chan<- Message, output *strings.Builder) {
+func (b *claudeBackend) handleAssistant(msg claudeSDKMessage, ch chan<- Message, output *strings.Builder) *TokenUsage {
 	var content claudeMessageContent
 	if err := json.Unmarshal(msg.Message, &content); err != nil {
-		return
+		return nil
 	}
 
 	for _, block := range content.Content {
@@ -204,6 +217,16 @@ func (b *claudeBackend) handleAssistant(msg claudeSDKMessage, ch chan<- Message,
 				Input:  input,
 			})
 		}
+	}
+	if content.Usage.InputTokens == 0 && content.Usage.OutputTokens == 0 &&
+		content.Usage.CacheReadInputTokens == 0 && content.Usage.CacheCreationInputTokens == 0 {
+		return nil
+	}
+	return &TokenUsage{
+		InputTokens:      content.Usage.InputTokens,
+		OutputTokens:     content.Usage.OutputTokens,
+		CacheReadTokens:  content.Usage.CacheReadInputTokens,
+		CacheWriteTokens: content.Usage.CacheCreationInputTokens,
 	}
 }
 
@@ -371,6 +394,12 @@ type claudeLogEntry struct {
 type claudeMessageContent struct {
 	Role    string               `json:"role"`
 	Content []claudeContentBlock `json:"content"`
+	Usage   struct {
+		InputTokens              int64 `json:"input_tokens"`
+		OutputTokens             int64 `json:"output_tokens"`
+		CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
+		CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
+	} `json:"usage"`
 }
 
 type claudeContentBlock struct {

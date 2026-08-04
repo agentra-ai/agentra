@@ -1206,6 +1206,111 @@ func TestTaskSessionCheckpointSurvivesRuntimeRecovery(t *testing.T) {
 	}
 }
 
+func TestTaskCompletionPersistsUsageArtifactsAndMetrics(t *testing.T) {
+	requireIntegrationDB(t)
+	_, taskID := createTaskMessageFixture(t, "dispatched", "local", "")
+
+	resp := authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/start", map[string]any{})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("start task: status = %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	usage := map[string]any{
+		"input_tokens": 100, "output_tokens": 50, "reasoning_output_tokens": 10,
+		"cache_read_tokens": 25, "cache_write_tokens": 5,
+	}
+	artifact := map[string]any{
+		"kind": "report", "path": "artifacts/report.json",
+		"media_type": "application/json", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	}
+	resp = authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/complete", map[string]any{
+		"output": "completed with usage", "duration_ms": 1234,
+		"token_usage": usage, "artifacts": []map[string]any{artifact},
+	})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("complete task: status = %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	var resultJSON []byte
+	if err := testPool.QueryRow(context.Background(), `SELECT result FROM agent_task_queue WHERE id = $1`, taskID).Scan(&resultJSON); err != nil {
+		t.Fatal(err)
+	}
+	var result map[string]any
+	if err := json.Unmarshal(resultJSON, &result); err != nil {
+		t.Fatal(err)
+	}
+	resultUsage, ok := result["token_usage"].(map[string]any)
+	if !ok || resultUsage["input_tokens"] != float64(100) || resultUsage["reasoning_output_tokens"] != float64(10) {
+		t.Fatalf("persisted token usage = %#v", result["token_usage"])
+	}
+	resultArtifacts, ok := result["artifacts"].([]any)
+	if !ok || len(resultArtifacts) != 1 {
+		t.Fatalf("persisted artifacts = %#v", result["artifacts"])
+	}
+
+	var durationMs, tokenInput, tokenOutput int
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT duration_ms, token_input, token_output
+		FROM agent_task_metrics
+		WHERE task_id = $1
+	`, taskID).Scan(&durationMs, &tokenInput, &tokenOutput); err != nil {
+		t.Fatal(err)
+	}
+	if durationMs != 1234 || tokenInput != 100 || tokenOutput != 60 {
+		t.Fatalf("metric usage = duration:%d input:%d output:%d", durationMs, tokenInput, tokenOutput)
+	}
+
+	var totalTokens int
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT total_tokens FROM task_runs WHERE task_id = $1 ORDER BY created_at DESC LIMIT 1
+	`, taskID).Scan(&totalTokens); err != nil {
+		t.Fatal(err)
+	}
+	if totalTokens != 160 {
+		t.Fatalf("trace total_tokens = %d, want 160", totalTokens)
+	}
+}
+
+func TestTaskCompletionRejectsInvalidUsageAndArtifacts(t *testing.T) {
+	requireIntegrationDB(t)
+	_, taskID := createTaskMessageFixture(t, "running", "local", "")
+	path := "/api/daemon/tasks/" + taskID + "/complete"
+
+	resp := authRequest(t, http.MethodPost, path, map[string]any{
+		"output": "invalid usage", "token_usage": map[string]any{"input_tokens": -1},
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("negative usage status = %d, want 400: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	resp = authRequest(t, http.MethodPost, path, map[string]any{
+		"output": "invalid artifact", "artifacts": []map[string]any{{"kind": "report"}},
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("unlocated artifact status = %d, want 400: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	var status string
+	if err := testPool.QueryRow(context.Background(), `SELECT status FROM agent_task_queue WHERE id = $1`, taskID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "running" {
+		t.Fatalf("invalid completion mutated task to %q", status)
+	}
+}
+
 func TestTaskMessagesRejectCrossWorkspaceReads(t *testing.T) {
 	requireIntegrationDB(t)
 	var otherWorkspaceID string

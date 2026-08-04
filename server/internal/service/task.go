@@ -389,9 +389,19 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 	}
 
 	slog.Info("task completed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
+	var payload protocol.TaskCompletedPayload
+	_ = json.Unmarshal(result, &payload)
+	tokenInput := int64(0)
+	tokenOutput := int64(0)
+	totalTokens := int64(0)
+	if payload.TokenUsage != nil {
+		tokenInput = payload.TokenUsage.InputTokens
+		tokenOutput = payload.TokenUsage.OutputTokens + payload.TokenUsage.ReasoningOutputTokens
+		totalTokens = tokenInput + tokenOutput
+	}
 
 	// Finalize trace recording for this task run (existing task_runs table).
-	s.finalizeTrace(ctx, task.ID, task.AgentID, "completed", "", 0, 0, 0, string(result))
+	s.finalizeTrace(ctx, task.ID, task.AgentID, "completed", "", 0, 0, int(totalTokens), string(result))
 	// End execution trace (new execution_traces table).
 	s.endExecutionTrace(ctx, task.ID, "completed")
 
@@ -399,11 +409,8 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 	// Comment-triggered tasks: the agent replies via CLI with --parent, so
 	// posting here would create a duplicate.
 	if !task.TriggerCommentID.Valid {
-		var payload protocol.TaskCompletedPayload
-		if err := json.Unmarshal(result, &payload); err == nil {
-			if payload.Output != "" {
-				s.createAgentComment(ctx, task.IssueID, task.AgentID, redact.Text(payload.Output), "comment", task.TriggerCommentID)
-			}
+		if payload.Output != "" {
+			s.createAgentComment(ctx, task.IssueID, task.AgentID, redact.Text(payload.Output), "comment", task.TriggerCommentID)
 		}
 	}
 
@@ -412,7 +419,7 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 
 	// Append-only telemetry record (Issue #11). Fire-and-forget: never block
 	// the completion path on a metrics write failure.
-	s.recordTaskMetric(ctx, task, "completed", 0, 0, 0, 0, "")
+	s.recordTaskMetric(ctx, task, "completed", payload.DurationMs, tokenInput, tokenOutput, 0, "")
 
 	// Broadcast
 	s.broadcastTaskEvent(ctx, protocol.EventTaskCompleted, task)

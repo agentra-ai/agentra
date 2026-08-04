@@ -19,6 +19,7 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/daemon/usage"
 	"github.com/agentra-ai/agentra/server/internal/loop/stages"
 	"github.com/agentra-ai/agentra/server/pkg/agent"
+	"github.com/agentra-ai/agentra/server/pkg/protocol"
 )
 
 // workspaceState tracks registered runtimes for a single workspace.
@@ -852,7 +853,7 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 		taskLog.Info("task completed", "status", result.Status)
 		// Report "committing" stage before completing
 		_ = d.client.ReportAgentStage(ctx, task.ID, "committing")
-		if err := d.client.CompleteTask(ctx, task.ID, result.Comment, result.BranchName, result.SessionID, result.WorkDir); err != nil {
+		if err := d.client.CompleteTask(ctx, task.ID, result.Comment, result.BranchName, result.SessionID, result.WorkDir, result.DurationMs, result.TokenUsage, result.Artifacts); err != nil {
 			taskLog.Error("complete task failed, falling back to fail", "error", err)
 			if failErr := d.client.FailTask(ctx, task.ID, fmt.Sprintf("complete task failed: %s", err.Error())); failErr != nil {
 				taskLog.Error("fail task fallback also failed", "error", failErr)
@@ -1136,10 +1137,13 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 			return TaskResult{}, fmt.Errorf("%s returned empty output", provider)
 		}
 		return TaskResult{
-			Status:    "completed",
-			Comment:   result.Output,
-			SessionID: result.SessionID,
-			WorkDir:   env.WorkDir,
+			Status:     "completed",
+			Comment:    result.Output,
+			SessionID:  result.SessionID,
+			WorkDir:    env.WorkDir,
+			DurationMs: result.DurationMs,
+			TokenUsage: protocolTokenUsage(result.TokenUsage),
+			Artifacts:  protocolArtifacts(result.Artifacts),
 		}, nil
 	case "timeout":
 		return TaskResult{}, fmt.Errorf("%s timed out after %s", provider, d.cfg.AgentTimeout)
@@ -1150,6 +1154,33 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		}
 		return TaskResult{Status: "blocked", Comment: errMsg}, nil
 	}
+}
+
+func protocolTokenUsage(usage *agent.TokenUsage) *protocol.TaskTokenUsage {
+	if usage == nil {
+		return nil
+	}
+	return &protocol.TaskTokenUsage{
+		InputTokens:           usage.InputTokens,
+		OutputTokens:          usage.OutputTokens,
+		ReasoningOutputTokens: usage.ReasoningOutputTokens,
+		CacheReadTokens:       usage.CacheReadTokens,
+		CacheWriteTokens:      usage.CacheWriteTokens,
+	}
+}
+
+func protocolArtifacts(artifacts []agent.Artifact) []protocol.TaskArtifact {
+	if len(artifacts) == 0 {
+		return nil
+	}
+	result := make([]protocol.TaskArtifact, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		result = append(result, protocol.TaskArtifact{
+			Kind: artifact.Kind, Path: artifact.Path, URI: artifact.URI,
+			MediaType: artifact.MediaType, SHA256: artifact.SHA256,
+		})
+	}
+	return result
 }
 
 // buildPromptForStage returns the user prompt, system prompt, per-stage

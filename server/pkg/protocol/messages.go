@@ -26,9 +26,31 @@ type TaskProgressPayload struct {
 
 // TaskCompletedPayload is sent from daemon to server when a task finishes.
 type TaskCompletedPayload struct {
-	TaskID string `json:"task_id"`
-	PRURL  string `json:"pr_url,omitempty"`
-	Output string `json:"output,omitempty"`
+	TaskID     string          `json:"task_id"`
+	PRURL      string          `json:"pr_url,omitempty"`
+	Output     string          `json:"output,omitempty"`
+	DurationMs int64           `json:"duration_ms,omitempty"`
+	TokenUsage *TaskTokenUsage `json:"token_usage,omitempty"`
+	Artifacts  []TaskArtifact  `json:"artifacts,omitempty"`
+}
+
+// TaskTokenUsage is the provider-neutral per-task usage contract.
+type TaskTokenUsage struct {
+	InputTokens           int64 `json:"input_tokens"`
+	OutputTokens          int64 `json:"output_tokens"`
+	ReasoningOutputTokens int64 `json:"reasoning_output_tokens,omitempty"`
+	CacheReadTokens       int64 `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens      int64 `json:"cache_write_tokens,omitempty"`
+}
+
+// TaskArtifact is the durable wire representation of a provider-declared
+// artifact. Unsupported adapters send no artifacts.
+type TaskArtifact struct {
+	Kind      string `json:"kind"`
+	Path      string `json:"path,omitempty"`
+	URI       string `json:"uri,omitempty"`
+	MediaType string `json:"media_type,omitempty"`
+	SHA256    string `json:"sha256,omitempty"`
 }
 
 // TaskMessagePayload represents a single agent execution message (tool call, text, etc.)
@@ -37,10 +59,10 @@ type TaskMessagePayload struct {
 	IssueID string         `json:"issue_id,omitempty"`
 	Seq     int            `json:"seq"`
 	Type    string         `json:"type"`              // "text", "tool_use", "tool_result", "error"
-	Tool    string         `json:"tool,omitempty"`     // tool name for tool_use/tool_result
-	Content string         `json:"content,omitempty"`  // text content
-	Input   map[string]any `json:"input,omitempty"`    // tool input (tool_use only)
-	Output  string         `json:"output,omitempty"`   // tool output (tool_result only)
+	Tool    string         `json:"tool,omitempty"`    // tool name for tool_use/tool_result
+	Content string         `json:"content,omitempty"` // text content
+	Input   map[string]any `json:"input,omitempty"`   // tool input (tool_use only)
+	Output  string         `json:"output,omitempty"`  // tool output (tool_result only)
 }
 
 // DaemonRegisterPayload is sent from daemon to server on connection.

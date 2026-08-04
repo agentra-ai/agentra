@@ -73,3 +73,37 @@ func TestCheckpointTaskSessionRequest(t *testing.T) {
 		t.Fatalf("body = %#v", body)
 	}
 }
+
+func TestCompleteTaskIncludesUsageAndArtifacts(t *testing.T) {
+	var body struct {
+		DurationMs int64                    `json:"duration_ms"`
+		TokenUsage *protocol.TaskTokenUsage `json:"token_usage"`
+		Artifacts  []protocol.TaskArtifact  `json:"artifacts"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	usage := &protocol.TaskTokenUsage{
+		InputTokens: 100, OutputTokens: 50, ReasoningOutputTokens: 10,
+		CacheReadTokens: 25, CacheWriteTokens: 5,
+	}
+	artifacts := []protocol.TaskArtifact{{Kind: "report", Path: "artifacts/report.json", MediaType: "application/json", SHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}
+	if err := client.CompleteTask(context.Background(), "task-1", "done", "branch", "session", "/tmp/worktree", 1234, usage, artifacts); err != nil {
+		t.Fatal(err)
+	}
+	if body.DurationMs != 1234 || body.TokenUsage == nil || *body.TokenUsage != *usage {
+		t.Fatalf("completion usage = %#v, duration = %d", body.TokenUsage, body.DurationMs)
+	}
+	if len(body.Artifacts) != 1 || body.Artifacts[0] != artifacts[0] {
+		t.Fatalf("completion artifacts = %#v", body.Artifacts)
+	}
+}

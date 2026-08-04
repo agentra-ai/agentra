@@ -122,8 +122,8 @@ func (c *Client) CheckpointTaskSession(ctx context.Context, taskID, sessionID, w
 	}, nil)
 }
 
-func (c *Client) CompleteTask(ctx context.Context, taskID, output, branchName, sessionID, workDir string) error {
-	body := map[string]any{"output": output}
+func (c *Client) CompleteTask(ctx context.Context, taskID, output, branchName, sessionID, workDir string, durationMs int64, tokenUsage *protocol.TaskTokenUsage, artifacts []protocol.TaskArtifact) error {
+	body := map[string]any{"output": output, "duration_ms": durationMs}
 	if branchName != "" {
 		body["branch_name"] = branchName
 	}
@@ -132,6 +132,12 @@ func (c *Client) CompleteTask(ctx context.Context, taskID, output, branchName, s
 	}
 	if workDir != "" {
 		body["work_dir"] = workDir
+	}
+	if tokenUsage != nil {
+		body["token_usage"] = tokenUsage
+	}
+	if len(artifacts) > 0 {
+		body["artifacts"] = artifacts
 	}
 	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/complete", taskID), body, nil)
 }

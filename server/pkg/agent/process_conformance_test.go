@@ -92,6 +92,17 @@ func TestRuntimeFixturePartialStreamSuccess(t *testing.T) {
 		ProviderCodex:    "fixture-codex-thread",
 		ProviderOpenCode: "fixture-opencode-session",
 	}
+	expectedUsage := map[ProviderType]TokenUsage{
+		ProviderClaude: {
+			InputTokens: 101, OutputTokens: 11, CacheReadTokens: 5, CacheWriteTokens: 3,
+		},
+		ProviderCodex: {
+			InputTokens: 303, OutputTokens: 33, ReasoningOutputTokens: 3, CacheReadTokens: 9, CacheWriteTokens: 6,
+		},
+		ProviderOpenCode: {
+			InputTokens: 202, OutputTokens: 22, ReasoningOutputTokens: 2, CacheReadTokens: 7, CacheWriteTokens: 4,
+		},
+	}
 
 	for _, provider := range []ProviderType{ProviderClaude, ProviderCodex, ProviderOpenCode} {
 		provider := provider
@@ -115,6 +126,12 @@ func TestRuntimeFixturePartialStreamSuccess(t *testing.T) {
 			}
 			if result.SessionID != expectedSessionIDs[provider] {
 				t.Errorf("session ID = %q, want %q", result.SessionID, expectedSessionIDs[provider])
+			}
+			if result.TokenUsage == nil || *result.TokenUsage != expectedUsage[provider] {
+				t.Errorf("token usage = %#v, want %#v", result.TokenUsage, expectedUsage[provider])
+			}
+			if len(result.Artifacts) != 0 {
+				t.Errorf("unsupported artifacts = %#v, want none", result.Artifacts)
 			}
 			assertMessage(t, messages, MessageStatus, "running")
 			assertMessage(t, messages, MessageText, "fixture output")

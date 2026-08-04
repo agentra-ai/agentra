@@ -66,12 +66,28 @@ type Result struct {
 
 	// TokenUsage is populated by API-based providers after execution.
 	TokenUsage *TokenUsage
+	// Artifacts contains provider-declared outputs. CLI adapters that cannot
+	// identify artifacts reliably leave this empty and declare the capability
+	// unsupported instead of guessing from the worktree.
+	Artifacts []Artifact
 }
 
 // TokenUsage holds token consumption metrics from an API provider.
 type TokenUsage struct {
-	InputTokens      int64 `json:"input_tokens"`
-	OutputTokens     int64 `json:"output_tokens"`
-	CacheReadTokens  int64 `json:"cache_read_tokens,omitempty"`
-	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
+	InputTokens           int64 `json:"input_tokens"`
+	OutputTokens          int64 `json:"output_tokens"`
+	ReasoningOutputTokens int64 `json:"reasoning_output_tokens,omitempty"`
+	CacheReadTokens       int64 `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens      int64 `json:"cache_write_tokens,omitempty"`
+}
+
+// Artifact is a provider-declared execution output. Path is workspace-local;
+// URI is used for remote artifacts. At least one locator must be present when
+// an adapter declares artifact support.
+type Artifact struct {
+	Kind      string `json:"kind"`
+	Path      string `json:"path,omitempty"`
+	URI       string `json:"uri,omitempty"`
+	MediaType string `json:"media_type,omitempty"`
+	SHA256    string `json:"sha256,omitempty"`
 }

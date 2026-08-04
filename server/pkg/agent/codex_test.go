@@ -374,7 +374,7 @@ func TestCodexRawItemCommandExecution(t *testing.T) {
 	}
 }
 
-func TestCodexRawItemAgentMessageFinalAnswer(t *testing.T) {
+func TestCodexRawItemAgentMessageFinalAnswerDoesNotFinishTurnEarly(t *testing.T) {
 	t.Parallel()
 
 	c, _, _ := newTestCodexClient(t)
@@ -397,8 +397,8 @@ func TestCodexRawItemAgentMessageFinalAnswer(t *testing.T) {
 	if gotText != "Done!" {
 		t.Fatalf("expected text 'Done!', got %q", gotText)
 	}
-	if !turnDone {
-		t.Fatal("expected onTurnDone for final_answer")
+	if turnDone {
+		t.Fatal("final_answer finished turn before trailing usage notification")
 	}
 }
 

@@ -110,6 +110,7 @@ func (b *opencodeBackend) Execute(ctx context.Context, prompt string, opts ExecO
 			Error:      scanResult.errMsg,
 			DurationMs: duration.Milliseconds(),
 			SessionID:  scanResult.sessionID,
+			TokenUsage: scanResult.tokenUsage,
 		}
 	}()
 
@@ -146,10 +147,11 @@ func buildOpencodeArgs(opts ExecOptions, execPath string) []string {
 
 // eventResult holds the accumulated state from processing the event stream.
 type eventResult struct {
-	status    string
-	errMsg    string
-	output    string
-	sessionID string
+	status     string
+	errMsg     string
+	output     string
+	sessionID  string
+	tokenUsage *TokenUsage
 }
 
 // processEvents reads JSON lines from r, dispatches events to ch, and returns
@@ -157,6 +159,8 @@ type eventResult struct {
 func (b *opencodeBackend) processEvents(r io.Reader, ch chan<- Message) eventResult {
 	var output strings.Builder
 	var sessionID string
+	var tokenUsage TokenUsage
+	hasTokenUsage := false
 	finalStatus := "completed"
 	var finalError string
 
@@ -191,7 +195,14 @@ func (b *opencodeBackend) processEvents(r io.Reader, ch chan<- Message) eventRes
 		case "step_start":
 			trySend(ch, Message{Type: MessageStatus, Status: "running"})
 		case "step_finish":
-			// Captures final session ID from step_finish if present.
+			if event.Part.Tokens != nil {
+				tokenUsage.InputTokens += event.Part.Tokens.Input
+				tokenUsage.OutputTokens += event.Part.Tokens.Output
+				tokenUsage.ReasoningOutputTokens += event.Part.Tokens.Reasoning
+				tokenUsage.CacheReadTokens += event.Part.Tokens.Cache.Read
+				tokenUsage.CacheWriteTokens += event.Part.Tokens.Cache.Write
+				hasTokenUsage = true
+			}
 		}
 	}
 
@@ -204,11 +215,16 @@ func (b *opencodeBackend) processEvents(r io.Reader, ch chan<- Message) eventRes
 		}
 	}
 
+	var finalTokenUsage *TokenUsage
+	if hasTokenUsage {
+		finalTokenUsage = &tokenUsage
+	}
 	return eventResult{
-		status:    finalStatus,
-		errMsg:    finalError,
-		output:    output.String(),
-		sessionID: sessionID,
+		status:     finalStatus,
+		errMsg:     finalError,
+		output:     output.String(),
+		sessionID:  sessionID,
+		tokenUsage: finalTokenUsage,
 	}
 }
 
@@ -315,6 +331,17 @@ type opencodeEventPart struct {
 	Tool   string             `json:"tool,omitempty"`
 	CallID string             `json:"callID,omitempty"`
 	State  *opencodeToolState `json:"state,omitempty"`
+	Tokens *opencodeTokens    `json:"tokens,omitempty"`
+}
+
+type opencodeTokens struct {
+	Input     int64 `json:"input"`
+	Output    int64 `json:"output"`
+	Reasoning int64 `json:"reasoning"`
+	Cache     struct {
+		Read  int64 `json:"read"`
+		Write int64 `json:"write"`
+	} `json:"cache"`
 }
 
 // opencodeToolState represents the state of a tool invocation.

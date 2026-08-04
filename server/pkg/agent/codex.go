@@ -251,6 +251,7 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 			Error:      finalError,
 			DurationMs: duration.Milliseconds(),
 			SessionID:  threadID,
+			TokenUsage: c.tokenUsage,
 		}
 	}()
 
@@ -273,6 +274,7 @@ type codexClient struct {
 	notificationProtocol string // "unknown", "legacy", "raw"
 	turnStarted          bool
 	completedTurnIDs     map[string]bool
+	tokenUsage           *TokenUsage
 }
 
 type pendingRPC struct {
@@ -459,7 +461,8 @@ func (c *codexClient) handleNotification(raw map[string]json.RawMessage) {
 	if c.notificationProtocol != "legacy" {
 		if c.notificationProtocol == "unknown" &&
 			(method == "turn/started" || method == "turn/completed" ||
-				method == "thread/started" || strings.HasPrefix(method, "item/")) {
+				method == "thread/started" || method == "thread/tokenUsage/updated" ||
+				strings.HasPrefix(method, "item/")) {
 			c.notificationProtocol = "raw"
 		}
 
@@ -531,6 +534,10 @@ func (c *codexClient) handleEvent(msg map[string]any) {
 		if c.onTurnDone != nil {
 			c.onTurnDone(true)
 		}
+	case "token_count":
+		if usage := extractLegacyCodexTokenUsage(msg); usage != nil {
+			c.tokenUsage = usage
+		}
 	}
 }
 
@@ -571,6 +578,11 @@ func (c *codexClient) handleRawNotification(method string, params map[string]any
 			if c.onTurnDone != nil {
 				c.onTurnDone(false)
 			}
+		}
+
+	case "thread/tokenUsage/updated":
+		if usage := extractRawCodexTokenUsage(params); usage != nil {
+			c.tokenUsage = usage
 		}
 
 	default:
@@ -635,12 +647,9 @@ func (c *codexClient) handleItemNotification(method string, params map[string]an
 		if text != "" && c.onMessage != nil {
 			c.onMessage(Message{Type: MessageText, Content: text})
 		}
-		phase, _ := item["phase"].(string)
-		if phase == "final_answer" && c.turnStarted {
-			if c.onTurnDone != nil {
-				c.onTurnDone(false)
-			}
-		}
+		// final_answer precedes thread/tokenUsage/updated in the v2 protocol.
+		// turn/completed (or the idle fallback) owns lifecycle completion so
+		// usage and other trailing notifications are not lost.
 	}
 }
 
@@ -683,6 +692,62 @@ func extractNestedString(m map[string]any, keys ...string) string {
 	}
 	s, _ := current.(string)
 	return s
+}
+
+func extractRawCodexTokenUsage(params map[string]any) *TokenUsage {
+	tokenUsage, ok := params["tokenUsage"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	total, ok := tokenUsage["total"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	return &TokenUsage{
+		InputTokens:           jsonInt64(total["inputTokens"]),
+		OutputTokens:          jsonInt64(total["outputTokens"]),
+		ReasoningOutputTokens: jsonInt64(total["reasoningOutputTokens"]),
+		CacheReadTokens:       jsonInt64(total["cachedInputTokens"]),
+		CacheWriteTokens:      jsonInt64(total["cacheWriteInputTokens"]),
+	}
+}
+
+func extractLegacyCodexTokenUsage(msg map[string]any) *TokenUsage {
+	info, ok := msg["info"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	total, ok := info["total_token_usage"].(map[string]any)
+	if !ok {
+		total, ok = info["last_token_usage"].(map[string]any)
+	}
+	if !ok {
+		return nil
+	}
+	cacheRead := jsonInt64(total["cached_input_tokens"])
+	if cacheRead == 0 {
+		cacheRead = jsonInt64(total["cache_read_input_tokens"])
+	}
+	return &TokenUsage{
+		InputTokens:           jsonInt64(total["input_tokens"]),
+		OutputTokens:          jsonInt64(total["output_tokens"]),
+		ReasoningOutputTokens: jsonInt64(total["reasoning_output_tokens"]),
+		CacheReadTokens:       cacheRead,
+		CacheWriteTokens:      jsonInt64(total["cache_write_input_tokens"]),
+	}
+}
+
+func jsonInt64(value any) int64 {
+	switch number := value.(type) {
+	case float64:
+		return int64(number)
+	case int64:
+		return number
+	case int:
+		return int64(number)
+	default:
+		return 0
+	}
 }
 
 func nilIfEmpty(s string) any {
