@@ -38,7 +38,7 @@ func BuildReviewPrompt(task TaskRef) (*ReviewPrompt, error) {
 		SystemPrompt: systemPrompt,
 		UserPrompt:   userPrompt,
 		Tools:        toolsForStage("loop_review"),
-		MaxTurns:     10,
+		MaxTurns:     maxTurnsForStage("loop_review"),
 	}, nil
 }
 

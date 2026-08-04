@@ -32,7 +32,7 @@ func BuildPlanPrompt(task TaskRef) (*PlanPrompt, error) {
 		SystemPrompt: systemPrompt,
 		UserPrompt:   userPrompt,
 		Tools:        toolsForStage("loop_plan"),
-		MaxTurns:     5,
+		MaxTurns:     maxTurnsForStage("loop_plan"),
 	}, nil
 }
 

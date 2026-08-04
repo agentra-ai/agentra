@@ -210,6 +210,51 @@ func (q *Queries) ClaimAgentTask(ctx context.Context, agentID pgtype.UUID) (Agen
 	return i, err
 }
 
+const claimAgentTaskByID = `-- name: ClaimAgentTaskByID :one
+UPDATE agent_task_queue AS target
+SET status = 'dispatched', dispatched_at = now()
+WHERE target.id = $1 AND target.status = 'queued'
+  AND NOT EXISTS (
+      SELECT 1 FROM agent_task_queue active
+      WHERE active.issue_id = target.issue_id
+        AND active.status IN ('dispatched', 'running')
+  )
+RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id
+`
+
+// Claims one task whose runtime policy has already been validated. The exact
+// ID prevents a concurrent queue change from dispatching a different task
+// than the service inspected.
+func (q *Queries) ClaimAgentTaskByID(ctx context.Context, id pgtype.UUID) (AgentTaskQueue, error) {
+	row := q.db.QueryRow(ctx, claimAgentTaskByID, id)
+	var i AgentTaskQueue
+	err := row.Scan(
+		&i.ID,
+		&i.AgentID,
+		&i.IssueID,
+		&i.Status,
+		&i.Priority,
+		&i.DispatchedAt,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.Result,
+		&i.Error,
+		&i.CreatedAt,
+		&i.Context,
+		&i.RuntimeID,
+		&i.SessionID,
+		&i.WorkDir,
+		&i.TriggerCommentID,
+		&i.RuntimeType,
+		&i.CloudRuntimeID,
+		&i.RetryCount,
+		&i.MaxRetries,
+		&i.TaskType,
+		&i.LoopID,
+	)
+	return i, err
+}
+
 const completeAgentTask = `-- name: CompleteAgentTask :one
 UPDATE agent_task_queue
 SET status = 'completed', completed_at = now(), result = $2, session_id = $3, work_dir = $4
@@ -981,6 +1026,51 @@ func (q *Queries) ListTasksByIssue(ctx context.Context, issueID pgtype.UUID) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const rejectQueuedAgentTask = `-- name: RejectQueuedAgentTask :one
+UPDATE agent_task_queue
+SET status = 'failed', completed_at = now(), error = $2
+WHERE id = $1 AND status = 'queued'
+RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id
+`
+
+type RejectQueuedAgentTaskParams struct {
+	ID    pgtype.UUID `json:"id"`
+	Error pgtype.Text `json:"error"`
+}
+
+// Capability mismatches are terminal configuration errors, not retryable
+// execution failures. Reject them before dispatch so daemons never launch an
+// incompatible provider process and the queue cannot retain them forever.
+func (q *Queries) RejectQueuedAgentTask(ctx context.Context, arg RejectQueuedAgentTaskParams) (AgentTaskQueue, error) {
+	row := q.db.QueryRow(ctx, rejectQueuedAgentTask, arg.ID, arg.Error)
+	var i AgentTaskQueue
+	err := row.Scan(
+		&i.ID,
+		&i.AgentID,
+		&i.IssueID,
+		&i.Status,
+		&i.Priority,
+		&i.DispatchedAt,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.Result,
+		&i.Error,
+		&i.CreatedAt,
+		&i.Context,
+		&i.RuntimeID,
+		&i.SessionID,
+		&i.WorkDir,
+		&i.TriggerCommentID,
+		&i.RuntimeType,
+		&i.CloudRuntimeID,
+		&i.RetryCount,
+		&i.MaxRetries,
+		&i.TaskType,
+		&i.LoopID,
+	)
+	return i, err
 }
 
 const restoreAgent = `-- name: RestoreAgent :one

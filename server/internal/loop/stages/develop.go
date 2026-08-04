@@ -36,7 +36,7 @@ func BuildDevelopPrompt(task TaskRef) (*DevelopPrompt, error) {
 		SystemPrompt: systemPrompt,
 		UserPrompt:   userPrompt,
 		Tools:        toolsForStage("loop_develop"),
-		MaxTurns:     25,
+		MaxTurns:     maxTurnsForStage("loop_develop"),
 	}, nil
 }
 

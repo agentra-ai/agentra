@@ -112,6 +112,29 @@ WHERE id = (
 )
 RETURNING *;
 
+-- name: ClaimAgentTaskByID :one
+-- Claims one task whose runtime policy has already been validated. The exact
+-- ID prevents a concurrent queue change from dispatching a different task
+-- than the service inspected.
+UPDATE agent_task_queue AS target
+SET status = 'dispatched', dispatched_at = now()
+WHERE target.id = $1 AND target.status = 'queued'
+  AND NOT EXISTS (
+      SELECT 1 FROM agent_task_queue active
+      WHERE active.issue_id = target.issue_id
+        AND active.status IN ('dispatched', 'running')
+  )
+RETURNING *;
+
+-- name: RejectQueuedAgentTask :one
+-- Capability mismatches are terminal configuration errors, not retryable
+-- execution failures. Reject them before dispatch so daemons never launch an
+-- incompatible provider process and the queue cannot retain them forever.
+UPDATE agent_task_queue
+SET status = 'failed', completed_at = now(), error = $2
+WHERE id = $1 AND status = 'queued'
+RETURNING *;
+
 -- name: StartAgentTask :one
 UPDATE agent_task_queue
 SET status = 'running', started_at = now()

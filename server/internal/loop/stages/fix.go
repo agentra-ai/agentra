@@ -43,7 +43,7 @@ func BuildFixPrompt(task TaskRef) (*FixPrompt, error) {
 		SystemPrompt: systemPrompt,
 		UserPrompt:   userPrompt,
 		Tools:        toolsForStage("loop_fix"),
-		MaxTurns:     20,
+		MaxTurns:     maxTurnsForStage("loop_fix"),
 	}, nil
 }
 

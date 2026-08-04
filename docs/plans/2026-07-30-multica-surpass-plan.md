@@ -322,7 +322,8 @@ Memory + Eval + Analytics feedback
 - 已完成 crash-resume 的本地闭环：三个 adapter 在 provider session 建立后、执行结束前发出 checkpoint；server 只允许 workspace 成员为运行中 task 持久化 session/workdir；同一稳定 daemon identity 的新进程 instance 重新注册时在 retry budget 内自动重排队，同一 instance 的重复注册保持幂等，并在重新 claim 同一 task 时优先恢复该 checkpoint。adapter、client、数据库恢复和跨租户拒绝均有回归。
 - 已完成 token usage 与 artifact wire contract：Claude assistant usage、Codex `thread/tokenUsage/updated`（并兼容 legacy token_count）和 OpenCode step-finish tokens 都进入统一 Result；daemon 将 duration/usage/artifacts 传至 task result、trace 与 metrics。负 usage、无定位符或错误 digest 的 artifact 失败关闭；三个 CLI 尚无可靠 provider-declared artifact，因此 capability 继续明确标为 unsupported，不扫描 worktree 猜测。
 - Runtime API 现在为已知 local provider 返回版本化的 v1 adapter contract，Web runtime 详情按完整 14 项词汇展示 native/adapter/unsupported 和支持计数；unknown/cloud runtime 不伪造矩阵。API 完整性、UI 计数、类型与 lint 均有回归。
-- 真实 provider binary 和通用 pre-claim 过滤尚未完成，因此 `M2-03` 至 `M2-04` 仍处于进行中，不能将三个 adapter 提升为 stable。
+- 通用 pre-claim capability 过滤已经落地：stage 的工具集与 turn budget 成为 daemon/queue 的单一策略源；runtime claim 在 dispatch 前按 adapter descriptor 校验，能力不兼容的队列项原子失败并保留明确错误，同一次 claim 继续选择后续兼容任务。
+- M2A 本地实现门槛已完成；三平台 hosted suite 和真实 provider binary 证据尚未取得，因此 `M2-03` 仍处于进行中，不能将三个 adapter 提升为 stable。
 
 ### M3 — Agentra Intelligence：形成真正差异化的编排闭环
 

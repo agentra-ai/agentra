@@ -1,5 +1,45 @@
 package stages
 
+import (
+	"fmt"
+	"strings"
+
+	"github.com/agentra-ai/agentra/server/pkg/agent"
+)
+
+type executionPolicy struct {
+	tools    []string
+	maxTurns int
+}
+
+var executionPolicies = map[string]executionPolicy{
+	"loop_plan": {
+		tools:    []string{"read_file", "search_code"},
+		maxTurns: 5,
+	},
+	"loop_review": {
+		tools:    []string{"read_file", "search_code", "git_diff"},
+		maxTurns: 10,
+	},
+	"loop_develop": {
+		tools: []string{
+			"read_file", "search_code", "write_file",
+			"run_command", "run_test",
+			"git_status", "git_diff", "git_commit", "git_push",
+			"create_branch", "github_pr_create",
+		},
+		maxTurns: 25,
+	},
+	"loop_fix": {
+		tools: []string{
+			"read_file", "search_code", "write_file",
+			"run_command", "run_test",
+			"git_status", "git_diff", "git_commit", "git_push",
+		},
+		maxTurns: 20,
+	},
+}
+
 // toolsForStage returns the tool names available to a given stage. The
 // underlying tool implementations live in server/internal/loop/tools/ —
 // this function only enumerates which tool names a stage is allowed to
@@ -20,24 +60,38 @@ package stages
 // Unknown task types get nil — the daemon falls back to whatever tools
 // the spawned agent CLI exposes by default, which is the safe baseline.
 func toolsForStage(taskType string) []string {
-	switch taskType {
-	case "loop_plan":
-		return []string{"read_file", "search_code"}
-	case "loop_review":
-		return []string{"read_file", "search_code", "git_diff"}
-	case "loop_develop":
-		return []string{
-			"read_file", "search_code", "write_file",
-			"run_command", "run_test",
-			"git_status", "git_diff", "git_commit", "git_push",
-			"create_branch", "github_pr_create",
+	policy, ok := executionPolicies[taskType]
+	if !ok {
+		return nil
+	}
+	return append([]string(nil), policy.tools...)
+}
+
+func maxTurnsForStage(taskType string) int {
+	return executionPolicies[taskType].maxTurns
+}
+
+// ValidateAdapterForTaskType applies the same execution policy used by the
+// daemon before a queued task is dispatched. Unknown loop stages fail closed;
+// standard and legacy non-loop task types have no stage-specific options.
+func ValidateAdapterForTaskType(descriptor agent.AdapterDescriptor, taskType string) error {
+	taskType = strings.TrimSpace(taskType)
+	if taskType == "" || taskType == "standard" {
+		return nil
+	}
+	policy, ok := executionPolicies[taskType]
+	if !ok {
+		if strings.HasPrefix(taskType, "loop_") {
+			return fmt.Errorf("unsupported loop task type %q", taskType)
 		}
-	case "loop_fix":
-		return []string{
-			"read_file", "search_code", "write_file",
-			"run_command", "run_test",
-			"git_status", "git_diff", "git_commit", "git_push",
-		}
+		return nil
+	}
+	if err := agent.ValidateExecOptions(descriptor, agent.ExecOptions{
+		SystemPrompt: "engineering-loop-stage",
+		MaxTurns:     policy.maxTurns,
+		Tools:        append([]string(nil), policy.tools...),
+	}); err != nil {
+		return fmt.Errorf("task type %q: %w", taskType, err)
 	}
 	return nil
 }

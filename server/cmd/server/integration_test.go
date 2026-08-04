@@ -1206,6 +1206,96 @@ func TestTaskSessionCheckpointSurvivesRuntimeRecovery(t *testing.T) {
 	}
 }
 
+func TestRuntimeClaimRejectsIncompatibleTaskBeforeDispatch(t *testing.T) {
+	requireIntegrationDB(t)
+	ctx := context.Background()
+
+	var runtimeID, agentID, loopIssueID, standardIssueID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO agent_runtime (workspace_id, name, runtime_mode, provider, status)
+		VALUES ($1, 'Pre-claim Codex Runtime', 'local', 'codex', 'online')
+		RETURNING id
+	`, testWorkspaceID).Scan(&runtimeID); err != nil {
+		t.Fatalf("create runtime: %v", err)
+	}
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO agent (workspace_id, name, runtime_mode, runtime_id, owner_id, provider, max_concurrent_tasks)
+		VALUES ($1, 'Pre-claim Codex Agent', 'local', $2, $3, 'codex', 1)
+		RETURNING id
+	`, testWorkspaceID, runtimeID, testUserID).Scan(&agentID); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	for title, target := range map[string]*string{
+		"Incompatible loop task":   &loopIssueID,
+		"Compatible standard task": &standardIssueID,
+	} {
+		var issueNumber int
+		if err := testPool.QueryRow(ctx, `
+			UPDATE workspace SET issue_counter = issue_counter + 1
+			WHERE id = $1
+			RETURNING issue_counter
+		`, testWorkspaceID).Scan(&issueNumber); err != nil {
+			t.Fatalf("reserve issue number for %q: %v", title, err)
+		}
+		if err := testPool.QueryRow(ctx, `
+			INSERT INTO issue (workspace_id, title, status, priority, creator_type, creator_id, assignee_type, assignee_id, number)
+			VALUES ($1, $2, 'in_progress', 'medium', 'member', $3, 'agent', $4, $5)
+			RETURNING id
+		`, testWorkspaceID, title, testUserID, agentID, issueNumber).Scan(target); err != nil {
+			t.Fatalf("create issue %q: %v", title, err)
+		}
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM issue WHERE id IN ($1, $2)`, loopIssueID, standardIssueID)
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM agent WHERE id = $1`, agentID)
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM agent_runtime WHERE id = $1`, runtimeID)
+	})
+
+	var incompatibleTaskID, compatibleTaskID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, runtime_type, task_type)
+		VALUES ($1, $2, $3, 'queued', 10, 'local', 'loop_plan')
+		RETURNING id
+	`, agentID, runtimeID, loopIssueID).Scan(&incompatibleTaskID); err != nil {
+		t.Fatalf("create incompatible task: %v", err)
+	}
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, runtime_type, task_type)
+		VALUES ($1, $2, $3, 'queued', 0, 'local', 'standard')
+		RETURNING id
+	`, agentID, runtimeID, standardIssueID).Scan(&compatibleTaskID); err != nil {
+		t.Fatalf("create compatible task: %v", err)
+	}
+
+	resp := authRequest(t, http.MethodPost, "/api/daemon/runtimes/"+runtimeID+"/tasks/claim", map[string]any{})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("claim task: status = %d: %s", resp.StatusCode, body)
+	}
+	var claim struct {
+		Task struct {
+			ID string `json:"id"`
+		} `json:"task"`
+	}
+	readJSON(t, resp, &claim)
+	if claim.Task.ID != compatibleTaskID {
+		t.Fatalf("claimed task = %q, want compatible task %q", claim.Task.ID, compatibleTaskID)
+	}
+
+	var incompatibleStatus, incompatibleError string
+	var incompatibleDispatchedAt *time.Time
+	if err := testPool.QueryRow(ctx, `
+		SELECT status, error, dispatched_at
+		FROM agent_task_queue WHERE id = $1
+	`, incompatibleTaskID).Scan(&incompatibleStatus, &incompatibleError, &incompatibleDispatchedAt); err != nil {
+		t.Fatal(err)
+	}
+	if incompatibleStatus != "failed" || incompatibleDispatchedAt != nil || !strings.Contains(incompatibleError, "max_turns") {
+		t.Fatalf("incompatible task = status %q, error %q, dispatched_at %v", incompatibleStatus, incompatibleError, incompatibleDispatchedAt)
+	}
+}
+
 func TestTaskCompletionPersistsUsageArtifactsAndMetrics(t *testing.T) {
 	requireIntegrationDB(t)
 	_, taskID := createTaskMessageFixture(t, "dispatched", "local", "")

@@ -15,9 +15,11 @@ import (
 
 	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/events"
+	"github.com/agentra-ai/agentra/server/internal/loop/stages"
 	"github.com/agentra-ai/agentra/server/internal/mention"
 	"github.com/agentra-ai/agentra/server/internal/realtime"
 	"github.com/agentra-ai/agentra/server/internal/util"
+	runtimeagent "github.com/agentra-ai/agentra/server/pkg/agent"
 	"github.com/agentra-ai/agentra/server/pkg/crypto"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/agentra-ai/agentra/server/pkg/protocol"
@@ -241,29 +243,102 @@ func (s *TaskService) ClaimTask(ctx context.Context, agentID pgtype.UUID) (*db.A
 // ClaimTaskForRuntime claims the next runnable task for a runtime while
 // still respecting each agent's max_concurrent_tasks limit.
 func (s *TaskService) ClaimTaskForRuntime(ctx context.Context, runtimeID pgtype.UUID) (*db.AgentTaskQueue, error) {
+	runtime, err := s.Queries.GetAgentRuntime(ctx, runtimeID)
+	if err != nil {
+		return nil, fmt.Errorf("load runtime: %w", err)
+	}
+	provider := runtimeagent.ProviderType(strings.ToLower(strings.TrimSpace(runtime.Provider)))
+	descriptor, ok := runtimeagent.DescriptorFor(provider)
+	if !ok {
+		return nil, fmt.Errorf("runtime provider %q has no adapter contract", runtime.Provider)
+	}
+
 	tasks, err := s.Queries.ListPendingTasksByRuntime(ctx, runtimeID)
 	if err != nil {
 		return nil, fmt.Errorf("list pending tasks: %w", err)
 	}
 
-	triedAgents := map[string]struct{}{}
+	capacityBlockedAgents := map[string]struct{}{}
 	for _, candidate := range tasks {
-		agentKey := util.UUIDToString(candidate.AgentID)
-		if _, seen := triedAgents[agentKey]; seen {
+		if candidate.Status != "queued" {
 			continue
 		}
-		triedAgents[agentKey] = struct{}{}
+		if err := stages.ValidateAdapterForTaskType(descriptor, candidate.TaskType); err != nil {
+			errMsg := fmt.Sprintf("task rejected before dispatch: %v", err)
+			if _, rejectErr := s.rejectQueuedTask(ctx, candidate.ID, errMsg); rejectErr != nil {
+				if errors.Is(rejectErr, pgx.ErrNoRows) {
+					continue
+				}
+				return nil, rejectErr
+			}
+			continue
+		}
 
-		task, err := s.ClaimTask(ctx, candidate.AgentID)
+		agentKey := util.UUIDToString(candidate.AgentID)
+		if _, blocked := capacityBlockedAgents[agentKey]; blocked {
+			continue
+		}
+
+		task, hasCapacity, err := s.claimTaskCandidate(ctx, candidate)
 		if err != nil {
 			return nil, err
 		}
-		if task != nil && task.RuntimeID == runtimeID {
+		if !hasCapacity {
+			capacityBlockedAgents[agentKey] = struct{}{}
+			continue
+		}
+		if task != nil {
 			return task, nil
 		}
 	}
 
 	return nil, nil
+}
+
+func (s *TaskService) claimTaskCandidate(ctx context.Context, candidate db.AgentTaskQueue) (*db.AgentTaskQueue, bool, error) {
+	agent, err := s.Queries.GetAgent(ctx, candidate.AgentID)
+	if err != nil {
+		return nil, false, fmt.Errorf("agent not found: %w", err)
+	}
+	running, err := s.Queries.CountRunningTasks(ctx, candidate.AgentID)
+	if err != nil {
+		return nil, false, fmt.Errorf("count running tasks: %w", err)
+	}
+	if running >= int64(agent.MaxConcurrentTasks) {
+		return nil, false, nil
+	}
+
+	task, err := s.Queries.ClaimAgentTaskByID(ctx, candidate.ID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, true, nil
+		}
+		return nil, true, fmt.Errorf("claim task candidate: %w", err)
+	}
+	slog.Info("task claimed", "task_id", util.UUIDToString(task.ID), "agent_id", util.UUIDToString(task.AgentID))
+	s.updateAgentStatus(ctx, task.AgentID, "working")
+	s.broadcastTaskDispatch(ctx, task)
+	return &task, true, nil
+}
+
+func (s *TaskService) rejectQueuedTask(ctx context.Context, taskID pgtype.UUID, errMsg string) (*db.AgentTaskQueue, error) {
+	task, err := s.Queries.RejectQueuedAgentTask(ctx, db.RejectQueuedAgentTaskParams{
+		ID:    taskID,
+		Error: pgtype.Text{String: errMsg, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("reject queued task: %w", err)
+	}
+	slog.Warn("task rejected before dispatch",
+		"task_id", util.UUIDToString(task.ID),
+		"agent_id", util.UUIDToString(task.AgentID),
+		"task_type", task.TaskType,
+		"error", errMsg,
+	)
+	s.createAgentComment(ctx, task.IssueID, task.AgentID, redact.Text(errMsg), "system", task.TriggerCommentID)
+	s.ReconcileAgentStatus(ctx, task.AgentID)
+	s.broadcastTaskEvent(ctx, protocol.EventTaskFailed, task)
+	return &task, nil
 }
 
 // StartTask transitions a dispatched task to running.
