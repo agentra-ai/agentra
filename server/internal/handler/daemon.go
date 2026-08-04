@@ -93,6 +93,14 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "at least one runtime is required")
 		return
 	}
+	for i := range req.Runtimes {
+		provider, err := validateLocalRuntimeProvider(req.Runtimes[i].Type)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("runtimes[%d].type: %s", i, err))
+			return
+		}
+		req.Runtimes[i].Type = provider
+	}
 
 	// Verify the caller is a member of the target workspace.
 	if _, ok := h.requireWorkspaceMember(w, r, req.WorkspaceID, "workspace not found"); !ok {
@@ -107,10 +115,7 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]AgentRuntimeResponse, 0, len(req.Runtimes))
 	for _, runtime := range req.Runtimes {
-		provider := strings.TrimSpace(runtime.Type)
-		if provider == "" {
-			provider = "unknown"
-		}
+		provider := runtime.Type
 		name := strings.TrimSpace(runtime.Name)
 		if name == "" {
 			name = provider

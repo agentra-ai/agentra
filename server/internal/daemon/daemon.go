@@ -497,10 +497,7 @@ func (d *Daemon) handlePing(ctx context.Context, rt Runtime, pingID string) {
 	pingCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
-	session, err := backend.Execute(pingCtx, "Respond with exactly one word: pong", agent.ExecOptions{
-		MaxTurns: 1,
-		Timeout:  60 * time.Second,
-	})
+	session, err := backend.Execute(pingCtx, "Respond with exactly one word: pong", pingExecOptions(backend.Descriptor(), 60*time.Second))
 	if err != nil {
 		d.client.ReportPingResult(ctx, rt.ID, pingID, map[string]any{
 			"status":      "failed",
@@ -538,6 +535,17 @@ func (d *Daemon) handlePing(ctx context.Context, rt Runtime, pingID string) {
 			"duration_ms": durationMs,
 		})
 	}
+}
+
+// pingExecOptions requests a single turn only when the provider can enforce
+// it. Ping is an internal health probe, so unsupported optional limits are
+// omitted deliberately rather than turning a healthy adapter into a failure.
+func pingExecOptions(descriptor agent.AdapterDescriptor, timeout time.Duration) agent.ExecOptions {
+	opts := agent.ExecOptions{Timeout: timeout}
+	if descriptor.Supports(agent.CapabilityMaxTurns) {
+		opts.MaxTurns = 1
+	}
+	return opts
 }
 
 // handleUpdate performs the CLI update when triggered by the server via heartbeat.
@@ -952,7 +960,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 
 	taskStart := time.Now()
 
-	session, err := backend.Execute(ctx, prompt, agent.ExecOptions{
+	execOptions := agent.ExecOptions{
 		Cwd:             env.WorkDir,
 		Model:           entry.Model,
 		SystemPrompt:    systemPrompt,
@@ -960,7 +968,11 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		Timeout:         d.cfg.AgentTimeout,
 		ResumeSessionID: task.PriorSessionID,
 		Tools:           tools,
-	})
+	}
+	if err := agent.ValidateExecOptions(backend.Descriptor(), execOptions); err != nil {
+		return TaskResult{}, fmt.Errorf("task %s runtime options for %s: %w", task.ID, provider, err)
+	}
+	session, err := backend.Execute(ctx, prompt, execOptions)
 	if err != nil {
 		return TaskResult{}, err
 	}
@@ -1128,12 +1140,9 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 // prepared execenv working directory, threaded into the TaskRef so stage
 // prompts can reference the live path.
 //
-// As of Task 15, Plan, Develop, Review, and Fix are wired. Other loop_*
-// types fall through to BuildPrompt. The tools slice is consumed by
-// agent.ExecOptions.Tools and plumbed into the spawned agent CLI — Claude
-// translates it to --allowedTools, while Codex and Opencode ignore it
-// (their JSON-RPC / CLI does not currently expose per-invocation tool
-// restrictions) and log a debug message.
+// Plan, Develop, Review, and Fix are wired. Unknown loop_* types fail. The
+// tools slice is consumed by agent.ExecOptions.Tools; the Loop create API
+// rejects local providers that cannot enforce these stage restrictions.
 //
 // Branch/Iteration source: the server's claim handler (see
 // handler.ClaimTaskByRuntime) populates Task.Branch and Task.Iteration

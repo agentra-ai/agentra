@@ -126,7 +126,7 @@ type AgentTaskResponse struct {
 	PriorSessionID   string         `json:"prior_session_id,omitempty"`   // session ID from a previous task on same issue
 	PriorWorkDir     string         `json:"prior_work_dir,omitempty"`     // work_dir from a previous task on same issue
 	TriggerCommentID *string        `json:"trigger_comment_id,omitempty"` // comment that triggered this task
-	RuntimeType      string         `json:"runtime_type"` // "local" or "cloud"
+	RuntimeType      string         `json:"runtime_type"`                 // "local" or "cloud"
 	TaskType         string         `json:"task_type,omitempty"`          // "standard" (default) or loop_plan/develop/review/fix
 	LoopID           string         `json:"loop_id,omitempty"`            // set when TaskType starts with "loop_"; identifies the loop row in `loops`
 	Branch           string         `json:"branch,omitempty"`             // for loop_review/loop_fix: the develop stage's branch from loops.branch_name
@@ -288,6 +288,11 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid runtime_id")
 		return
 	}
+	provider, err := canonicalAgentProvider(runtime, req.Provider)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	rc, _ := json.Marshal(req.RuntimeConfig)
 	if req.RuntimeConfig == nil {
@@ -323,8 +328,8 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		OwnerID:            parseUUID(ownerID),
 		Tools:              tools,
 		Triggers:           triggers,
-		Provider:           req.Provider,
-		ModelOverride:       pgtype.Text{String: req.ModelOverride, Valid: req.ModelOverride != ""},
+		Provider:           provider,
+		ModelOverride:      pgtype.Text{String: req.ModelOverride, Valid: req.ModelOverride != ""},
 		ProviderConfig:     providerConfig,
 	})
 	if err != nil {
@@ -399,6 +404,7 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	params := db.UpdateAgentParams{
 		ID: parseUUID(id),
 	}
+	var selectedRuntime *db.AgentRuntime
 	if req.Name != nil {
 		params.Name = pgtype.Text{String: *req.Name, Valid: true}
 	}
@@ -426,6 +432,7 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		}
 		params.RuntimeID = runtime.ID
 		params.RuntimeMode = pgtype.Text{String: runtime.RuntimeMode, Valid: true}
+		selectedRuntime = &runtime
 	}
 	if req.Visibility != nil {
 		params.Visibility = pgtype.Text{String: *req.Visibility, Valid: true}
@@ -444,8 +451,28 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		triggers, _ := json.Marshal(req.Triggers)
 		params.Triggers = triggers
 	}
-	if req.Provider != nil {
-		params.Provider = pgtype.Text{String: *req.Provider, Valid: true}
+	if req.Provider != nil || selectedRuntime != nil {
+		if selectedRuntime == nil {
+			runtime, err := h.Queries.GetAgentRuntimeForWorkspace(r.Context(), db.GetAgentRuntimeForWorkspaceParams{
+				ID:          agent.RuntimeID,
+				WorkspaceID: agent.WorkspaceID,
+			})
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "invalid runtime_id")
+				return
+			}
+			selectedRuntime = &runtime
+		}
+		requestedProvider := ""
+		if req.Provider != nil {
+			requestedProvider = *req.Provider
+		}
+		provider, err := canonicalAgentProvider(*selectedRuntime, requestedProvider)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		params.Provider = pgtype.Text{String: provider, Valid: true}
 	}
 	if req.ModelOverride != nil {
 		params.ModelOverride = pgtype.Text{String: *req.ModelOverride, Valid: true}

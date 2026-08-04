@@ -4,7 +4,36 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/agentra-ai/agentra/server/pkg/agent"
 )
+
+func TestPingExecOptionsConformToAdapterCapabilities(t *testing.T) {
+	t.Parallel()
+
+	for _, descriptor := range agent.KnownAdapters() {
+		descriptor := descriptor
+		t.Run(string(descriptor.Provider), func(t *testing.T) {
+			t.Parallel()
+
+			opts := pingExecOptions(descriptor, 3*time.Second)
+			if opts.Timeout != 3*time.Second {
+				t.Fatalf("timeout = %s, want 3s", opts.Timeout)
+			}
+			if descriptor.Supports(agent.CapabilityMaxTurns) {
+				if opts.MaxTurns != 1 {
+					t.Fatalf("max turns = %d, want 1", opts.MaxTurns)
+				}
+			} else if opts.MaxTurns != 0 {
+				t.Fatalf("unsupported max turns = %d, want omitted", opts.MaxTurns)
+			}
+			if err := agent.ValidateExecOptions(descriptor, opts); err != nil {
+				t.Fatalf("ping options violate adapter contract: %v", err)
+			}
+		})
+	}
+}
 
 func TestNormalizeServerBaseURL(t *testing.T) {
 	t.Parallel()

@@ -77,19 +77,42 @@ func (h *Handler) CreateLoop(w http.ResponseWriter, r *http.Request) {
 		writeLoopLookupError(w, err, http.StatusNotFound, "issue not found", "issue")
 		return
 	}
-	if _, err := h.Queries.GetAgentInWorkspace(r.Context(), dbpkg.GetAgentInWorkspaceParams{
+	validateAgentRuntime := func(agent dbpkg.Agent, field string) bool {
+		runtime, err := h.Queries.GetAgentRuntimeForWorkspace(r.Context(), dbpkg.GetAgentRuntimeForWorkspaceParams{
+			ID:          agent.RuntimeID,
+			WorkspaceID: wsUUID,
+		})
+		if err != nil {
+			writeLoopLookupError(w, err, http.StatusBadRequest, field+": runtime not found in workspace", field)
+			return false
+		}
+		if err := validateLoopRuntime(runtime); err != nil {
+			writeError(w, http.StatusBadRequest, field+": runtime is incompatible with Engineering Loop: "+err.Error())
+			return false
+		}
+		return true
+	}
+	defaultAgent, err := h.Queries.GetAgentInWorkspace(r.Context(), dbpkg.GetAgentInWorkspaceParams{
 		ID:          handlerutil.ParseUUID(*req.AgentID),
 		WorkspaceID: wsUUID,
-	}); err != nil {
+	})
+	if err != nil {
 		writeLoopLookupError(w, err, http.StatusBadRequest, "agent_id: agent not found in workspace", "agent_id")
 		return
 	}
+	if !validateAgentRuntime(defaultAgent, "agent_id") {
+		return
+	}
 	for stage, agentID := range req.StageAgents {
-		if _, err := h.Queries.GetAgentInWorkspace(r.Context(), dbpkg.GetAgentInWorkspaceParams{
+		stageAgent, err := h.Queries.GetAgentInWorkspace(r.Context(), dbpkg.GetAgentInWorkspaceParams{
 			ID:          handlerutil.ParseUUID(agentID),
 			WorkspaceID: wsUUID,
-		}); err != nil {
+		})
+		if err != nil {
 			writeLoopLookupError(w, err, http.StatusBadRequest, "stage_agents: agent for stage "+stage+" not found in workspace", "stage_agents")
+			return
+		}
+		if !validateAgentRuntime(stageAgent, "stage_agents."+stage) {
 			return
 		}
 	}

@@ -313,7 +313,8 @@ Memory + Eval + Analytics feedback
 - 三个 adapter 已通过真实子进程 success、stderr、非零退出、bounded timeout、主动 cancel 和 resume miss 回归；Codex 成功结果现在保留可恢复的 thread ID，adapter stderr 在进入结构化日志前执行 secret redaction。
 - hermetic runtime contract 已加入独立的 Ubuntu、macOS、Windows CI matrix，Linux 额外启用 race detector；真实 hosted runner 结果仍须在提交推送后确认。
 - Linux/macOS runtime 现在运行在独立 process group，Windows 使用系统 tree termination；三种 adapter 均通过 heartbeat 孙进程回归证明 cancel 后不再继续执行，等待上限固定为 2 秒。Windows hosted runner 结果仍须在推送后确认。
-- token usage/artifact fixture、真实 provider binary、crash resume 和 dispatch/UI 保存前校验尚未完成，因此 `M2-02` 至 `M2-05` 仍处于进行中，不能将三个 adapter 提升为 stable。
+- 已启动 `M2-04` 的服务端闭环：daemon 只允许注册已声明的本地 provider；Agent 保存时从 runtime 派生 provider 并拒绝冲突值；Engineering Loop 创建前验证 stage 所需的 max-turn/tool 能力；daemon ping 与 task launch 都按 descriptor 校验选项。
+- token usage/artifact fixture、真实 provider binary、crash resume、通用 pre-claim 过滤和 UI capability 展示尚未完成，因此 `M2-02` 至 `M2-05` 仍处于进行中，不能将三个 adapter 提升为 stable。
 
 ### M3 — Agentra Intelligence：形成真正差异化的编排闭环
 

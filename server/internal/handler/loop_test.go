@@ -374,6 +374,51 @@ func seedAgentInWorkspace(t *testing.T, workspaceID string) string {
 	return agentID
 }
 
+func TestCreateLoopRejectsIncompatibleLocalRuntime(t *testing.T) {
+	issueID := createLoopTestIssue(t, "loop incompatible runtime")
+	runtimeID := uuid.NewString()
+	agentID := uuid.NewString()
+	_, err := testPool.Exec(context.Background(), `
+		INSERT INTO agent_runtime (id, workspace_id, name, runtime_mode, provider)
+		VALUES ($1, $2, 'codex-loop-runtime', 'local', 'codex')`,
+		runtimeID, testWorkspaceID)
+	if err != nil {
+		t.Fatalf("seed codex runtime: %v", err)
+	}
+	_, err = testPool.Exec(context.Background(), `
+		INSERT INTO agent (id, workspace_id, name, runtime_mode, runtime_id, owner_id, provider)
+		VALUES ($1, $2, 'codex-loop-agent', 'local', $3, $4, 'codex')`,
+		agentID, testWorkspaceID, runtimeID, testUserID)
+	if err != nil {
+		t.Fatalf("seed codex agent: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM agent WHERE id = $1`, agentID)
+		testPool.Exec(context.Background(), `DELETE FROM agent_runtime WHERE id = $1`, runtimeID)
+	})
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/loops?workspace_id="+testWorkspaceID, map[string]any{
+		"issue_id": issueID,
+		"agent_id": agentID,
+	})
+	testHandler.CreateLoop(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("CreateLoop: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "max_turns") {
+		t.Fatalf("CreateLoop error does not identify unsupported capability: %s", w.Body.String())
+	}
+
+	var count int
+	if err := testPool.QueryRow(context.Background(), `SELECT count(*) FROM loops WHERE issue_id = $1`, issueID).Scan(&count); err != nil {
+		t.Fatalf("count loops: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("incompatible runtime created %d loop rows", count)
+	}
+}
+
 func TestGetLoop_HappyPath(t *testing.T) {
 	issueID := createLoopTestIssue(t, "loop get happy")
 	agentID := createLoopTestAgent(t)

@@ -348,6 +348,53 @@ func TestAgentCRUD(t *testing.T) {
 	}
 }
 
+func TestCreateAgentDerivesProviderFromRuntime(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("GET", "/api/agents?workspace_id="+testWorkspaceID, nil)
+	testHandler.ListAgents(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListAgents: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var agents []AgentResponse
+	if err := json.NewDecoder(w.Body).Decode(&agents); err != nil || len(agents) == 0 {
+		t.Fatalf("decode seeded agents: %v", err)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/agents?workspace_id="+testWorkspaceID, map[string]any{
+		"name":       "Canonical Provider Agent",
+		"runtime_id": agents[0].RuntimeID,
+	})
+	testHandler.CreateAgent(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateAgent: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var created AgentResponse
+	if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+		t.Fatalf("decode created agent: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM agent WHERE id = $1`, created.ID)
+	})
+	if created.Provider != "handler_test_runtime" {
+		t.Fatalf("provider = %q, want runtime provider handler_test_runtime", created.Provider)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/agents?workspace_id="+testWorkspaceID, map[string]any{
+		"name":       "Mismatched Provider Agent",
+		"runtime_id": agents[0].RuntimeID,
+		"provider":   "codex",
+	})
+	testHandler.CreateAgent(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("CreateAgent mismatch: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "does not match") {
+		t.Fatalf("CreateAgent mismatch returned unclear error: %s", w.Body.String())
+	}
+}
+
 func TestWorkspaceCRUD(t *testing.T) {
 	// List workspaces
 	w := httptest.NewRecorder()
