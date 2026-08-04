@@ -6,6 +6,19 @@ export type AgentVisibility = "workspace" | "private";
 
 export type AgentTriggerType = "on_assign" | "on_comment" | "scheduled";
 
+export type RuntimeCapabilityLevel = "native" | "adapter" | "unsupported";
+
+export interface RuntimeCapabilitySupport {
+  level: RuntimeCapabilityLevel;
+  detail?: string;
+}
+
+export interface RuntimeAdapterContract {
+  version: "v1";
+  transport: string;
+  capabilities: Record<string, RuntimeCapabilitySupport>;
+}
+
 export interface RuntimeDevice {
   id: string;
   workspace_id: string;
@@ -19,6 +32,7 @@ export interface RuntimeDevice {
   last_seen_at: string | null;
   created_at: string;
   updated_at: string;
+  adapter?: RuntimeAdapterContract;
 }
 
 export type AgentRuntime = RuntimeDevice;

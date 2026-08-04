@@ -468,11 +468,19 @@
       "device": "Device",
       "daemonId": "Daemon ID",
       "cliVersion": "CLI Version",
+      "capabilities": "Adapter Capabilities",
       "connectionTest": "Connection Test",
       "tokenUsage": "Token Usage",
       "metadata": "Metadata",
       "created": "Created",
       "updated": "Updated"
+    },
+    "capabilities": {
+      "summary": "{supported} of {total} capabilities supported",
+      "native": "Native",
+      "adapter": "Adapter",
+      "unsupported": "Unsupported",
+      "unavailable": "No verified adapter contract is available for this runtime."
     },
     "usage": {
       "noData": "No usage data yet",

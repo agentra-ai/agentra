@@ -7,6 +7,7 @@ import { RuntimeModeIcon, StatusBadge, InfoField } from "./shared";
 import { PingSection } from "./ping-section";
 import { UpdateSection } from "./update-section";
 import { UsageSection } from "./usage-section";
+import { CapabilitySection } from "./capability-section";
 import { useRuntimeStore } from "../store";
 
 function getCliVersion(metadata: Record<string, unknown>): string | null {
@@ -84,6 +85,15 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
               isOnline={runtime.status === "online"}
               onUpdateComplete={handleUpdateComplete}
             />
+          </div>
+        )}
+
+        {runtime.runtime_mode === "local" && (
+          <div>
+            <h3 className="mb-3 text-xs font-medium text-muted-foreground">
+              {t("detail.capabilities")}
+            </h3>
+            <CapabilitySection adapter={runtime.adapter} />
           </div>
         )}
 

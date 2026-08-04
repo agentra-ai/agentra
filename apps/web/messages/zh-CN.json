@@ -468,11 +468,19 @@
       "device": "设备",
       "daemonId": "守护进程 ID",
       "cliVersion": "CLI 版本",
+      "capabilities": "适配器能力",
       "connectionTest": "连接测试",
       "tokenUsage": "Token 使用量",
       "metadata": "元数据",
       "created": "创建时间",
       "updated": "更新时间"
+    },
+    "capabilities": {
+      "summary": "支持 {supported}/{total} 项能力",
+      "native": "原生",
+      "adapter": "适配层",
+      "unsupported": "不支持",
+      "unavailable": "此运行时暂无经过验证的适配器能力契约。"
     },
     "usage": {
       "noData": "暂无使用数据",

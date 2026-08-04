@@ -6,24 +6,56 @@ import (
 	"strconv"
 	"time"
 
+	runtimeagent "github.com/agentra-ai/agentra/server/pkg/agent"
+	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
 
+type RuntimeCapabilitySupport struct {
+	Level  string `json:"level"`
+	Detail string `json:"detail,omitempty"`
+}
+
+type RuntimeAdapterContract struct {
+	Version      string                              `json:"version"`
+	Transport    string                              `json:"transport"`
+	Capabilities map[string]RuntimeCapabilitySupport `json:"capabilities"`
+}
+
 type AgentRuntimeResponse struct {
-	ID          string  `json:"id"`
-	WorkspaceID string  `json:"workspace_id"`
-	DaemonID    *string `json:"daemon_id"`
-	Name        string  `json:"name"`
-	RuntimeMode string  `json:"runtime_mode"`
-	Provider    string  `json:"provider"`
-	Status      string  `json:"status"`
-	DeviceInfo  string  `json:"device_info"`
-	Metadata    any     `json:"metadata"`
-	LastSeenAt  *string `json:"last_seen_at"`
-	CreatedAt   string  `json:"created_at"`
-	UpdatedAt   string  `json:"updated_at"`
+	ID          string                  `json:"id"`
+	WorkspaceID string                  `json:"workspace_id"`
+	DaemonID    *string                 `json:"daemon_id"`
+	Name        string                  `json:"name"`
+	RuntimeMode string                  `json:"runtime_mode"`
+	Provider    string                  `json:"provider"`
+	Status      string                  `json:"status"`
+	DeviceInfo  string                  `json:"device_info"`
+	Metadata    any                     `json:"metadata"`
+	LastSeenAt  *string                 `json:"last_seen_at"`
+	CreatedAt   string                  `json:"created_at"`
+	UpdatedAt   string                  `json:"updated_at"`
+	Adapter     *RuntimeAdapterContract `json:"adapter,omitempty"`
+}
+
+func runtimeAdapterContract(runtimeMode, provider string) *RuntimeAdapterContract {
+	if runtimeMode != "local" {
+		return nil
+	}
+	descriptor, ok := runtimeagent.DescriptorFor(runtimeagent.ProviderType(provider))
+	if !ok {
+		return nil
+	}
+	capabilities := make(map[string]RuntimeCapabilitySupport, len(descriptor.Capabilities))
+	for capability, support := range descriptor.Capabilities {
+		capabilities[string(capability)] = RuntimeCapabilitySupport{
+			Level: string(support.Level), Detail: support.Detail,
+		}
+	}
+	return &RuntimeAdapterContract{
+		Version: "v1", Transport: descriptor.Transport, Capabilities: capabilities,
+	}
 }
 
 func runtimeToResponse(rt db.AgentRuntime) AgentRuntimeResponse {
@@ -48,6 +80,7 @@ func runtimeToResponse(rt db.AgentRuntime) AgentRuntimeResponse {
 		LastSeenAt:  timestampToPtr(rt.LastSeenAt),
 		CreatedAt:   timestampToString(rt.CreatedAt),
 		UpdatedAt:   timestampToString(rt.UpdatedAt),
+		Adapter:     runtimeAdapterContract(rt.RuntimeMode, rt.Provider),
 	}
 }
 
