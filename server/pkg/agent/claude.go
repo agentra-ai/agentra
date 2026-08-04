@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/agentra-ai/agentra/server/pkg/redact"
 )
 
 // claudeBackend implements Backend by spawning the Claude Code CLI
@@ -265,16 +267,16 @@ func (b *claudeBackend) handleControlRequest(msg claudeSDKMessage, stdin interfa
 // map to the same Claude tool (e.g. all git operations use Bash). Pass-through
 // for names that already match a Claude tool.
 var agentraToClaudeTools = map[string][]string{
-	"read_file":       {"Read"},
-	"write_file":      {"Write", "Edit"},
-	"search_code":     {"Glob", "Grep"},
-	"run_command":     {"Bash"},
-	"run_test":        {"Bash"},
-	"git_status":      {"Bash"},
-	"git_diff":        {"Bash"},
-	"git_commit":      {"Bash"},
-	"git_push":        {"Bash"},
-	"create_branch":   {"Bash"},
+	"read_file":        {"Read"},
+	"write_file":       {"Write", "Edit"},
+	"search_code":      {"Glob", "Grep"},
+	"run_command":      {"Bash"},
+	"run_test":         {"Bash"},
+	"git_status":       {"Bash"},
+	"git_diff":         {"Bash"},
+	"git_commit":       {"Bash"},
+	"git_push":         {"Bash"},
+	"create_branch":    {"Bash"},
 	"github_pr_create": {"Bash"},
 }
 
@@ -423,7 +425,7 @@ func newLogWriter(logger *slog.Logger, prefix string) *logWriter {
 func (w *logWriter) Write(p []byte) (int, error) {
 	text := strings.TrimSpace(string(p))
 	if text != "" {
-		w.logger.Debug(w.prefix + text)
+		w.logger.Debug(w.prefix + redact.Text(text))
 	}
 	return len(p), nil
 }

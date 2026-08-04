@@ -214,3 +214,13 @@ func TestRedactMultipleSecrets(t *testing.T) {
 		t.Fatal("GitHub token not redacted in multi-secret text")
 	}
 }
+
+func TestRedactionDoesNotReprocessReplacement(t *testing.T) {
+	t.Parallel()
+
+	input := "fixture token=sk-agentra-runtime-fixture-secret-1234567890"
+	got := Text(input)
+	if got != "fixture [REDACTED CREDENTIAL]" {
+		t.Fatalf("redaction marker was altered: %q", got)
+	}
+}

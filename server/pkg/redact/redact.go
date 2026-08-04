@@ -83,9 +83,7 @@ func init() {
 // matches with safe placeholders. It also masks the local user's home
 // directory path to prevent leaking the username.
 func Text(s string) string {
-	for _, p := range patterns {
-		s = p.re.ReplaceAllString(s, p.replacement)
-	}
+	s = redactKnownPatterns(s)
 
 	// Redact home directory paths (e.g. /Users/john/ → /Users/****/).
 	if homeDir != "" && username != "" {
@@ -94,4 +92,36 @@ func Text(s string) string {
 	}
 
 	return s
+}
+
+// redactKnownPatterns makes one left-to-right pass over the original input.
+// Replacement markers are written directly to the result and are never fed
+// back through later patterns, so a marker such as "[REDACTED API KEY]" cannot
+// itself be mistaken for a generic API_KEY credential.
+func redactKnownPatterns(s string) string {
+	var result strings.Builder
+	remaining := s
+	for len(remaining) > 0 {
+		patternIndex := -1
+		var match []int
+		for i, pattern := range patterns {
+			candidate := pattern.re.FindStringIndex(remaining)
+			if candidate == nil {
+				continue
+			}
+			if patternIndex == -1 || candidate[0] < match[0] {
+				patternIndex = i
+				match = candidate
+			}
+		}
+		if patternIndex == -1 {
+			result.WriteString(remaining)
+			break
+		}
+
+		result.WriteString(remaining[:match[0]])
+		result.WriteString(patterns[patternIndex].replacement)
+		remaining = remaining[match[1]:]
+	}
+	return result.String()
 }

@@ -248,6 +248,7 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 			Output:     finalOutput,
 			Error:      finalError,
 			DurationMs: duration.Milliseconds(),
+			SessionID:  threadID,
 		}
 	}()
 
