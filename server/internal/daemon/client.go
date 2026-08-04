@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -73,30 +74,32 @@ func (c *Client) ClaimTask(ctx context.Context, runtimeID string) (*Task, error)
 	return resp.Task, nil
 }
 
-func (c *Client) StartTask(ctx context.Context, taskID string) (string, error) {
+func (c *Client) StartTask(ctx context.Context, taskID, runID string) error {
 	var resp struct {
 		RunID string `json:"run_id"`
 	}
-	if err := c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/start", taskID), map[string]any{}, &resp); err != nil {
-		return "", err
+	if err := c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/start", taskID), map[string]any{"run_id": runID}, &resp); err != nil {
+		return err
 	}
-	if strings.TrimSpace(resp.RunID) == "" {
-		return "", fmt.Errorf("start task response is missing run_id")
+	if strings.TrimSpace(resp.RunID) != strings.TrimSpace(runID) {
+		return fmt.Errorf("start task response run_id %q does not match %q", resp.RunID, runID)
 	}
-	return resp.RunID, nil
+	return nil
 }
 
-func (c *Client) ReportProgress(ctx context.Context, taskID, summary string, step, total int) error {
+func (c *Client) ReportProgress(ctx context.Context, taskID, runID, summary string, step, total int) error {
 	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/progress", taskID), map[string]any{
+		"run_id":  runID,
 		"summary": summary,
 		"step":    step,
 		"total":   total,
 	}, nil)
 }
 
-func (c *Client) ReportAgentStage(ctx context.Context, taskID, stage string) error {
+func (c *Client) ReportAgentStage(ctx context.Context, taskID, runID, stage string) error {
 	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/stage", taskID), map[string]any{
-		"stage": stage,
+		"run_id": runID,
+		"stage":  stage,
 	}, nil)
 }
 
@@ -125,15 +128,16 @@ func (c *Client) ReportTaskMessages(ctx context.Context, taskID, runID string, m
 
 // CheckpointTaskSession persists resumable provider state before execution
 // finishes so a daemon restart can continue the same task.
-func (c *Client) CheckpointTaskSession(ctx context.Context, taskID, sessionID, workDir string) error {
+func (c *Client) CheckpointTaskSession(ctx context.Context, taskID, runID, sessionID, workDir string) error {
 	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/session", taskID), map[string]string{
+		"run_id":     runID,
 		"session_id": sessionID,
 		"work_dir":   workDir,
 	}, nil)
 }
 
-func (c *Client) CompleteTask(ctx context.Context, taskID, output, branchName, sessionID, workDir string, durationMs int64, tokenUsage *protocol.TaskTokenUsage, artifacts []protocol.TaskArtifact) error {
-	body := map[string]any{"output": output, "duration_ms": durationMs}
+func (c *Client) CompleteTask(ctx context.Context, taskID, runID, output, branchName, sessionID, workDir string, durationMs int64, tokenUsage *protocol.TaskTokenUsage, artifacts []protocol.TaskArtifact) error {
+	body := map[string]any{"run_id": runID, "output": output, "duration_ms": durationMs}
 	if branchName != "" {
 		body["branch_name"] = branchName
 	}
@@ -152,19 +156,21 @@ func (c *Client) CompleteTask(ctx context.Context, taskID, output, branchName, s
 	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/complete", taskID), body, nil)
 }
 
-func (c *Client) FailTask(ctx context.Context, taskID, errMsg string) error {
+func (c *Client) FailTask(ctx context.Context, taskID, runID, errMsg string) error {
 	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/fail", taskID), map[string]any{
-		"error": errMsg,
+		"run_id": runID,
+		"error":  errMsg,
 	}, nil)
 }
 
 // GetTaskStatus returns the current status of a task. Used by the daemon to
 // detect if a task was cancelled while it was executing.
-func (c *Client) GetTaskStatus(ctx context.Context, taskID string) (string, error) {
+func (c *Client) GetTaskStatus(ctx context.Context, taskID, runID string) (string, error) {
 	var resp struct {
 		Status string `json:"status"`
 	}
-	if err := c.getJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/status", taskID), &resp); err != nil {
+	path := fmt.Sprintf("/api/daemon/tasks/%s/status?run_id=%s", taskID, url.QueryEscape(runID))
+	if err := c.getJSON(ctx, path, &resp); err != nil {
 		return "", err
 	}
 	return resp.Status, nil

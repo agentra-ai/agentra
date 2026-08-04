@@ -5,7 +5,7 @@ import { Bot, ChevronRight, ChevronUp, Loader2, ArrowDown, Brain, AlertCircle, C
 import { useFormatter, useTranslations } from "next-intl";
 import { api } from "@/shared/api";
 import { useWSEvent, useWSReconnect } from "@/features/realtime";
-import type { TaskMessagePayload, TaskCompletedPayload, TaskFailedPayload, TaskCancelledPayload, AgentStagePayload, AgentStage } from "@/shared/types/events";
+import type { TaskMessagePayload, TaskDispatchPayload, TaskCompletedPayload, TaskFailedPayload, TaskCancelledPayload, AgentStagePayload, AgentStage } from "@/shared/types/events";
 import type { AgentTask } from "@/shared/types/agent";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { ActorAvatar } from "@/components/common/actor-avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useActorName } from "@/features/workspace";
 import { redactSecrets } from "../utils/redact";
+import { isCurrentRunEvent, isFreshRunSnapshot } from "../utils/run-event";
 
 // ─── Shared types & helpers ─────────────────────────────────────────────────
 
@@ -146,11 +147,14 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
       if (!cancelled) {
         setActiveTask(task);
         if (task) {
+          activeRunID.current = task.run_id ?? null;
           api.listTaskMessages(task.id, { limit: MAX_TIMELINE_ITEMS }).then((msgs) => {
             if (!cancelled) {
+              const snapshotRunID = msgs[0]?.run_id ?? task.run_id ?? null;
+              if (!isFreshRunSnapshot(task.run_id ?? null, activeRunID.current, snapshotRunID)) return;
               const timeline = buildTimeline(msgs);
               setItems(timeline);
-              activeRunID.current = msgs[0]?.run_id ?? null;
+              activeRunID.current = snapshotRunID;
               seenSeqs.current.clear();
               for (const m of msgs) rememberSeen(seenSeqs.current, `${m.run_id}:${m.seq}`);
             }
@@ -168,6 +172,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
     useCallback((payload: unknown) => {
       const msg = payload as TaskMessagePayload;
       if (msg.issue_id !== issueId) return;
+      if (!isCurrentRunEvent(activeRunID.current, msg.run_id)) return;
       const key = `${msg.run_id}:${msg.seq}`;
       const changedRun = activeRunID.current !== msg.run_id;
       if (changedRun) {
@@ -204,11 +209,15 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
         return;
       }
       const sameTask = activeTask?.id === task.id;
+      const requestedRunID = task.run_id ?? null;
+      const sameRun = sameTask && activeRunID.current === requestedRunID;
+      activeRunID.current = requestedRunID;
       setActiveTask(task);
       api.listTaskMessages(task.id, { limit: MAX_TIMELINE_ITEMS }).then((messages) => {
         const snapshot = buildTimeline(messages);
-        const snapshotRunID = messages[0]?.run_id ?? null;
-        const sameRun = sameTask && activeRunID.current === snapshotRunID;
+        const snapshotRunID = messages[0]?.run_id ?? requestedRunID;
+        if (!isFreshRunSnapshot(requestedRunID, activeRunID.current, snapshotRunID)) return;
+        if (requestedRunID && snapshotRunID && requestedRunID !== snapshotRunID) return;
         activeRunID.current = snapshotRunID;
         setItems((current) => sameRun ? mergeTimeline(snapshot, current) : snapshot);
         seenSeqs.current.clear();
@@ -223,13 +232,15 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
     useCallback((payload: unknown) => {
       const p = payload as TaskCompletedPayload;
       if (p.issue_id !== issueId) return;
+      if (activeTask && p.task_id !== activeTask.id) return;
+      if (!isCurrentRunEvent(activeRunID.current, p.run_id)) return;
       setActiveTask(null);
       setItems([]);
       seenSeqs.current.clear();
       activeRunID.current = null;
       setCancelling(false);
       setAgentStage("idle");
-    }, [issueId]),
+    }, [activeTask, issueId]),
   );
 
   useWSEvent(
@@ -237,13 +248,15 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
     useCallback((payload: unknown) => {
       const p = payload as TaskFailedPayload;
       if (p.issue_id !== issueId) return;
+      if (activeTask && p.task_id !== activeTask.id) return;
+      if (!isCurrentRunEvent(activeRunID.current, p.run_id)) return;
       setActiveTask(null);
       setItems([]);
       seenSeqs.current.clear();
       activeRunID.current = null;
       setCancelling(false);
       setAgentStage("idle");
-    }, [issueId]),
+    }, [activeTask, issueId]),
   );
 
   useWSEvent(
@@ -251,13 +264,15 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
     useCallback((payload: unknown) => {
       const p = payload as TaskCancelledPayload;
       if (p.issue_id !== issueId) return;
+      if (activeTask && p.task_id !== activeTask.id) return;
+      if (!isCurrentRunEvent(activeRunID.current, p.run_id)) return;
       setActiveTask(null);
       setItems([]);
       seenSeqs.current.clear();
       activeRunID.current = null;
       setCancelling(false);
       setAgentStage("idle");
-    }, [issueId]),
+    }, [activeTask, issueId]),
   );
 
   // Pick up new tasks — skip if we're already showing an active task to avoid
@@ -265,14 +280,22 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
   // backend prevents this race, but this is a defensive safeguard).
   useWSEvent(
     "task:dispatch",
-    useCallback(() => {
-      if (activeTask) return;
+    useCallback((payload: unknown) => {
+      const p = payload as TaskDispatchPayload;
+      if (activeTask && p.task_id !== activeTask.id) return;
+      if (activeTask) {
+        activeRunID.current = p.run_id;
+        setItems([]);
+        seenSeqs.current.clear();
+        setAgentStage("idle");
+      }
       api.getActiveTaskForIssue(issueId).then(({ task }) => {
+        if (activeRunID.current && activeRunID.current !== p.run_id) return;
         if (task) {
           setActiveTask(task);
           setItems([]);
           seenSeqs.current.clear();
-          activeRunID.current = null;
+          activeRunID.current = task.run_id ?? (task.id === p.task_id ? p.run_id : null);
           setAgentStage("idle");
         }
       }).catch(console.error);
@@ -285,6 +308,8 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
     useCallback((payload: unknown) => {
       const p = payload as AgentStagePayload;
       if (!activeTask || p.task_id !== activeTask.id) return;
+      if (!isCurrentRunEvent(activeRunID.current, p.run_id)) return;
+      activeRunID.current ??= p.run_id;
       setAgentStage(p.stage);
     }, [activeTask]),
   );

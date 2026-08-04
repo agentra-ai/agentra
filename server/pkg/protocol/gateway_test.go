@@ -10,6 +10,7 @@ func TestGatewayTaskCompletedMessageUsesCanonicalSnakeCase(t *testing.T) {
 	data, err := json.Marshal(GatewayTaskCompletedMessage{
 		Type:     EventTaskCompleted,
 		TaskID:   "task-1",
+		RunID:    "run-1",
 		ExitCode: 17,
 		Output:   "failed",
 	})
@@ -18,7 +19,7 @@ func TestGatewayTaskCompletedMessageUsesCanonicalSnakeCase(t *testing.T) {
 	}
 
 	got := string(data)
-	for _, field := range []string{`"task_id":"task-1"`, `"exit_code":17`} {
+	for _, field := range []string{`"task_id":"task-1"`, `"run_id":"run-1"`, `"exit_code":17`} {
 		if !strings.Contains(got, field) {
 			t.Fatalf("message %s does not contain %s", got, field)
 		}
@@ -32,6 +33,7 @@ func TestGatewayTaskLogsMessageRoundTripPreservesCursor(t *testing.T) {
 	want := GatewayTaskLogsMessage{
 		Type:    EventTaskLogs,
 		TaskID:  "task-1",
+		RunID:   "run-1",
 		Seq:     42,
 		Stream:  GatewayStreamStderr,
 		Content: "boom\n",

@@ -15,6 +15,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/agentra-ai/agentra/pkg/taskgraph"
@@ -269,12 +270,62 @@ func createTaskMessageFixture(t *testing.T, status, runtimeType, cloudRuntimeID 
 	`, agentID, issueID, status, runtimeID, runtimeType, cloudRuntimeID).Scan(&taskID); err != nil {
 		t.Fatalf("create task fixture: %v", err)
 	}
+	if status == "dispatched" || status == "running" {
+		var runID string
+		if err := testPool.QueryRow(context.Background(), `
+			INSERT INTO task_runs (task_id, agent_id, status, started_at)
+			VALUES ($1, $2, $3, now())
+			RETURNING id
+		`, taskID, agentID, status).Scan(&runID); err != nil {
+			t.Fatalf("create task fixture run: %v", err)
+		}
+		if _, err := testPool.Exec(context.Background(), `
+			UPDATE agent_task_queue SET active_run_id = $2 WHERE id = $1
+		`, taskID, runID); err != nil {
+			t.Fatalf("link task fixture run: %v", err)
+		}
+	}
 	return issueID, taskID
+}
+
+func activeRunIDForTask(t *testing.T, taskID string) string {
+	t.Helper()
+	var runID string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT active_run_id FROM agent_task_queue WHERE id = $1
+	`, taskID).Scan(&runID); err != nil {
+		t.Fatalf("load active run: %v", err)
+	}
+	return runID
+}
+
+func dispatchNewRunForTask(t *testing.T, taskID string) string {
+	t.Helper()
+	var runID string
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO task_runs (task_id, agent_id, status, started_at)
+		SELECT id, agent_id, 'dispatched', now()
+		FROM agent_task_queue
+		WHERE id = $1
+		RETURNING id
+	`, taskID).Scan(&runID); err != nil {
+		t.Fatalf("create retry run: %v", err)
+	}
+	if _, err := testPool.Exec(context.Background(), `
+		UPDATE agent_task_queue
+		SET status = 'dispatched', active_run_id = $2,
+		    started_at = NULL, completed_at = NULL, error = NULL
+		WHERE id = $1
+	`, taskID, runID); err != nil {
+		t.Fatalf("dispatch retry run: %v", err)
+	}
+	return runID
 }
 
 func startTaskFixture(t *testing.T, taskID string) string {
 	t.Helper()
-	resp := authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/start", map[string]any{})
+	runID := activeRunIDForTask(t, taskID)
+	resp := authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/start", map[string]any{"run_id": runID})
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
@@ -284,8 +335,8 @@ func startTaskFixture(t *testing.T, taskID string) string {
 		RunID string `json:"run_id"`
 	}
 	readJSON(t, resp, &started)
-	if started.RunID == "" {
-		t.Fatal("start task returned an empty run_id")
+	if started.RunID != runID {
+		t.Fatalf("start task returned run_id %q, want %q", started.RunID, runID)
 	}
 	return started.RunID
 }
@@ -1100,7 +1151,7 @@ func TestTaskMessagesAreRedactedIdempotentAndCursorBounded(t *testing.T) {
 
 func TestTaskRunIdentityIsolatesRetryMessages(t *testing.T) {
 	requireIntegrationDB(t)
-	_, taskID := createTaskMessageFixture(t, "dispatched", "local", "")
+	issueID, taskID := createTaskMessageFixture(t, "dispatched", "local", "")
 	path := "/api/daemon/tasks/" + taskID + "/messages"
 
 	run1 := startTaskFixture(t, taskID)
@@ -1115,23 +1166,23 @@ func TestTaskRunIdentityIsolatesRetryMessages(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	ctx := context.Background()
-	if _, err := testPool.Exec(ctx, `
-		UPDATE task_runs
-		SET status = 'failed', completed_at = now(), error = 'retry fixture'
-		WHERE id = $1
-	`, run1); err != nil {
-		t.Fatal(err)
+	resp = authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/fail", map[string]any{
+		"run_id": run1,
+		"error":  "retry fixture",
+	})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("fail first run: status = %d: %s", resp.StatusCode, body)
 	}
-	if _, err := testPool.Exec(ctx, `
-		UPDATE agent_task_queue
-		SET status = 'dispatched', started_at = NULL, completed_at = NULL, error = NULL
-		WHERE id = $1
-	`, taskID); err != nil {
-		t.Fatal(err)
-	}
+	resp.Body.Close()
 
+	ctx := context.Background()
+	dispatchedRun2 := dispatchNewRunForTask(t, taskID)
 	run2 := startTaskFixture(t, taskID)
+	if run2 != dispatchedRun2 {
+		t.Fatalf("started run %q, want dispatched run %q", run2, dispatchedRun2)
+	}
 	if run2 == run1 {
 		t.Fatalf("retry reused run_id %q", run1)
 	}
@@ -1145,6 +1196,54 @@ func TestTaskRunIdentityIsolatesRetryMessages(t *testing.T) {
 		t.Fatalf("report second-run message: status = %d: %s", resp.StatusCode, body)
 	}
 	resp.Body.Close()
+
+	resp = authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/session", map[string]any{
+		"run_id": run2, "session_id": "fresh-session", "work_dir": "/tmp/fresh-run",
+	})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("checkpoint second run: status = %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	var commentsBeforeStale, metricsBeforeStale int
+	if err := testPool.QueryRow(ctx, `SELECT count(*) FROM comment WHERE issue_id = $1`, issueID).Scan(&commentsBeforeStale); err != nil {
+		t.Fatal(err)
+	}
+	if err := testPool.QueryRow(ctx, `SELECT count(*) FROM agent_task_metrics WHERE task_id = $1`, taskID).Scan(&metricsBeforeStale); err != nil {
+		t.Fatal(err)
+	}
+
+	assertConflict := func(method, requestPath string, body any) {
+		t.Helper()
+		staleResp := authRequest(t, method, requestPath, body)
+		defer staleResp.Body.Close()
+		if staleResp.StatusCode != http.StatusConflict {
+			responseBody, _ := io.ReadAll(staleResp.Body)
+			t.Fatalf("stale callback %s %s = %d, want 409: %s", method, requestPath, staleResp.StatusCode, responseBody)
+		}
+	}
+
+	// Every attempt-scoped Adapter callback must reject the superseded Run,
+	// not only durable message frames.
+	assertConflict(http.MethodPost, "/api/daemon/tasks/"+taskID+"/start", map[string]any{"run_id": run1})
+	assertConflict(http.MethodPost, "/api/daemon/tasks/"+taskID+"/progress", map[string]any{
+		"run_id": run1, "summary": "stale progress", "step": 1, "total": 1,
+	})
+	assertConflict(http.MethodPost, "/api/daemon/tasks/"+taskID+"/stage", map[string]any{
+		"run_id": run1, "stage": "testing",
+	})
+	assertConflict(http.MethodPost, "/api/daemon/tasks/"+taskID+"/session", map[string]any{
+		"run_id": run1, "session_id": "stale-session", "work_dir": "/tmp/stale-run",
+	})
+	assertConflict(http.MethodPost, "/api/daemon/tasks/"+taskID+"/complete", map[string]any{
+		"run_id": run1, "output": "stale completion", "duration_ms": 1,
+	})
+	assertConflict(http.MethodPost, "/api/daemon/tasks/"+taskID+"/fail", map[string]any{
+		"run_id": run1, "error": "stale failure",
+	})
+	assertConflict(http.MethodGet, "/api/daemon/tasks/"+taskID+"/status?run_id="+run1, nil)
 
 	// A delayed frame from the previous process must not contaminate the active
 	// attempt, even though its cursor is valid within that older Run.
@@ -1180,13 +1279,116 @@ func TestTaskRunIdentityIsolatesRetryMessages(t *testing.T) {
 	if persisted != 2 {
 		t.Fatalf("persisted retry messages = %d, want 2", persisted)
 	}
+
+	var taskStatus, activeRunID, sessionID, workDir string
+	if err := testPool.QueryRow(ctx, `
+		SELECT status, active_run_id, session_id, work_dir
+		FROM agent_task_queue WHERE id = $1
+	`, taskID).Scan(&taskStatus, &activeRunID, &sessionID, &workDir); err != nil {
+		t.Fatal(err)
+	}
+	if taskStatus != "running" || activeRunID != run2 || sessionID != "fresh-session" || workDir != "/tmp/fresh-run" {
+		t.Fatalf("active lifecycle = status:%q run:%q session:%q work:%q", taskStatus, activeRunID, sessionID, workDir)
+	}
+
+	var run1Status, run2Status, run2Session, run2WorkDir string
+	if err := testPool.QueryRow(ctx, `
+		SELECT old.status, current.status, current.session_id, current.work_dir
+		FROM task_runs old
+		JOIN task_runs current ON current.id = $2
+		WHERE old.id = $1
+	`, run1, run2).Scan(&run1Status, &run2Status, &run2Session, &run2WorkDir); err != nil {
+		t.Fatal(err)
+	}
+	if run1Status != "failed" || run2Status != "running" || run2Session != "fresh-session" || run2WorkDir != "/tmp/fresh-run" {
+		t.Fatalf("run states = old:%q current:%q session:%q work:%q", run1Status, run2Status, run2Session, run2WorkDir)
+	}
+
+	var commentsAfterStale, metricsAfterStale int
+	if err := testPool.QueryRow(ctx, `SELECT count(*) FROM comment WHERE issue_id = $1`, issueID).Scan(&commentsAfterStale); err != nil {
+		t.Fatal(err)
+	}
+	if err := testPool.QueryRow(ctx, `SELECT count(*) FROM agent_task_metrics WHERE task_id = $1`, taskID).Scan(&metricsAfterStale); err != nil {
+		t.Fatal(err)
+	}
+	if commentsAfterStale != commentsBeforeStale || metricsAfterStale != metricsBeforeStale {
+		t.Fatalf("stale callbacks wrote projections: comments %d->%d metrics %d->%d", commentsBeforeStale, commentsAfterStale, metricsBeforeStale, metricsAfterStale)
+	}
+}
+
+func TestTaskMessageInsertCannotCrossTerminalTransition(t *testing.T) {
+	requireIntegrationDB(t)
+	_, taskID := createTaskMessageFixture(t, "dispatched", "local", "")
+	runID := startTaskFixture(t, taskID)
+	ctx := context.Background()
+
+	terminalTx, err := testPool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer terminalTx.Rollback(ctx)
+	if _, err := terminalTx.Exec(ctx, `
+		UPDATE task_runs
+		SET status = 'completed', completed_at = now()
+		WHERE id = $1
+	`, runID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := terminalTx.Exec(ctx, `
+		UPDATE agent_task_queue
+		SET status = 'completed', completed_at = now(), active_run_id = NULL
+		WHERE id = $1
+	`, taskID); err != nil {
+		t.Fatal(err)
+	}
+
+	type insertResult struct {
+		outcome db.CreateTaskMessageRow
+		err     error
+	}
+	started := make(chan struct{})
+	done := make(chan insertResult, 1)
+	go func() {
+		close(started)
+		outcome, insertErr := db.New(testPool).CreateTaskMessage(ctx, db.CreateTaskMessageParams{
+			TaskID:  util.ParseUUID(taskID),
+			RunID:   util.ParseUUID(runID),
+			Seq:     1,
+			Type:    "text",
+			Content: pgtype.Text{String: "must not cross terminal commit", Valid: true},
+		})
+		done <- insertResult{outcome: outcome, err: insertErr}
+	}()
+	<-started
+	if err := terminalTx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	result := <-done
+	if result.err != nil {
+		t.Fatalf("conditional message insert: %v", result.err)
+	}
+	if result.outcome.Active || result.outcome.Inserted {
+		t.Fatalf("message insert crossed terminal transition: %#v", result.outcome)
+	}
+	var messageCount int
+	if err := testPool.QueryRow(ctx, `
+		SELECT count(*) FROM task_message WHERE task_id = $1
+	`, taskID).Scan(&messageCount); err != nil {
+		t.Fatal(err)
+	}
+	if messageCount != 0 {
+		t.Fatalf("post-terminal messages = %d, want 0", messageCount)
+	}
 }
 
 func TestTaskSessionCheckpointSurvivesRuntimeRecovery(t *testing.T) {
 	requireIntegrationDB(t)
 	_, taskID := createTaskMessageFixture(t, "running", "local", "")
+	runID := activeRunIDForTask(t, taskID)
 
 	resp := authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/session", map[string]string{
+		"run_id":     runID,
 		"session_id": "session-before-crash",
 		"work_dir":   "/tmp/agentra-checkpoint-worktree",
 	})
@@ -1304,11 +1506,18 @@ func TestTaskSessionCheckpointSurvivesRuntimeRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("recover exhausted runtime task: %v", err)
 	}
-	if len(exhausted) != 1 || exhausted[0].Status != "failed" || exhausted[0].RetryCount != exhausted[0].MaxRetries {
+	if len(exhausted) != 1 {
 		t.Fatalf("exhausted recovery = %#v", exhausted)
 	}
-	if exhausted[0].Error.String != "runtime restarted and retry budget was exhausted" {
-		t.Fatalf("exhausted recovery error = %q", exhausted[0].Error.String)
+	exhaustedTask, err := queries.GetAgentTask(context.Background(), exhausted[0].TaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exhaustedTask.Status != "failed" || exhaustedTask.RetryCount != exhaustedTask.MaxRetries {
+		t.Fatalf("exhausted recovery task = %#v", exhaustedTask)
+	}
+	if exhaustedTask.Error.String != "runtime restarted and retry budget was exhausted" {
+		t.Fatalf("exhausted recovery error = %q", exhaustedTask.Error.String)
 	}
 }
 
@@ -1381,12 +1590,28 @@ func TestRuntimeClaimRejectsIncompatibleTaskBeforeDispatch(t *testing.T) {
 	}
 	var claim struct {
 		Task struct {
-			ID string `json:"id"`
+			ID    string `json:"id"`
+			RunID string `json:"run_id"`
 		} `json:"task"`
 	}
 	readJSON(t, resp, &claim)
 	if claim.Task.ID != compatibleTaskID {
 		t.Fatalf("claimed task = %q, want compatible task %q", claim.Task.ID, compatibleTaskID)
+	}
+	if claim.Task.RunID == "" {
+		t.Fatal("claimed task did not allocate a dispatch Run")
+	}
+	var claimedStatus, claimedActiveRunID, claimedRunStatus string
+	if err := testPool.QueryRow(ctx, `
+		SELECT atq.status, atq.active_run_id, tr.status
+		FROM agent_task_queue atq
+		JOIN task_runs tr ON tr.id = atq.active_run_id
+		WHERE atq.id = $1
+	`, compatibleTaskID).Scan(&claimedStatus, &claimedActiveRunID, &claimedRunStatus); err != nil {
+		t.Fatal(err)
+	}
+	if claimedStatus != "dispatched" || claimedRunStatus != "dispatched" || claimedActiveRunID != claim.Task.RunID {
+		t.Fatalf("claimed lifecycle = task:%q run:%q active:%q response:%q", claimedStatus, claimedRunStatus, claimedActiveRunID, claim.Task.RunID)
 	}
 
 	var incompatibleStatus, incompatibleError string
@@ -1406,13 +1631,7 @@ func TestTaskCompletionPersistsUsageArtifactsAndMetrics(t *testing.T) {
 	requireIntegrationDB(t)
 	_, taskID := createTaskMessageFixture(t, "dispatched", "local", "")
 
-	resp := authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/start", map[string]any{})
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		t.Fatalf("start task: status = %d: %s", resp.StatusCode, body)
-	}
-	resp.Body.Close()
+	runID := startTaskFixture(t, taskID)
 
 	usage := map[string]any{
 		"input_tokens": 100, "output_tokens": 50, "reasoning_output_tokens": 10,
@@ -1422,8 +1641,8 @@ func TestTaskCompletionPersistsUsageArtifactsAndMetrics(t *testing.T) {
 		"kind": "report", "path": "artifacts/report.json",
 		"media_type": "application/json", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	}
-	resp = authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/complete", map[string]any{
-		"output": "completed with usage", "duration_ms": 1234,
+	resp := authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/complete", map[string]any{
+		"run_id": runID, "output": "completed with usage", "duration_ms": 1234,
 		"token_usage": usage, "artifacts": []map[string]any{artifact},
 	})
 	if resp.StatusCode != http.StatusOK {
@@ -1462,24 +1681,38 @@ func TestTaskCompletionPersistsUsageArtifactsAndMetrics(t *testing.T) {
 		t.Fatalf("metric usage = duration:%d input:%d output:%d", durationMs, tokenInput, tokenOutput)
 	}
 
-	var totalTokens int
+	var taskStatus string
+	var activeRunID *string
 	if err := testPool.QueryRow(context.Background(), `
-		SELECT total_tokens FROM task_runs WHERE task_id = $1 ORDER BY created_at DESC LIMIT 1
-	`, taskID).Scan(&totalTokens); err != nil {
+		SELECT status, active_run_id::text FROM agent_task_queue WHERE id = $1
+	`, taskID).Scan(&taskStatus, &activeRunID); err != nil {
 		t.Fatal(err)
 	}
-	if totalTokens != 160 {
-		t.Fatalf("trace total_tokens = %d, want 160", totalTokens)
+	if taskStatus != "completed" || activeRunID != nil {
+		t.Fatalf("completed work item = status:%q active_run_id:%v", taskStatus, activeRunID)
+	}
+
+	var runStatus, runOutput string
+	var runDurationMs, totalTokens int
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT status, output, duration_ms, total_tokens
+		FROM task_runs WHERE id = $1 AND task_id = $2
+	`, runID, taskID).Scan(&runStatus, &runOutput, &runDurationMs, &totalTokens); err != nil {
+		t.Fatal(err)
+	}
+	if runStatus != "completed" || runDurationMs != 1234 || totalTokens != 160 || !strings.Contains(runOutput, "completed with usage") {
+		t.Fatalf("completed run = status:%q duration:%d tokens:%d output:%q", runStatus, runDurationMs, totalTokens, runOutput)
 	}
 }
 
 func TestTaskCompletionRejectsInvalidUsageAndArtifacts(t *testing.T) {
 	requireIntegrationDB(t)
 	_, taskID := createTaskMessageFixture(t, "running", "local", "")
+	runID := activeRunIDForTask(t, taskID)
 	path := "/api/daemon/tasks/" + taskID + "/complete"
 
 	resp := authRequest(t, http.MethodPost, path, map[string]any{
-		"output": "invalid usage", "token_usage": map[string]any{"input_tokens": -1},
+		"run_id": runID, "output": "invalid usage", "token_usage": map[string]any{"input_tokens": -1},
 	})
 	if resp.StatusCode != http.StatusBadRequest {
 		body, _ := io.ReadAll(resp.Body)
@@ -1489,7 +1722,7 @@ func TestTaskCompletionRejectsInvalidUsageAndArtifacts(t *testing.T) {
 	resp.Body.Close()
 
 	resp = authRequest(t, http.MethodPost, path, map[string]any{
-		"output": "invalid artifact", "artifacts": []map[string]any{{"kind": "report"}},
+		"run_id": runID, "output": "invalid artifact", "artifacts": []map[string]any{{"kind": "report"}},
 	})
 	if resp.StatusCode != http.StatusBadRequest {
 		body, _ := io.ReadAll(resp.Body)
@@ -1549,6 +1782,7 @@ func TestTaskMessagesRejectCrossWorkspaceReads(t *testing.T) {
 	resp.Body.Close()
 
 	resp = authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/session", map[string]string{
+		"run_id":     "11111111-1111-1111-1111-111111111111",
 		"session_id": "foreign-session",
 		"work_dir":   "/tmp/foreign-worktree",
 	})
@@ -1579,11 +1813,12 @@ func TestGatewayLogsFlowThroughDurableTaskMessageLedger(t *testing.T) {
 		_, _ = testPool.Exec(context.Background(), `DELETE FROM cloud_runtimes WHERE id = $1`, cloudRuntimeID)
 	})
 	_, taskID := createTaskMessageFixture(t, "dispatched", "cloud", cloudRuntimeID)
+	runID := activeRunIDForTask(t, taskID)
 
-	testHub.GatewayHub.OnTaskDispatched("gateway-1", testWorkspaceID, taskID, "container-1")
-	testHub.GatewayHub.OnTaskLogs("gateway-evil", "00000000-0000-0000-0000-000000000000", taskID, 1, "stdout", "cross-tenant")
-	testHub.GatewayHub.OnTaskLogs("gateway-1", testWorkspaceID, taskID, 1, "stdout", "AUTH_TOKEN=very-secret")
-	testHub.GatewayHub.OnTaskLogs("gateway-1", testWorkspaceID, taskID, 1, "stdout", "duplicate")
+	testHub.GatewayHub.OnTaskDispatched("gateway-1", testWorkspaceID, taskID, runID, "container-1")
+	testHub.GatewayHub.OnTaskLogs("gateway-evil", "00000000-0000-0000-0000-000000000000", taskID, runID, 1, "stdout", "cross-tenant")
+	testHub.GatewayHub.OnTaskLogs("gateway-1", testWorkspaceID, taskID, runID, 1, "stdout", "AUTH_TOKEN=very-secret")
+	testHub.GatewayHub.OnTaskLogs("gateway-1", testWorkspaceID, taskID, runID, 1, "stdout", "duplicate")
 
 	var status, content string
 	var count int
@@ -1603,12 +1838,78 @@ func TestGatewayLogsFlowThroughDurableTaskMessageLedger(t *testing.T) {
 		t.Fatalf("gateway content was not redacted: %q", content)
 	}
 
-	testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, 0, "completed")
+	testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, runID, 0, "completed")
 	if err := testPool.QueryRow(context.Background(), `SELECT status FROM agent_task_queue WHERE id = $1`, taskID).Scan(&status); err != nil {
 		t.Fatal(err)
 	}
 	if status != "completed" {
 		t.Fatalf("gateway task status = %q, want completed", status)
+	}
+}
+
+func TestGatewayRetryClosesRunBeforeRequeue(t *testing.T) {
+	requireIntegrationDB(t)
+	if testHub == nil {
+		t.Fatal("test gateway hub is not configured")
+	}
+
+	var cloudRuntimeID string
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO cloud_runtimes (
+			workspace_id, provider, encrypted_api_key, api_key_hash, max_concurrent_tasks
+		)
+		VALUES ($1, 'anthropic', $2, $3, 1)
+		RETURNING id
+	`, testWorkspaceID, []byte("encrypted-retry-key"), "gateway-retry-"+fmt.Sprintf("%d", time.Now().UnixNano())).Scan(&cloudRuntimeID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM cloud_runtimes WHERE id = $1`, cloudRuntimeID)
+	})
+	_, taskID := createTaskMessageFixture(t, "dispatched", "cloud", cloudRuntimeID)
+	run1 := activeRunIDForTask(t, taskID)
+
+	testHub.GatewayHub.OnTaskDispatched("gateway-1", testWorkspaceID, taskID, run1, "container-1")
+	testHub.GatewayHub.OnTaskFail("gateway-1", testWorkspaceID, taskID, run1, "transient gateway failure", true)
+
+	var taskStatus, run1Status, trace1Status string
+	var activeRunID *string
+	var retryCount int
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT atq.status, atq.active_run_id::text, atq.retry_count, tr.status, et.status
+		FROM agent_task_queue atq
+		JOIN task_runs tr ON tr.id = $2
+		JOIN execution_traces et ON et.run_id = tr.id
+		WHERE atq.id = $1
+	`, taskID, run1).Scan(&taskStatus, &activeRunID, &retryCount, &run1Status, &trace1Status); err != nil {
+		t.Fatal(err)
+	}
+	if taskStatus != "queued" || activeRunID != nil || retryCount != 1 || run1Status != "failed" || trace1Status != "failed" {
+		t.Fatalf("retried lifecycle = task:%q active:%v retry:%d run:%q trace:%q", taskStatus, activeRunID, retryCount, run1Status, trace1Status)
+	}
+
+	run2 := dispatchNewRunForTask(t, taskID)
+	testHub.GatewayHub.OnTaskDispatched("gateway-1", testWorkspaceID, taskID, run2, "container-2")
+	// A terminal frame already in flight from container-1 cannot complete the
+	// newly running container-2 attempt.
+	testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, run1, 0, "stale completion")
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT status, active_run_id::text FROM agent_task_queue WHERE id = $1
+	`, taskID).Scan(&taskStatus, &activeRunID); err != nil {
+		t.Fatal(err)
+	}
+	if taskStatus != "running" || activeRunID == nil || *activeRunID != run2 {
+		t.Fatalf("stale gateway terminal changed current run: status:%q active:%v want:%q", taskStatus, activeRunID, run2)
+	}
+
+	testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, run2, 0, "current completion")
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT status, active_run_id::text FROM agent_task_queue WHERE id = $1
+	`, taskID).Scan(&taskStatus, &activeRunID); err != nil {
+		t.Fatal(err)
+	}
+	if taskStatus != "completed" || activeRunID != nil {
+		t.Fatalf("current gateway terminal = status:%q active:%v", taskStatus, activeRunID)
 	}
 }
 

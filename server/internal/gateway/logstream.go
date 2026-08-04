@@ -9,7 +9,7 @@ import (
 )
 
 type taskLogSender interface {
-	SendTaskLogs(taskID string, seq int, stream, content string) error
+	SendTaskLogs(taskID, runID string, seq int, stream, content string) error
 }
 
 // taskLogEmitter serializes stdout and stderr onto one monotonic per-task
@@ -19,6 +19,7 @@ type taskLogEmitter struct {
 	mu     sync.Mutex
 	sender taskLogSender
 	taskID string
+	runID  string
 	seq    int
 	tail   *boundedTailBuffer
 }
@@ -53,7 +54,7 @@ func (w *taskLogWriter) Write(p []byte) (int, error) {
 		if w.emitter.tail != nil {
 			_, _ = w.emitter.tail.Write([]byte(content))
 		}
-		if err := w.emitter.sender.SendTaskLogs(w.emitter.taskID, w.emitter.seq, w.stream, content); err != nil {
+		if err := w.emitter.sender.SendTaskLogs(w.emitter.taskID, w.emitter.runID, w.emitter.seq, w.stream, content); err != nil {
 			return written, err
 		}
 		written += size

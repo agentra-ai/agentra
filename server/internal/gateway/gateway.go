@@ -36,6 +36,7 @@ type Gateway struct {
 
 type RunningTask struct {
 	TaskID       string
+	RunID        string
 	ContainerID  string
 	CancelFunc   context.CancelFunc
 	APIKey       string
@@ -59,8 +60,8 @@ func (g *Gateway) Run(ctx context.Context) error {
 	g.wsClient = NewWSClient(g.cfg.ServerURL, g.cfg.GatewayID, g.cfg.WorkspaceID, g.cfg.AuthToken, g.logger)
 
 	// Register task dispatch callback
-	g.wsClient.OnTaskDispatch = func(taskID string, config map[string]any) {
-		g.handleTaskDispatch(taskID, config)
+	g.wsClient.OnTaskDispatch = func(taskID, runID string, config map[string]any) {
+		g.handleTaskDispatch(taskID, runID, config)
 	}
 
 	// Register task cancel callback
@@ -77,10 +78,10 @@ func (g *Gateway) Run(ctx context.Context) error {
 	return g.wsClient.Run(ctx)
 }
 
-func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
+func (g *Gateway) handleTaskDispatch(taskID, runID string, config map[string]any) {
 	if g.containerMgr == nil {
 		g.logger.Error("task dispatch: no container manager", "task_id", taskID)
-		g.wsClient.SendTaskFailed(taskID, "gateway not configured")
+		g.wsClient.SendTaskFailed(taskID, runID, "gateway not configured")
 		return
 	}
 
@@ -116,6 +117,7 @@ func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
 	// Store running task
 	runningTask := &RunningTask{
 		TaskID:       taskID,
+		RunID:        runID,
 		APIKey:       apiKey,
 		Instructions: taskInstructions,
 		Provider:     provider,
@@ -139,7 +141,7 @@ func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
 	containerID, err := g.createContainerWithRetry(taskCtx, containerCfg, taskID)
 	if err != nil {
 		g.logger.Error("task dispatch: container creation failed after retries", "task_id", taskID, "error", err)
-		g.wsClient.SendTaskFailedWithRetry(taskID, fmt.Sprintf("failed to create container after %d attempts: %v", g.cfg.MaxRetries, err), false)
+		g.wsClient.SendTaskFailedWithRetry(taskID, runID, fmt.Sprintf("failed to create container after %d attempts: %v", g.cfg.MaxRetries, err), false)
 		g.tasks.Delete(taskID)
 		return
 	}
@@ -154,13 +156,13 @@ func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
 		if destroyErr := g.containerMgr.DestroyContainer(context.Background(), containerID); destroyErr != nil {
 			g.logger.Error("task dispatch: failed to destroy container after start failure", "task_id", taskID, "error", destroyErr)
 		}
-		g.wsClient.SendTaskFailedWithRetry(taskID, fmt.Sprintf("failed to start container after %d attempts: %v", g.cfg.MaxRetries, err), false)
+		g.wsClient.SendTaskFailedWithRetry(taskID, runID, fmt.Sprintf("failed to start container after %d attempts: %v", g.cfg.MaxRetries, err), false)
 		g.tasks.Delete(taskID)
 		return
 	}
 
 	// The task is running only after Docker confirms a successful start.
-	if err := g.wsClient.SendTaskDispatched(taskID, containerID); err != nil {
+	if err := g.wsClient.SendTaskDispatched(taskID, runID, containerID); err != nil {
 		g.logger.Error("task dispatch: failed to send dispatched", "task_id", taskID, "error", err)
 	}
 
@@ -172,6 +174,7 @@ func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
 		emitter := &taskLogEmitter{
 			sender: g.wsClient,
 			taskID: taskID,
+			runID:  runID,
 			tail:   tail,
 		}
 		logsDone := make(chan error, 1)
@@ -190,7 +193,7 @@ func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
 			stopLogs()
 			g.logger.Error("task wait failed", "task_id", taskID, "error", err)
 			// Container wait failure is retryable (container may be hung)
-			if sendErr := g.wsClient.SendTaskFailedWithRetry(taskID, fmt.Sprintf("wait failed: %v", err), true); sendErr != nil {
+			if sendErr := g.wsClient.SendTaskFailedWithRetry(taskID, runID, fmt.Sprintf("wait failed: %v", err), true); sendErr != nil {
 				g.logger.Error("task wait failed: report failed", "task_id", taskID, "error", sendErr)
 			}
 		} else {
@@ -210,13 +213,13 @@ func (g *Gateway) handleTaskDispatch(taskID string, config map[string]any) {
 			output := tail.String()
 			if exitCode == 0 {
 				g.logger.Info("task completed", "task_id", taskID, "exit_code", exitCode)
-				if sendErr := g.wsClient.SendTaskCompleted(taskID, exitCode, output); sendErr != nil {
+				if sendErr := g.wsClient.SendTaskCompleted(taskID, runID, exitCode, output); sendErr != nil {
 					g.logger.Error("task completed: report failed", "task_id", taskID, "error", sendErr)
 				}
 			} else {
 				// Agent exit code != 0 is not retryable (agent code failed)
 				g.logger.Info("task failed", "task_id", taskID, "exit_code", exitCode)
-				if sendErr := g.wsClient.SendTaskFailedWithRetry(taskID, output, false); sendErr != nil {
+				if sendErr := g.wsClient.SendTaskFailedWithRetry(taskID, runID, output, false); sendErr != nil {
 					g.logger.Error("task failed: report failed", "task_id", taskID, "error", sendErr)
 				}
 			}

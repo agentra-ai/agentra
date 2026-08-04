@@ -3,7 +3,8 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useWSEvent, useWSReconnect } from "@/features/realtime/hooks";
 import { api } from "@/shared/api";
-import type { TaskMessagePayload } from "@/shared/types/events";
+import type { TaskDispatchPayload, TaskMessagePayload } from "@/shared/types/events";
+import { isCurrentRunEvent, isFreshRunSnapshot } from "../utils/run-event";
 
 /**
  * Cap on the number of log lines kept in memory for a single task.
@@ -58,9 +59,12 @@ export function useStreamingLogs(taskId: string | null) {
     activeRunID.current = null;
     if (!taskId) return () => { cancelled = true; };
 
+    const runAtRequest = activeRunID.current;
     api.listTaskMessages(taskId, { limit: MAX_LOG_LINES }).then((messages) => {
       if (!cancelled) {
-        activeRunID.current = messages[0]?.run_id ?? null;
+        const snapshotRunID = messages[0]?.run_id ?? null;
+        if (!isFreshRunSnapshot(runAtRequest, activeRunID.current, snapshotRunID)) return;
+        activeRunID.current = snapshotRunID;
         setEntries(taskMessagesToLogEntries(messages).slice(-MAX_LOG_LINES));
       }
     }).catch(console.error);
@@ -70,6 +74,7 @@ export function useStreamingLogs(taskId: string | null) {
   useWSEvent("task:message", useCallback((payload: unknown) => {
     const p = payload as TaskMessagePayload;
     if (p.task_id !== taskId) return;
+    if (!isCurrentRunEvent(activeRunID.current, p.run_id)) return;
 
     const incoming = taskMessagesToLogEntries([p]);
     setEntries((prev) => {
@@ -81,12 +86,21 @@ export function useStreamingLogs(taskId: string | null) {
     });
   }, [taskId]));
 
+  useWSEvent("task:dispatch", useCallback((payload: unknown) => {
+    const p = payload as TaskDispatchPayload;
+    if (p.task_id !== taskId) return;
+    activeRunID.current = p.run_id;
+    setEntries([]);
+  }, [taskId]));
+
   useWSReconnect(useCallback(() => {
     if (!taskId) return;
+    const runAtRequest = activeRunID.current;
     api.listTaskMessages(taskId, { limit: MAX_LOG_LINES }).then((messages) => {
-      const snapshotRunID = messages[0]?.run_id ?? null;
+      const snapshotRunID = messages[0]?.run_id ?? activeRunID.current;
       const snapshot = taskMessagesToLogEntries(messages);
       setEntries((prev) => {
+        if (!isFreshRunSnapshot(runAtRequest, activeRunID.current, snapshotRunID)) return prev;
         if (activeRunID.current !== snapshotRunID) {
           activeRunID.current = snapshotRunID;
           return snapshot;

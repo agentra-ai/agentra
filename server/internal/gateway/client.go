@@ -35,10 +35,10 @@ type Hub struct {
 	workspace map[string]string  // workspaceID -> gatewayID
 
 	// Gateway-to-server task lifecycle callbacks.
-	OnTaskDispatched func(gatewayID, workspaceID, taskID, containerID string)
-	OnTaskComplete   func(gatewayID, workspaceID, taskID string, exitCode int, output string)
-	OnTaskFail       func(gatewayID, workspaceID, taskID string, error string, retryable bool)
-	OnTaskLogs       func(gatewayID, workspaceID, taskID string, seq int, stream, content string)
+	OnTaskDispatched func(gatewayID, workspaceID, taskID, runID, containerID string)
+	OnTaskComplete   func(gatewayID, workspaceID, taskID, runID string, exitCode int, output string)
+	OnTaskFail       func(gatewayID, workspaceID, taskID, runID string, error string, retryable bool)
+	OnTaskLogs       func(gatewayID, workspaceID, taskID, runID string, seq int, stream, content string)
 }
 
 func NewHub() *Hub {
@@ -179,11 +179,11 @@ func (c *Client) handleMessage(message []byte) error {
 		if err := json.Unmarshal(message, &event); err != nil {
 			return fmt.Errorf("decode task completed: %w", err)
 		}
-		if strings.TrimSpace(event.TaskID) == "" {
-			return fmt.Errorf("task completed: task_id is required")
+		if strings.TrimSpace(event.TaskID) == "" || strings.TrimSpace(event.RunID) == "" {
+			return fmt.Errorf("task completed: task_id and run_id are required")
 		}
 		if c.Hub.OnTaskComplete != nil {
-			c.Hub.OnTaskComplete(c.ID, c.WorkspaceID, event.TaskID, event.ExitCode, event.Output)
+			c.Hub.OnTaskComplete(c.ID, c.WorkspaceID, event.TaskID, event.RunID, event.ExitCode, event.Output)
 		}
 		return nil
 
@@ -192,11 +192,11 @@ func (c *Client) handleMessage(message []byte) error {
 		if err := json.Unmarshal(message, &event); err != nil {
 			return fmt.Errorf("decode task dispatched: %w", err)
 		}
-		if strings.TrimSpace(event.TaskID) == "" || strings.TrimSpace(event.ContainerID) == "" {
-			return fmt.Errorf("task dispatched: task_id and container_id are required")
+		if strings.TrimSpace(event.TaskID) == "" || strings.TrimSpace(event.RunID) == "" || strings.TrimSpace(event.ContainerID) == "" {
+			return fmt.Errorf("task dispatched: task_id, run_id, and container_id are required")
 		}
 		if c.Hub.OnTaskDispatched != nil {
-			c.Hub.OnTaskDispatched(c.ID, c.WorkspaceID, event.TaskID, event.ContainerID)
+			c.Hub.OnTaskDispatched(c.ID, c.WorkspaceID, event.TaskID, event.RunID, event.ContainerID)
 		}
 		return nil
 
@@ -205,11 +205,11 @@ func (c *Client) handleMessage(message []byte) error {
 		if err := json.Unmarshal(message, &event); err != nil {
 			return fmt.Errorf("decode task failed: %w", err)
 		}
-		if strings.TrimSpace(event.TaskID) == "" {
-			return fmt.Errorf("task failed: task_id is required")
+		if strings.TrimSpace(event.TaskID) == "" || strings.TrimSpace(event.RunID) == "" {
+			return fmt.Errorf("task failed: task_id and run_id are required")
 		}
 		if c.Hub.OnTaskFail != nil {
-			c.Hub.OnTaskFail(c.ID, c.WorkspaceID, event.TaskID, event.Error, event.Retryable)
+			c.Hub.OnTaskFail(c.ID, c.WorkspaceID, event.TaskID, event.RunID, event.Error, event.Retryable)
 		}
 		return nil
 
@@ -218,8 +218,8 @@ func (c *Client) handleMessage(message []byte) error {
 		if err := json.Unmarshal(message, &event); err != nil {
 			return fmt.Errorf("decode task logs: %w", err)
 		}
-		if strings.TrimSpace(event.TaskID) == "" {
-			return fmt.Errorf("task logs: task_id is required")
+		if strings.TrimSpace(event.TaskID) == "" || strings.TrimSpace(event.RunID) == "" {
+			return fmt.Errorf("task logs: task_id and run_id are required")
 		}
 		if event.Seq <= 0 || int64(event.Seq) > 2147483647 {
 			return fmt.Errorf("task logs: seq must be between 1 and 2147483647")
@@ -234,7 +234,7 @@ func (c *Client) handleMessage(message []byte) error {
 			return fmt.Errorf("task logs: content exceeds %d bytes", protocol.GatewayLogChunkBytes)
 		}
 		if c.Hub.OnTaskLogs != nil {
-			c.Hub.OnTaskLogs(c.ID, c.WorkspaceID, event.TaskID, event.Seq, event.Stream, event.Content)
+			c.Hub.OnTaskLogs(c.ID, c.WorkspaceID, event.TaskID, event.RunID, event.Seq, event.Stream, event.Content)
 		}
 		return nil
 

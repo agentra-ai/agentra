@@ -59,20 +59,54 @@ RETURNING id, workspace_id;
 -- name: FailTasksForOfflineRuntimes :many
 -- Marks dispatched/running tasks as failed when their runtime is offline.
 -- This cleans up orphaned tasks after a daemon crash or network partition.
-UPDATE agent_task_queue
-SET status = 'failed', completed_at = now(), error = 'runtime went offline'
-WHERE status IN ('dispatched', 'running')
-  AND runtime_id IN (
-    SELECT id FROM agent_runtime WHERE status = 'offline'
-  )
-RETURNING id, agent_id, issue_id;
+WITH targets AS (
+    SELECT atq.id, atq.active_run_id
+    FROM agent_task_queue atq
+    WHERE atq.status IN ('dispatched', 'running')
+      AND atq.runtime_id IN (
+        SELECT id FROM agent_runtime WHERE status = 'offline'
+      )
+    FOR UPDATE
+), closed_runs AS (
+    UPDATE task_runs tr
+    SET status = 'failed', completed_at = NOW(), error = 'runtime went offline'
+    FROM targets
+    WHERE tr.id = targets.active_run_id
+      AND tr.status IN ('dispatched', 'running')
+    RETURNING tr.id
+)
+UPDATE agent_task_queue atq
+SET status = 'failed', completed_at = now(), error = 'runtime went offline', active_run_id = NULL
+FROM targets
+WHERE atq.id = targets.id
+RETURNING atq.id, atq.agent_id, atq.issue_id;
 
 -- name: RecoverTasksForRuntime :many
 -- A daemon registration represents a fresh process for this stable runtime
 -- identity. Requeue orphaned work within its retry budget so the new process
 -- can resume from the in-flight session checkpoint; fail closed once the
 -- budget is exhausted.
-UPDATE agent_task_queue
+WITH targets AS (
+    SELECT id, active_run_id
+    FROM agent_task_queue atq
+    WHERE atq.runtime_id = $1
+      AND atq.runtime_type = 'local'
+      AND (
+          atq.status IN ('dispatched', 'running')
+          OR (atq.status = 'failed' AND atq.error = 'runtime went offline')
+      )
+    FOR UPDATE
+), closed_runs AS (
+    UPDATE task_runs tr
+    SET status = 'failed',
+        completed_at = NOW(),
+        error = 'runtime restarted; task queued for resume'
+    FROM targets
+    WHERE tr.id = targets.active_run_id
+      AND tr.status IN ('dispatched', 'running')
+    RETURNING tr.id
+)
+UPDATE agent_task_queue atq
 SET status = CASE
         WHEN retry_count < max_retries THEN 'queued'
         ELSE 'failed'
@@ -90,11 +124,8 @@ SET status = CASE
         ELSE retry_count
     END,
     dispatched_at = NULL,
-    started_at = NULL
-WHERE runtime_id = $1
-  AND runtime_type = 'local'
-  AND (
-      status IN ('dispatched', 'running')
-      OR (status = 'failed' AND error = 'runtime went offline')
-  )
-RETURNING *;
+    started_at = NULL,
+    active_run_id = NULL
+FROM targets
+WHERE atq.id = targets.id
+RETURNING atq.id AS task_id, targets.active_run_id AS run_id;

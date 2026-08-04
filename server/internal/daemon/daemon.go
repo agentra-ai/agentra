@@ -772,19 +772,21 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 	}
 	taskLog.Info("picked task", "issue", task.IssueID, "agent", agentName, "provider", provider)
 
-	runID, err := d.client.StartTask(ctx, task.ID)
-	if err != nil {
+	if strings.TrimSpace(task.RunID) == "" {
+		taskLog.Error("claimed task is missing run_id")
+		return
+	}
+	if err := d.client.StartTask(ctx, task.ID, task.RunID); err != nil {
 		taskLog.Error("start task failed", "error", err)
-		if failErr := d.client.FailTask(ctx, task.ID, fmt.Sprintf("start task failed: %s", err.Error())); failErr != nil {
+		if failErr := d.client.FailTask(ctx, task.ID, task.RunID, fmt.Sprintf("start task failed: %s", err.Error())); failErr != nil {
 			taskLog.Error("fail task after start error", "error", failErr)
 		}
 		return
 	}
-	task.RunID = runID
 
 	// Report initial "reading" stage
-	_ = d.client.ReportAgentStage(ctx, task.ID, "reading")
-	_ = d.client.ReportProgress(ctx, task.ID, fmt.Sprintf("Launching %s", provider), 1, 2)
+	_ = d.client.ReportAgentStage(ctx, task.ID, task.RunID, "reading")
+	_ = d.client.ReportProgress(ctx, task.ID, task.RunID, fmt.Sprintf("Launching %s", provider), 1, 2)
 
 	// Create a cancellable context so we can interrupt the running agent
 	// when the server-side task status changes to 'cancelled'.
@@ -801,7 +803,7 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 			case <-runCtx.Done():
 				return
 			case <-ticker.C:
-				if status, err := d.client.GetTaskStatus(ctx, task.ID); err == nil && status == "cancelled" {
+				if status, err := d.client.GetTaskStatus(ctx, task.ID, task.RunID); err == nil && status == "cancelled" {
 					taskLog.Info("task cancelled by server, interrupting agent")
 					runCancel()
 					close(cancelledByPoll)
@@ -812,7 +814,7 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 	}()
 
 	// Report "implementing" stage before agent starts executing
-	_ = d.client.ReportAgentStage(ctx, task.ID, "implementing")
+	_ = d.client.ReportAgentStage(ctx, task.ID, task.RunID, "implementing")
 
 	result, err := d.runTask(runCtx, task, provider, taskLog)
 
@@ -820,50 +822,50 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 	select {
 	case <-cancelledByPoll:
 		taskLog.Info("task cancelled during execution, discarding result")
-		_ = d.client.ReportAgentStage(ctx, task.ID, "idle")
+		_ = d.client.ReportAgentStage(ctx, task.ID, task.RunID, "idle")
 		return
 	default:
 	}
 
 	if err != nil {
 		taskLog.Error("task failed", "error", err)
-		if failErr := d.client.FailTask(ctx, task.ID, err.Error()); failErr != nil {
+		if failErr := d.client.FailTask(ctx, task.ID, task.RunID, err.Error()); failErr != nil {
 			taskLog.Error("fail task callback failed", "error", failErr)
 		}
-		_ = d.client.ReportAgentStage(ctx, task.ID, "idle")
+		_ = d.client.ReportAgentStage(ctx, task.ID, task.RunID, "idle")
 		return
 	}
 
-	_ = d.client.ReportProgress(ctx, task.ID, "Finishing task", 2, 2)
+	_ = d.client.ReportProgress(ctx, task.ID, task.RunID, "Finishing task", 2, 2)
 
 	// Check if the task was cancelled while it was running (e.g. issue
 	// was reassigned). If so, skip reporting results — the server already
 	// moved the task to 'cancelled' so complete/fail would fail anyway.
-	if status, err := d.client.GetTaskStatus(ctx, task.ID); err == nil && status == "cancelled" {
+	if status, err := d.client.GetTaskStatus(ctx, task.ID, task.RunID); err == nil && status == "cancelled" {
 		taskLog.Info("task cancelled during execution, discarding result")
-		_ = d.client.ReportAgentStage(ctx, task.ID, "idle")
+		_ = d.client.ReportAgentStage(ctx, task.ID, task.RunID, "idle")
 		return
 	}
 
 	switch result.Status {
 	case "blocked":
-		if err := d.client.FailTask(ctx, task.ID, result.Comment); err != nil {
+		if err := d.client.FailTask(ctx, task.ID, task.RunID, result.Comment); err != nil {
 			taskLog.Error("report blocked task failed", "error", err)
 		}
-		_ = d.client.ReportAgentStage(ctx, task.ID, "idle")
+		_ = d.client.ReportAgentStage(ctx, task.ID, task.RunID, "idle")
 	default:
 		taskLog.Info("task completed", "status", result.Status)
 		// Report "committing" stage before completing
-		_ = d.client.ReportAgentStage(ctx, task.ID, "committing")
-		if err := d.client.CompleteTask(ctx, task.ID, result.Comment, result.BranchName, result.SessionID, result.WorkDir, result.DurationMs, result.TokenUsage, result.Artifacts); err != nil {
+		_ = d.client.ReportAgentStage(ctx, task.ID, task.RunID, "committing")
+		if err := d.client.CompleteTask(ctx, task.ID, task.RunID, result.Comment, result.BranchName, result.SessionID, result.WorkDir, result.DurationMs, result.TokenUsage, result.Artifacts); err != nil {
 			taskLog.Error("complete task failed, falling back to fail", "error", err)
-			if failErr := d.client.FailTask(ctx, task.ID, fmt.Sprintf("complete task failed: %s", err.Error())); failErr != nil {
+			if failErr := d.client.FailTask(ctx, task.ID, task.RunID, fmt.Sprintf("complete task failed: %s", err.Error())); failErr != nil {
 				taskLog.Error("fail task fallback also failed", "error", failErr)
 			}
-			_ = d.client.ReportAgentStage(ctx, task.ID, "idle")
+			_ = d.client.ReportAgentStage(ctx, task.ID, task.RunID, "idle")
 		} else {
 			// Report "done" stage after successful completion
-			_ = d.client.ReportAgentStage(ctx, task.ID, "done")
+			_ = d.client.ReportAgentStage(ctx, task.ID, task.RunID, "done")
 		}
 	}
 }
@@ -1055,7 +1057,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 					continue
 				}
 				checkpointCtx, checkpointCancel := context.WithTimeout(context.Background(), 5*time.Second)
-				if err := d.client.CheckpointTaskSession(checkpointCtx, task.ID, sessionID, env.WorkDir); err != nil {
+				if err := d.client.CheckpointTaskSession(checkpointCtx, task.ID, task.RunID, sessionID, env.WorkDir); err != nil {
 					taskLog.Warn("failed to checkpoint provider session", "error", err)
 				} else {
 					checkpointedSessionID = sessionID

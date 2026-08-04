@@ -78,28 +78,60 @@ VALUES (
 RETURNING *;
 
 -- name: CancelAgentTasksByIssue :exec
-UPDATE agent_task_queue
-SET status = 'cancelled'
-WHERE issue_id = $1 AND status IN ('queued', 'dispatched', 'running');
+WITH targets AS (
+    SELECT id, active_run_id
+    FROM agent_task_queue atq
+    WHERE atq.issue_id = $1 AND atq.status IN ('queued', 'dispatched', 'running')
+    FOR UPDATE
+), closed_runs AS (
+    UPDATE task_runs tr
+    SET status = 'cancelled', completed_at = NOW()
+    FROM targets
+    WHERE tr.id = targets.active_run_id
+      AND tr.status IN ('dispatched', 'running')
+    RETURNING tr.id
+)
+UPDATE agent_task_queue atq
+SET status = 'cancelled', completed_at = NOW(), active_run_id = NULL
+FROM targets
+WHERE atq.id = targets.id;
 
 -- name: CancelAgentTasksByAgent :exec
-UPDATE agent_task_queue
-SET status = 'cancelled'
-WHERE agent_id = $1 AND status IN ('queued', 'dispatched', 'running');
+WITH targets AS (
+    SELECT id, active_run_id
+    FROM agent_task_queue atq
+    WHERE atq.agent_id = $1 AND atq.status IN ('queued', 'dispatched', 'running')
+    FOR UPDATE
+), closed_runs AS (
+    UPDATE task_runs tr
+    SET status = 'cancelled', completed_at = NOW()
+    FROM targets
+    WHERE tr.id = targets.active_run_id
+      AND tr.status IN ('dispatched', 'running')
+    RETURNING tr.id
+)
+UPDATE agent_task_queue atq
+SET status = 'cancelled', completed_at = NOW(), active_run_id = NULL
+FROM targets
+WHERE atq.id = targets.id;
 
 -- name: GetAgentTask :one
 SELECT * FROM agent_task_queue
 WHERE id = $1;
 
--- name: ClaimAgentTask :one
+-- name: GetAgentTaskForUpdate :one
+SELECT * FROM agent_task_queue
+WHERE id = $1
+FOR UPDATE;
+
+-- name: ClaimAgentTaskRun :one
 -- Claims the next queued task for an agent, enforcing per-issue serialization:
 -- a task is only claimable when no other task for the same issue is already
 -- dispatched or running. This guarantees serial execution within an issue
 -- while allowing parallel execution across different issues.
-UPDATE agent_task_queue
-SET status = 'dispatched', dispatched_at = now()
-WHERE id = (
-    SELECT atq.id FROM agent_task_queue atq
+WITH candidate AS (
+    SELECT atq.id, atq.agent_id
+    FROM agent_task_queue atq
     WHERE atq.agent_id = $1 AND atq.status = 'queued'
       AND NOT EXISTS (
           SELECT 1 FROM agent_task_queue active
@@ -109,22 +141,51 @@ WHERE id = (
     ORDER BY atq.priority DESC, atq.created_at ASC
     LIMIT 1
     FOR UPDATE SKIP LOCKED
+), claimed_run AS (
+    INSERT INTO task_runs (task_id, agent_id, status, started_at)
+    SELECT id, agent_id, 'dispatched', now()
+    FROM candidate
+    RETURNING id, task_id
+), claimed_task AS (
+    UPDATE agent_task_queue atq
+    SET status = 'dispatched', dispatched_at = now(), active_run_id = claimed_run.id
+    FROM claimed_run
+    WHERE atq.id = claimed_run.task_id AND atq.status = 'queued'
+    RETURNING atq.id
 )
-RETURNING *;
+SELECT claimed_task.id AS task_id, claimed_run.id AS run_id
+FROM claimed_task
+JOIN claimed_run ON claimed_run.task_id = claimed_task.id;
 
--- name: ClaimAgentTaskByID :one
+-- name: ClaimAgentTaskRunByID :one
 -- Claims one task whose runtime policy has already been validated. The exact
 -- ID prevents a concurrent queue change from dispatching a different task
 -- than the service inspected.
-UPDATE agent_task_queue AS target
-SET status = 'dispatched', dispatched_at = now()
-WHERE target.id = $1 AND target.status = 'queued'
-  AND NOT EXISTS (
-      SELECT 1 FROM agent_task_queue active
-      WHERE active.issue_id = target.issue_id
-        AND active.status IN ('dispatched', 'running')
-  )
-RETURNING *;
+WITH candidate AS (
+    SELECT target.id, target.agent_id
+    FROM agent_task_queue AS target
+    WHERE target.id = $1 AND target.status = 'queued'
+      AND NOT EXISTS (
+          SELECT 1 FROM agent_task_queue active
+          WHERE active.issue_id = target.issue_id
+            AND active.status IN ('dispatched', 'running')
+      )
+    FOR UPDATE
+), claimed_run AS (
+    INSERT INTO task_runs (task_id, agent_id, status, started_at)
+    SELECT id, agent_id, 'dispatched', now()
+    FROM candidate
+    RETURNING id, task_id
+), claimed_task AS (
+    UPDATE agent_task_queue atq
+    SET status = 'dispatched', dispatched_at = now(), active_run_id = claimed_run.id
+    FROM claimed_run
+    WHERE atq.id = claimed_run.task_id AND atq.status = 'queued'
+    RETURNING atq.id
+)
+SELECT claimed_task.id AS task_id, claimed_run.id AS run_id
+FROM claimed_task
+JOIN claimed_run ON claimed_run.task_id = claimed_task.id;
 
 -- name: RejectQueuedAgentTask :one
 -- Capability mismatches are terminal configuration errors, not retryable
@@ -135,36 +196,26 @@ SET status = 'failed', completed_at = now(), error = $2
 WHERE id = $1 AND status = 'queued'
 RETURNING *;
 
--- name: StartAgentTaskRun :one
--- The Work Item transition and Run creation are one database statement: a
--- caller can never observe running without an attempt identity.
-WITH started_task AS (
-    UPDATE agent_task_queue
-    SET status = 'running', started_at = now()
-    WHERE agent_task_queue.id = $1 AND agent_task_queue.status = 'dispatched'
-    RETURNING agent_task_queue.id, agent_task_queue.agent_id
-), started_run AS (
-    INSERT INTO task_runs (task_id, agent_id, status, started_at)
-    SELECT started_task.id, started_task.agent_id, 'running', now()
-    FROM started_task
-    RETURNING task_runs.id, task_runs.task_id
-)
-SELECT started_run.task_id, started_run.id AS run_id
-FROM started_run;
-
--- name: CompleteAgentTask :one
+-- name: SetAgentTaskRunning :one
 UPDATE agent_task_queue
-SET status = 'completed', completed_at = now(), result = $2, session_id = $3, work_dir = $4
-WHERE id = $1 AND status = 'running'
+SET status = 'running', started_at = now()
+WHERE id = $1 AND active_run_id = $2 AND status = 'dispatched'
 RETURNING *;
 
--- name: CheckpointAgentTaskSession :one
+-- name: CompleteAgentTaskForRun :one
+UPDATE agent_task_queue
+SET status = 'completed', completed_at = now(), result = $3,
+    session_id = $4, work_dir = $5, active_run_id = NULL
+WHERE id = $1 AND active_run_id = $2 AND status = 'running'
+RETURNING *;
+
+-- name: CheckpointAgentTaskSessionForRun :one
 -- Persists resumable state as soon as the provider creates a session. The
 -- running-state guard prevents a late daemon callback from mutating a task
 -- that has already completed, failed, or been cancelled.
 UPDATE agent_task_queue
-SET session_id = $2, work_dir = $3
-WHERE id = $1 AND status = 'running'
+SET session_id = $3, work_dir = $4
+WHERE id = $1 AND active_run_id = $2 AND status = 'running'
 RETURNING *;
 
 -- name: GetLastTaskSession :one
@@ -175,10 +226,10 @@ WHERE agent_id = $1 AND issue_id = $2 AND status = 'completed' AND session_id IS
 ORDER BY completed_at DESC
 LIMIT 1;
 
--- name: FailAgentTask :one
+-- name: FailAgentTaskForRun :one
 UPDATE agent_task_queue
-SET status = 'failed', completed_at = now(), error = $2
-WHERE id = $1 AND status IN ('dispatched', 'running')
+SET status = 'failed', completed_at = now(), error = $3, active_run_id = NULL
+WHERE id = $1 AND active_run_id = $2 AND status IN ('dispatched', 'running')
 RETURNING *;
 
 -- name: RetryAgentTask :one
@@ -191,7 +242,8 @@ SET status = 'queued',
     error = NULL,
     retry_count = retry_count + 1,
     dispatched_at = NULL,
-    started_at = NULL
+    started_at = NULL,
+    active_run_id = NULL
 WHERE id = $1 AND status IN ('failed', 'dispatched', 'running') AND retry_count < max_retries
 RETURNING *;
 
@@ -199,15 +251,29 @@ RETURNING *;
 -- Fails tasks stuck in dispatched/running beyond the given thresholds.
 -- Handles cases where the daemon is alive but the task is orphaned
 -- (e.g. agent process hung, daemon failed to report completion).
-UPDATE agent_task_queue
-SET status = 'failed', completed_at = now(), error = 'task timed out'
-WHERE (status = 'dispatched' AND dispatched_at < now() - make_interval(secs => @dispatch_timeout_secs::double precision))
-   OR (status = 'running' AND started_at < now() - make_interval(secs => @running_timeout_secs::double precision))
-RETURNING id, agent_id, issue_id;
+WITH targets AS (
+    SELECT id, active_run_id
+    FROM agent_task_queue
+    WHERE (status = 'dispatched' AND dispatched_at < now() - make_interval(secs => @dispatch_timeout_secs::double precision))
+       OR (status = 'running' AND started_at < now() - make_interval(secs => @running_timeout_secs::double precision))
+    FOR UPDATE
+), closed_runs AS (
+    UPDATE task_runs tr
+    SET status = 'failed', completed_at = NOW(), error = 'task timed out'
+    FROM targets
+    WHERE tr.id = targets.active_run_id
+      AND tr.status IN ('dispatched', 'running')
+    RETURNING tr.id
+)
+UPDATE agent_task_queue atq
+SET status = 'failed', completed_at = now(), error = 'task timed out', active_run_id = NULL
+FROM targets
+WHERE atq.id = targets.id
+RETURNING atq.id, atq.agent_id, atq.issue_id;
 
 -- name: CancelAgentTask :one
 UPDATE agent_task_queue
-SET status = 'cancelled', completed_at = now()
+SET status = 'cancelled', completed_at = now(), active_run_id = NULL
 WHERE id = $1 AND status IN ('queued', 'dispatched', 'running')
 RETURNING *;
 

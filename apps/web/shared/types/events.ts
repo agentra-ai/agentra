@@ -178,10 +178,17 @@ export interface TaskMessagePayload {
   output?: string;
 }
 
+export interface TaskDispatchPayload {
+  task_id: string;
+  run_id: string;
+  issue_id?: string;
+}
+
 export type AgentStage = "idle" | "reading" | "implementing" | "testing" | "committing" | "done";
 
 export interface AgentStagePayload {
   task_id: string;
+  run_id: string;
   agent_id: string;
   stage: AgentStage;
 }
@@ -194,6 +201,7 @@ export interface StreamingLogsPayload {
 
 export interface TaskCompletedPayload {
   task_id: string;
+  run_id?: string;
   agent_id: string;
   issue_id: string;
   status: string;
@@ -201,6 +209,7 @@ export interface TaskCompletedPayload {
 
 export interface TaskFailedPayload {
   task_id: string;
+  run_id?: string;
   agent_id: string;
   issue_id: string;
   status: string;
@@ -208,6 +217,7 @@ export interface TaskFailedPayload {
 
 export interface TaskCancelledPayload {
   task_id: string;
+  run_id?: string;
   agent_id: string;
   issue_id: string;
   status: string;

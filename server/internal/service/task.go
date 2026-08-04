@@ -31,11 +31,12 @@ type TaskService struct {
 	Hub          *realtime.Hub
 	Bus          *events.Bus
 	TraceService *TraceService
+	Lifecycle    *RunLifecycle
 }
 
-// StartedTask is the atomic result of starting a Work Item. RunID identifies
-// this execution attempt and must accompany attempt-scoped daemon callbacks.
-type StartedTask struct {
+// ClaimedTask is a dispatched Work Item plus the Run identity allocated for
+// the attempt. Every Runtime Adapter must carry RunID through all callbacks.
+type ClaimedTask struct {
 	Task  db.AgentTaskQueue
 	RunID pgtype.UUID
 }
@@ -45,8 +46,14 @@ type StartedTask struct {
 // cross-tenant oracle.
 var ErrGatewayTaskNotAuthorized = errors.New("cloud gateway task not authorized")
 
-func NewTaskService(q *db.Queries, hub *realtime.Hub, bus *events.Bus, traceSvc *TraceService) *TaskService {
-	return &TaskService{Queries: q, Hub: hub, Bus: bus, TraceService: traceSvc}
+func NewTaskService(q *db.Queries, txStarter runLifecycleTxStarter, hub *realtime.Hub, bus *events.Bus, traceSvc *TraceService) *TaskService {
+	return &TaskService{
+		Queries:      q,
+		Hub:          hub,
+		Bus:          bus,
+		TraceService: traceSvc,
+		Lifecycle:    NewRunLifecycle(txStarter, q),
+	}
 }
 
 // ValidateCloudGatewayTask binds a gateway event to the active cloud runtime
@@ -194,7 +201,7 @@ func (s *TaskService) CancelTasksForIssue(ctx context.Context, issueID pgtype.UU
 // CancelTask cancels a single task by ID. It broadcasts a task:cancelled event
 // so frontends can update immediately.
 func (s *TaskService) CancelTask(ctx context.Context, taskID pgtype.UUID) (*db.AgentTaskQueue, error) {
-	task, err := s.Queries.CancelAgentTask(ctx, taskID)
+	task, runID, err := s.Lifecycle.Cancel(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("cancel task: %w", err)
 	}
@@ -203,16 +210,19 @@ func (s *TaskService) CancelTask(ctx context.Context, taskID pgtype.UUID) (*db.A
 
 	// Reconcile agent status
 	s.ReconcileAgentStatus(ctx, task.AgentID)
+	if runID.Valid {
+		s.endExecutionTrace(ctx, runID, "aborted")
+	}
 
 	// Broadcast cancellation as a task:failed event so frontends clear the live card
-	s.broadcastTaskEvent(ctx, protocol.EventTaskCancelled, task)
+	s.broadcastTaskEvent(ctx, protocol.EventTaskCancelled, task, runID)
 
 	return &task, nil
 }
 
 // ClaimTask atomically claims the next queued task for an agent,
 // respecting max_concurrent_tasks.
-func (s *TaskService) ClaimTask(ctx context.Context, agentID pgtype.UUID) (*db.AgentTaskQueue, error) {
+func (s *TaskService) ClaimTask(ctx context.Context, agentID pgtype.UUID) (*ClaimedTask, error) {
 	agent, err := s.Queries.GetAgent(ctx, agentID)
 	if err != nil {
 		return nil, fmt.Errorf("agent not found: %w", err)
@@ -227,7 +237,7 @@ func (s *TaskService) ClaimTask(ctx context.Context, agentID pgtype.UUID) (*db.A
 		return nil, nil // No capacity
 	}
 
-	task, err := s.Queries.ClaimAgentTask(ctx, agentID)
+	claimed, err := s.Queries.ClaimAgentTaskRun(ctx, agentID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			slog.Debug("task claim: no tasks available", "agent_id", util.UUIDToString(agentID))
@@ -236,20 +246,24 @@ func (s *TaskService) ClaimTask(ctx context.Context, agentID pgtype.UUID) (*db.A
 		return nil, fmt.Errorf("claim task: %w", err)
 	}
 
-	slog.Info("task claimed", "task_id", util.UUIDToString(task.ID), "agent_id", util.UUIDToString(agentID))
+	task, err := s.Queries.GetAgentTask(ctx, claimed.TaskID)
+	if err != nil {
+		return nil, fmt.Errorf("load claimed task: %w", err)
+	}
+	slog.Info("task claimed", "task_id", util.UUIDToString(task.ID), "run_id", util.UUIDToString(claimed.RunID), "agent_id", util.UUIDToString(agentID))
 
 	// Update agent status to working
 	s.updateAgentStatus(ctx, agentID, "working")
 
 	// Broadcast task:dispatch
-	s.broadcastTaskDispatch(ctx, task)
+	s.broadcastTaskDispatch(ctx, task, claimed.RunID)
 
-	return &task, nil
+	return &ClaimedTask{Task: task, RunID: claimed.RunID}, nil
 }
 
 // ClaimTaskForRuntime claims the next runnable task for a runtime while
 // still respecting each agent's max_concurrent_tasks limit.
-func (s *TaskService) ClaimTaskForRuntime(ctx context.Context, runtimeID pgtype.UUID) (*db.AgentTaskQueue, error) {
+func (s *TaskService) ClaimTaskForRuntime(ctx context.Context, runtimeID pgtype.UUID) (*ClaimedTask, error) {
 	runtime, err := s.Queries.GetAgentRuntime(ctx, runtimeID)
 	if err != nil {
 		return nil, fmt.Errorf("load runtime: %w", err)
@@ -302,7 +316,7 @@ func (s *TaskService) ClaimTaskForRuntime(ctx context.Context, runtimeID pgtype.
 	return nil, nil
 }
 
-func (s *TaskService) claimTaskCandidate(ctx context.Context, candidate db.AgentTaskQueue) (*db.AgentTaskQueue, bool, error) {
+func (s *TaskService) claimTaskCandidate(ctx context.Context, candidate db.AgentTaskQueue) (*ClaimedTask, bool, error) {
 	agent, err := s.Queries.GetAgent(ctx, candidate.AgentID)
 	if err != nil {
 		return nil, false, fmt.Errorf("agent not found: %w", err)
@@ -315,17 +329,21 @@ func (s *TaskService) claimTaskCandidate(ctx context.Context, candidate db.Agent
 		return nil, false, nil
 	}
 
-	task, err := s.Queries.ClaimAgentTaskByID(ctx, candidate.ID)
+	claimed, err := s.Queries.ClaimAgentTaskRunByID(ctx, candidate.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, true, nil
 		}
 		return nil, true, fmt.Errorf("claim task candidate: %w", err)
 	}
-	slog.Info("task claimed", "task_id", util.UUIDToString(task.ID), "agent_id", util.UUIDToString(task.AgentID))
+	task, err := s.Queries.GetAgentTask(ctx, claimed.TaskID)
+	if err != nil {
+		return nil, true, fmt.Errorf("load claimed task: %w", err)
+	}
+	slog.Info("task claimed", "task_id", util.UUIDToString(task.ID), "run_id", util.UUIDToString(claimed.RunID), "agent_id", util.UUIDToString(task.AgentID))
 	s.updateAgentStatus(ctx, task.AgentID, "working")
-	s.broadcastTaskDispatch(ctx, task)
-	return &task, true, nil
+	s.broadcastTaskDispatch(ctx, task, claimed.RunID)
+	return &ClaimedTask{Task: task, RunID: claimed.RunID}, true, nil
 }
 
 func (s *TaskService) rejectQueuedTask(ctx context.Context, taskID pgtype.UUID, errMsg string) (*db.AgentTaskQueue, error) {
@@ -348,27 +366,22 @@ func (s *TaskService) rejectQueuedTask(ctx context.Context, taskID pgtype.UUID, 
 	return &task, nil
 }
 
-// StartTask transitions a dispatched task to running.
-// Issue status is NOT changed here — the agent manages it via the CLI.
-func (s *TaskService) StartTask(ctx context.Context, taskID pgtype.UUID) (*StartedTask, error) {
-	started, err := s.Queries.StartAgentTaskRun(ctx, taskID)
+// StartTask transitions the dispatch-allocated Run and its Work Item to
+// running in one authoritative Lifecycle transaction.
+func (s *TaskService) StartTask(ctx context.Context, ref RunRef) (*db.AgentTaskQueue, error) {
+	task, err := s.Lifecycle.Start(ctx, ref)
 	if err != nil {
 		return nil, fmt.Errorf("start task: %w", err)
 	}
-	task, err := s.Queries.GetAgentTask(ctx, started.TaskID)
-	if err != nil {
-		return nil, fmt.Errorf("load started task: %w", err)
-	}
 
-	slog.Info("task started", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
-	slog.Info("task run created", "run_id", util.UUIDToString(started.RunID), "task_id", util.UUIDToString(task.ID))
+	slog.Info("task started", "task_id", util.UUIDToString(task.ID), "run_id", util.UUIDToString(ref.RunID), "issue_id", util.UUIDToString(task.IssueID))
 
 	// Create execution trace (new execution_traces table).
 	if s.TraceService != nil && s.TraceService.TraceService != nil {
 		provider, model := s.resolveAgentProvider(ctx, task.AgentID)
 		_, err := s.TraceService.StartTrace(
 			ctx,
-			util.UUIDToString(started.RunID),
+			util.UUIDToString(ref.RunID),
 			util.UUIDToString(task.ID),
 			util.UUIDToString(task.AgentID),
 			util.UUIDToString(task.IssueID),
@@ -380,18 +393,14 @@ func (s *TaskService) StartTask(ctx context.Context, taskID pgtype.UUID) (*Start
 		}
 	}
 
-	return &StartedTask{Task: task, RunID: started.RunID}, nil
+	return &task, nil
 }
 
 // CheckpointTaskSession persists the provider session and execution directory
 // while a task is running. A daemon restart can then resume the same task
 // instead of falling back to the last completed task on the issue.
-func (s *TaskService) CheckpointTaskSession(ctx context.Context, taskID pgtype.UUID, sessionID, workDir string) (*db.AgentTaskQueue, error) {
-	task, err := s.Queries.CheckpointAgentTaskSession(ctx, db.CheckpointAgentTaskSessionParams{
-		ID:        taskID,
-		SessionID: pgtype.Text{String: sessionID, Valid: sessionID != ""},
-		WorkDir:   pgtype.Text{String: workDir, Valid: workDir != ""},
-	})
+func (s *TaskService) CheckpointTaskSession(ctx context.Context, ref RunRef, sessionID, workDir string) (*db.AgentTaskQueue, error) {
+	task, err := s.Lifecycle.Checkpoint(ctx, ref, sessionID, workDir)
 	if err != nil {
 		return nil, fmt.Errorf("checkpoint task session: %w", err)
 	}
@@ -403,22 +412,26 @@ func (s *TaskService) CheckpointTaskSession(ctx context.Context, taskID pgtype.U
 // tasks return to the queue with their session checkpoint intact; exhausted
 // tasks fail explicitly instead of remaining stuck forever.
 func (s *TaskService) RecoverTasksForRuntime(ctx context.Context, runtimeID pgtype.UUID) (requeued, failed int, err error) {
-	tasks, err := s.Queries.RecoverTasksForRuntime(ctx, runtimeID)
+	recovered, err := s.Queries.RecoverTasksForRuntime(ctx, runtimeID)
 	if err != nil {
 		return 0, 0, fmt.Errorf("recover tasks for runtime: %w", err)
 	}
-	for _, task := range tasks {
+	for _, recovery := range recovered {
+		task, lookupErr := s.Queries.GetAgentTask(ctx, recovery.TaskID)
+		if lookupErr != nil {
+			return requeued, failed, fmt.Errorf("load recovered task: %w", lookupErr)
+		}
+		if recovery.RunID.Valid {
+			s.endExecutionTrace(ctx, recovery.RunID, "failed")
+		}
 		switch task.Status {
 		case "queued":
 			requeued++
-			s.finalizeTrace(ctx, task.ID, task.AgentID, "failed", "runtime restarted; task queued for resume", 0, 0, 0, "")
-			s.endExecutionTrace(ctx, task.ID, "failed")
 			s.broadcastTaskEvent(ctx, protocol.EventTaskRetry, task)
-			s.broadcastTaskDispatch(ctx, task)
+			// Requeued work is claimed normally; the claim allocates its next
+			// Run before either Runtime Adapter sees a dispatch.
 		case "failed":
 			failed++
-			s.finalizeTrace(ctx, task.ID, task.AgentID, "failed", task.Error.String, 0, 0, 0, "")
-			s.endExecutionTrace(ctx, task.ID, "failed")
 			s.broadcastTaskEvent(ctx, protocol.EventTaskFailed, task)
 		}
 	}
@@ -440,32 +453,7 @@ func (s *TaskService) resolveAgentProvider(ctx context.Context, agentID pgtype.U
 
 // CompleteTask marks a task as completed.
 // Issue status is NOT changed here — the agent manages it via the CLI.
-func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, result []byte, sessionID, workDir string) (*db.AgentTaskQueue, error) {
-	task, err := s.Queries.CompleteAgentTask(ctx, db.CompleteAgentTaskParams{
-		ID:        taskID,
-		Result:    result,
-		SessionID: pgtype.Text{String: sessionID, Valid: sessionID != ""},
-		WorkDir:   pgtype.Text{String: workDir, Valid: workDir != ""},
-	})
-	if err != nil {
-		// Log the current task state to help debug why the update matched no rows.
-		if existing, lookupErr := s.Queries.GetAgentTask(ctx, taskID); lookupErr == nil {
-			slog.Warn("complete task failed: task not in running state",
-				"task_id", util.UUIDToString(taskID),
-				"current_status", existing.Status,
-				"issue_id", util.UUIDToString(existing.IssueID),
-				"agent_id", util.UUIDToString(existing.AgentID),
-			)
-		} else {
-			slog.Warn("complete task failed: task not found",
-				"task_id", util.UUIDToString(taskID),
-				"lookup_error", lookupErr,
-			)
-		}
-		return nil, fmt.Errorf("complete task: %w", err)
-	}
-
-	slog.Info("task completed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
+func (s *TaskService) CompleteTask(ctx context.Context, ref RunRef, result []byte, sessionID, workDir string) (*db.AgentTaskQueue, error) {
 	var payload protocol.TaskCompletedPayload
 	_ = json.Unmarshal(result, &payload)
 	tokenInput := int64(0)
@@ -476,11 +464,35 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 		tokenOutput = payload.TokenUsage.OutputTokens + payload.TokenUsage.ReasoningOutputTokens
 		totalTokens = tokenInput + tokenOutput
 	}
+	task, err := s.Lifecycle.Complete(ctx, ref, RunCompletion{
+		Result:      result,
+		SessionID:   sessionID,
+		WorkDir:     workDir,
+		DurationMs:  payload.DurationMs,
+		TotalTokens: totalTokens,
+	})
+	if err != nil {
+		// Log the current task state to help debug why the update matched no rows.
+		if existing, lookupErr := s.Queries.GetAgentTask(ctx, ref.WorkItemID); lookupErr == nil {
+			slog.Warn("complete task failed: task not in running state",
+				"task_id", util.UUIDToString(ref.WorkItemID),
+				"run_id", util.UUIDToString(ref.RunID),
+				"current_status", existing.Status,
+				"issue_id", util.UUIDToString(existing.IssueID),
+				"agent_id", util.UUIDToString(existing.AgentID),
+			)
+		} else {
+			slog.Warn("complete task failed: task not found",
+				"task_id", util.UUIDToString(ref.WorkItemID),
+				"lookup_error", lookupErr,
+			)
+		}
+		return nil, fmt.Errorf("complete task: %w", err)
+	}
 
-	// Finalize trace recording for this task run (existing task_runs table).
-	s.finalizeTrace(ctx, task.ID, task.AgentID, "completed", "", 0, 0, int(totalTokens), string(result))
+	slog.Info("task completed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
 	// End execution trace (new execution_traces table).
-	s.endExecutionTrace(ctx, task.ID, "completed")
+	s.endExecutionTrace(ctx, ref.RunID, "completed")
 
 	// Post agent output as a comment, but only for assignment-triggered tasks.
 	// Comment-triggered tasks: the agent replies via CLI with --parent, so
@@ -499,7 +511,7 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 	s.recordTaskMetric(ctx, task, "completed", payload.DurationMs, tokenInput, tokenOutput, 0, "")
 
 	// Broadcast
-	s.broadcastTaskEvent(ctx, protocol.EventTaskCompleted, task)
+	s.broadcastTaskEvent(ctx, protocol.EventTaskCompleted, task, ref.RunID)
 
 	return &task, nil
 }
@@ -567,47 +579,42 @@ func normalizeMetricTaskType(taskType string) string {
 
 // RetryTask resets a failed or active task back to queued for automatic retry.
 // Returns the updated task if retry was successful, or nil if max retries exceeded.
-func (s *TaskService) RetryTask(ctx context.Context, taskID pgtype.UUID) (*db.AgentTaskQueue, bool, error) {
-	task, err := s.Queries.RetryAgentTask(ctx, taskID)
+func (s *TaskService) RetryTask(ctx context.Context, ref RunRef, errMsg string) (*db.AgentTaskQueue, bool, error) {
+	task, retried, err := s.Lifecycle.RetryActive(ctx, ref, errMsg)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			// Either task not found, not in a retryable state, or max retries exceeded.
-			return nil, false, nil
-		}
 		return nil, false, fmt.Errorf("retry task: %w", err)
+	}
+	if !retried {
+		return nil, false, nil
 	}
 
 	slog.Info("task retry scheduled", "task_id", util.UUIDToString(task.ID),
 		"retry_count", task.RetryCount, "max_retries", task.MaxRetries,
 		"issue_id", util.UUIDToString(task.IssueID))
+	s.endExecutionTrace(ctx, ref.RunID, "failed")
 
 	// Broadcast retry event
-	s.broadcastTaskEvent(ctx, protocol.EventTaskRetry, task)
-
-	// Re-dispatch to gateway if cloud runtime
-	s.broadcastTaskDispatch(ctx, task)
+	s.broadcastTaskEvent(ctx, protocol.EventTaskRetry, task, ref.RunID)
 
 	return &task, true, nil
 }
 
 // FailTask marks a task as failed.
 // Issue status is NOT changed here — the agent manages it via the CLI.
-func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg string) (*db.AgentTaskQueue, error) {
-	task, err := s.Queries.FailAgentTask(ctx, db.FailAgentTaskParams{
-		ID:    taskID,
-		Error: pgtype.Text{String: errMsg, Valid: true},
-	})
+func (s *TaskService) FailTask(ctx context.Context, ref RunRef, errMsg string) (*db.AgentTaskQueue, error) {
+	task, err := s.Lifecycle.Fail(ctx, ref, errMsg)
 	if err != nil {
-		if existing, lookupErr := s.Queries.GetAgentTask(ctx, taskID); lookupErr == nil {
+		if existing, lookupErr := s.Queries.GetAgentTask(ctx, ref.WorkItemID); lookupErr == nil {
 			slog.Warn("fail task failed: task not in dispatched/running state",
-				"task_id", util.UUIDToString(taskID),
+				"task_id", util.UUIDToString(ref.WorkItemID),
+				"run_id", util.UUIDToString(ref.RunID),
 				"current_status", existing.Status,
 				"issue_id", util.UUIDToString(existing.IssueID),
 				"agent_id", util.UUIDToString(existing.AgentID),
 			)
 		} else {
 			slog.Warn("fail task failed: task not found",
-				"task_id", util.UUIDToString(taskID),
+				"task_id", util.UUIDToString(ref.WorkItemID),
 				"lookup_error", lookupErr,
 			)
 		}
@@ -616,11 +623,8 @@ func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg s
 
 	slog.Warn("task failed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID), "error", errMsg)
 
-	// Finalize trace recording for this task run (existing task_runs table).
-	s.finalizeTrace(ctx, task.ID, task.AgentID, "failed", errMsg, 0, 0, 0, "")
-
 	// End execution trace (new execution_traces table).
-	s.endExecutionTrace(ctx, task.ID, "failed")
+	s.endExecutionTrace(ctx, ref.RunID, "failed")
 	if errMsg != "" {
 		s.createAgentComment(ctx, task.IssueID, task.AgentID, redact.Text(errMsg), "system", task.TriggerCommentID)
 	}
@@ -628,25 +632,30 @@ func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg s
 	s.ReconcileAgentStatus(ctx, task.AgentID)
 
 	// Broadcast
-	s.broadcastTaskEvent(ctx, protocol.EventTaskFailed, task)
+	s.broadcastTaskEvent(ctx, protocol.EventTaskFailed, task, ref.RunID)
 
 	return &task, nil
 }
 
 // ReportProgress broadcasts a progress update via the event bus.
-func (s *TaskService) ReportProgress(ctx context.Context, taskID string, workspaceID string, summary string, step, total int) {
+func (s *TaskService) ReportProgress(ctx context.Context, ref RunRef, workspaceID string, summary string, step, total int) error {
+	if _, err := s.Lifecycle.AssertRunning(ctx, ref); err != nil {
+		return err
+	}
 	s.Bus.Publish(events.Event{
 		Type:        protocol.EventTaskProgress,
 		WorkspaceID: workspaceID,
 		ActorType:   "system",
 		ActorID:     "",
 		Payload: protocol.TaskProgressPayload{
-			TaskID:  taskID,
+			TaskID:  util.UUIDToString(ref.WorkItemID),
+			RunID:   util.UUIDToString(ref.RunID),
 			Summary: summary,
 			Step:    step,
 			Total:   total,
 		},
 	})
+	return nil
 }
 
 // AgentStage represents the current stage of agent execution.
@@ -661,18 +670,23 @@ const (
 )
 
 // ReportAgentStage broadcasts an agent stage change via the event bus.
-func (s *TaskService) ReportAgentStage(ctx context.Context, taskID string, agentID string, workspaceID string, stage AgentStage) {
+func (s *TaskService) ReportAgentStage(ctx context.Context, ref RunRef, agentID string, workspaceID string, stage AgentStage) error {
+	if _, err := s.Lifecycle.AssertRunning(ctx, ref); err != nil {
+		return err
+	}
 	s.Bus.Publish(events.Event{
 		Type:        protocol.EventAgentStage,
 		WorkspaceID: workspaceID,
 		ActorType:   "system",
 		ActorID:     agentID,
 		Payload: map[string]any{
-			"task_id":  taskID,
+			"task_id":  util.UUIDToString(ref.WorkItemID),
+			"run_id":   util.UUIDToString(ref.RunID),
 			"agent_id": agentID,
 			"stage":    stage,
 		},
 	})
+	return nil
 }
 
 // ReconcileAgentStatus checks running task count and sets agent status accordingly.
@@ -770,7 +784,7 @@ func priorityToInt(p string) int32 {
 	}
 }
 
-func (s *TaskService) broadcastTaskDispatch(ctx context.Context, task db.AgentTaskQueue) {
+func (s *TaskService) broadcastTaskDispatch(ctx context.Context, task db.AgentTaskQueue, runID pgtype.UUID) {
 	var payload map[string]any
 	if task.Context != nil {
 		json.Unmarshal(task.Context, &payload)
@@ -779,6 +793,7 @@ func (s *TaskService) broadcastTaskDispatch(ctx context.Context, task db.AgentTa
 		payload = map[string]any{}
 	}
 	payload["task_id"] = util.UUIDToString(task.ID)
+	payload["run_id"] = util.UUIDToString(runID)
 	payload["runtime_id"] = util.UUIDToString(task.RuntimeID)
 
 	workspaceID := ""
@@ -853,6 +868,7 @@ func (s *TaskService) broadcastTaskDispatch(ctx context.Context, task db.AgentTa
 		msg, err := json.Marshal(protocol.GatewayTaskDispatchMessage{
 			Type:   protocol.EventTaskDispatch,
 			TaskID: taskIDStr,
+			RunID:  util.UUIDToString(runID),
 			Config: config,
 		})
 		if err != nil {
@@ -869,7 +885,7 @@ func (s *TaskService) broadcastTaskDispatch(ctx context.Context, task db.AgentTa
 	}
 }
 
-func (s *TaskService) broadcastTaskEvent(ctx context.Context, eventType string, task db.AgentTaskQueue) {
+func (s *TaskService) broadcastTaskEvent(ctx context.Context, eventType string, task db.AgentTaskQueue, runIDs ...pgtype.UUID) {
 	workspaceID := ""
 	if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil {
 		workspaceID = util.UUIDToString(issue.WorkspaceID)
@@ -877,17 +893,21 @@ func (s *TaskService) broadcastTaskEvent(ctx context.Context, eventType string, 
 	if workspaceID == "" {
 		return // Issue deleted; skip broadcast to avoid global leak
 	}
+	payload := map[string]any{
+		"task_id":  util.UUIDToString(task.ID),
+		"agent_id": util.UUIDToString(task.AgentID),
+		"issue_id": util.UUIDToString(task.IssueID),
+		"status":   task.Status,
+	}
+	if len(runIDs) > 0 && runIDs[0].Valid {
+		payload["run_id"] = util.UUIDToString(runIDs[0])
+	}
 	s.Bus.Publish(events.Event{
 		Type:        eventType,
 		WorkspaceID: workspaceID,
 		ActorType:   "system",
 		ActorID:     "",
-		Payload: map[string]any{
-			"task_id":  util.UUIDToString(task.ID),
-			"agent_id": util.UUIDToString(task.AgentID),
-			"issue_id": util.UUIDToString(task.IssueID),
-			"status":   task.Status,
-		},
+		Payload:     payload,
 	})
 }
 
@@ -1013,48 +1033,15 @@ func agentToMap(a db.Agent) map[string]any {
 	}
 }
 
-// finalizeTrace completes the trace record for a task run.
-func (s *TaskService) finalizeTrace(ctx context.Context, taskID, agentID pgtype.UUID, status, errorMsg string, exitCode, totalSteps, totalTokens int, output string) {
-	// Find the most recent run for this task.
-	runs, err := s.Queries.ListTaskRunsByTask(ctx, taskID)
-	if err != nil || len(runs) == 0 {
-		slog.Warn("finalize trace: no run found", "task_id", util.UUIDToString(taskID))
-		return
-	}
-	run := runs[0]
-
-	durationMs := 0
-	if run.CompletedAt.Valid && run.StartedAt.Valid {
-		durationMs = int(run.CompletedAt.Time.Sub(run.StartedAt.Time).Milliseconds())
-	}
-
-	_, err = s.Queries.CompleteTaskRun(ctx, db.CompleteTaskRunParams{
-		ID:          run.ID,
-		Status:      status,
-		DurationMs:  pgtype.Int4{Int32: int32(durationMs), Valid: true},
-		ExitCode:    pgtype.Int4{Int32: int32(exitCode), Valid: true},
-		TotalSteps:  pgtype.Int4{Int32: int32(totalSteps), Valid: true},
-		TotalTokens: pgtype.Int4{Int32: int32(totalTokens), Valid: true},
-		TotalCost:   pgtype.Numeric{},
-		Output:      pgtype.Text{String: output, Valid: output != ""},
-		Error:       pgtype.Text{String: errorMsg, Valid: errorMsg != ""},
-	})
-	if err != nil {
-		slog.Warn("finalize trace: failed", "run_id", util.UUIDToString(run.ID), "error", err)
-	} else {
-		slog.Info("trace run finalized", "run_id", util.UUIDToString(run.ID), "status", status)
-	}
-}
-
-// endExecutionTrace ends the execution trace for a task via the TraceService.
-// It looks up the most recent trace for the task and marks it with the given status.
-func (s *TaskService) endExecutionTrace(ctx context.Context, taskID pgtype.UUID, status string) {
+// endExecutionTrace ends the projection for one exact Run. It never guesses
+// an attempt by selecting the most recent Trace for a Work Item.
+func (s *TaskService) endExecutionTrace(ctx context.Context, runID pgtype.UUID, status string) {
 	if s.TraceService == nil || s.TraceService.TraceService == nil {
 		return
 	}
-	trace, err := s.TraceService.GetTraceByTask(ctx, util.UUIDToString(taskID))
+	trace, err := s.TraceService.GetTraceByRun(ctx, util.UUIDToString(runID))
 	if err != nil {
-		slog.Warn("end execution trace: failed to find trace", "task_id", util.UUIDToString(taskID), "error", err)
+		slog.Warn("end execution trace: failed to find trace", "run_id", util.UUIDToString(runID), "error", err)
 		return
 	}
 	if err := s.TraceService.EndTrace(ctx, trace.ID, status); err != nil {

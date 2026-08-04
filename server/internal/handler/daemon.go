@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -316,20 +317,22 @@ func (h *Handler) DaemonHeartbeat(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 	runtimeID := chi.URLParam(r, "runtimeId")
 
-	task, err := h.TaskService.ClaimTaskForRuntime(r.Context(), parseUUID(runtimeID))
+	claimed, err := h.TaskService.ClaimTaskForRuntime(r.Context(), parseUUID(runtimeID))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to claim task: "+err.Error())
 		return
 	}
 
-	if task == nil {
+	if claimed == nil {
 		slog.Debug("no task to claim", "runtime_id", runtimeID)
 		writeJSON(w, http.StatusOK, map[string]any{"task": nil})
 		return
 	}
+	task := claimed.Task
 
 	// Build response with fresh agent data (name + skills).
-	resp := taskToResponse(*task)
+	resp := taskToResponse(task)
+	resp.RunID = uuidToString(claimed.RunID)
 	if agent, err := h.Queries.GetAgent(r.Context(), task.AgentID); err == nil {
 		skills := h.TaskService.LoadAgentSkills(r.Context(), task.AgentID)
 		resp.Agent = &TaskAgentData{
@@ -416,25 +419,56 @@ func (h *Handler) ListPendingTasksByRuntime(w http.ResponseWriter, r *http.Reque
 // Task Lifecycle (called by daemon)
 // ---------------------------------------------------------------------------
 
+func daemonRunRef(taskID, runID string) (service.RunRef, error) {
+	ref := service.RunRef{WorkItemID: parseUUID(taskID), RunID: parseUUID(strings.TrimSpace(runID))}
+	if !ref.WorkItemID.Valid || !ref.RunID.Valid {
+		return service.RunRef{}, fmt.Errorf("run_id is required")
+	}
+	return ref, nil
+}
+
+func writeRunTransitionError(w http.ResponseWriter, err error) {
+	if errors.Is(err, service.ErrStaleRun) {
+		writeError(w, http.StatusConflict, service.ErrStaleRun.Error())
+		return
+	}
+	writeError(w, http.StatusBadRequest, err.Error())
+}
+
 // StartTask marks a dispatched task as running.
+type TaskStartRequest struct {
+	RunID string `json:"run_id"`
+}
+
 func (h *Handler) StartTask(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "taskId")
-
-	started, err := h.TaskService.StartTask(r.Context(), parseUUID(taskID))
+	var req TaskStartRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	ref, err := daemonRunRef(taskID, req.RunID)
 	if err != nil {
-		slog.Warn("start task failed", "task_id", taskID, "error", err)
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	resp := taskToResponse(started.Task)
-	resp.RunID = uuidToString(started.RunID)
-	slog.Info("task started", "task_id", taskID, "run_id", resp.RunID, "agent_id", uuidToString(started.Task.AgentID))
+	started, err := h.TaskService.StartTask(r.Context(), ref)
+	if err != nil {
+		slog.Warn("start task failed", "task_id", taskID, "error", err)
+		writeRunTransitionError(w, err)
+		return
+	}
+
+	resp := taskToResponse(*started)
+	resp.RunID = req.RunID
+	slog.Info("task started", "task_id", taskID, "run_id", resp.RunID, "agent_id", uuidToString(started.AgentID))
 	writeJSON(w, http.StatusOK, resp)
 }
 
 // ReportTaskProgress broadcasts a progress update.
 type TaskProgressRequest struct {
+	RunID   string `json:"run_id"`
 	Summary string `json:"summary"`
 	Step    int    `json:"step"`
 	Total   int    `json:"total"`
@@ -448,22 +482,31 @@ func (h *Handler) ReportTaskProgress(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	ref, err := daemonRunRef(taskID, req.RunID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	// Look up task to get workspace ID via the associated issue.
 	workspaceID := ""
-	task, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
+	task, err := h.Queries.GetAgentTask(r.Context(), ref.WorkItemID)
 	if err == nil {
 		if issue, err := h.Queries.GetIssue(r.Context(), task.IssueID); err == nil {
 			workspaceID = uuidToString(issue.WorkspaceID)
 		}
 	}
 
-	h.TaskService.ReportProgress(r.Context(), taskID, workspaceID, req.Summary, req.Step, req.Total)
+	if err := h.TaskService.ReportProgress(r.Context(), ref, workspaceID, req.Summary, req.Step, req.Total); err != nil {
+		writeRunTransitionError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // ReportAgentStage receives an agent stage change from the daemon.
 type TaskStageRequest struct {
+	RunID string `json:"run_id"`
 	Stage string `json:"stage"` // "reading", "implementing", "testing", "committing", "done"
 }
 
@@ -475,8 +518,13 @@ func (h *Handler) ReportAgentStage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	ref, err := daemonRunRef(taskID, req.RunID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
-	task, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
+	task, err := h.Queries.GetAgentTask(r.Context(), ref.WorkItemID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "task not found")
 		return
@@ -487,12 +535,16 @@ func (h *Handler) ReportAgentStage(w http.ResponseWriter, r *http.Request) {
 		workspaceID = uuidToString(issue.WorkspaceID)
 	}
 
-	h.TaskService.ReportAgentStage(r.Context(), taskID, uuidToString(task.AgentID), workspaceID, service.AgentStage(req.Stage))
+	if err := h.TaskService.ReportAgentStage(r.Context(), ref, uuidToString(task.AgentID), workspaceID, service.AgentStage(req.Stage)); err != nil {
+		writeRunTransitionError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // CompleteTask marks a running task as completed.
 type TaskCompleteRequest struct {
+	RunID      string                   `json:"run_id"`
 	PRURL      string                   `json:"pr_url"`
 	Output     string                   `json:"output"`
 	SessionID  string                   `json:"session_id"` // provider session ID for future resumption
@@ -503,6 +555,7 @@ type TaskCompleteRequest struct {
 }
 
 type TaskSessionCheckpointRequest struct {
+	RunID     string `json:"run_id"`
 	SessionID string `json:"session_id"`
 	WorkDir   string `json:"work_dir"`
 }
@@ -522,7 +575,12 @@ func (h *Handler) CheckpointTaskSession(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "session_id and work_dir are required")
 		return
 	}
-	taskRecord, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
+	ref, err := daemonRunRef(taskID, req.RunID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	taskRecord, err := h.Queries.GetAgentTask(r.Context(), ref.WorkItemID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "task not found")
 		return
@@ -536,10 +594,10 @@ func (h *Handler) CheckpointTaskSession(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	task, err := h.TaskService.CheckpointTaskSession(r.Context(), parseUUID(taskID), req.SessionID, req.WorkDir)
+	task, err := h.TaskService.CheckpointTaskSession(r.Context(), ref, req.SessionID, req.WorkDir)
 	if err != nil {
 		slog.Warn("checkpoint task session failed", "task_id", taskID, "error", err)
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeRunTransitionError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, taskToResponse(*task))
@@ -557,12 +615,17 @@ func (h *Handler) CompleteTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	ref, err := daemonRunRef(taskID, req.RunID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	result, _ := json.Marshal(req)
-	task, err := h.TaskService.CompleteTask(r.Context(), parseUUID(taskID), result, req.SessionID, req.WorkDir)
+	task, err := h.TaskService.CompleteTask(r.Context(), ref, result, req.SessionID, req.WorkDir)
 	if err != nil {
 		slog.Warn("complete task failed", "task_id", taskID, "error", err)
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeRunTransitionError(w, err)
 		return
 	}
 
@@ -604,9 +667,14 @@ func validateTaskCompletion(req TaskCompleteRequest) error {
 // Used by the daemon to check whether a task was cancelled mid-execution.
 func (h *Handler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "taskId")
-	task, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
+	ref, err := daemonRunRef(taskID, r.URL.Query().Get("run_id"))
 	if err != nil {
-		writeError(w, http.StatusNotFound, "task not found")
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	task, err := h.TaskService.Lifecycle.Status(r.Context(), ref)
+	if err != nil {
+		writeRunTransitionError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": task.Status})
@@ -614,6 +682,7 @@ func (h *Handler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 
 // FailTask marks a running task as failed.
 type TaskFailRequest struct {
+	RunID string `json:"run_id"`
 	Error string `json:"error"`
 }
 
@@ -625,11 +694,16 @@ func (h *Handler) FailTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	ref, err := daemonRunRef(taskID, req.RunID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
-	task, err := h.TaskService.FailTask(r.Context(), parseUUID(taskID), req.Error)
+	task, err := h.TaskService.FailTask(r.Context(), ref, req.Error)
 	if err != nil {
 		slog.Warn("fail task failed", "task_id", taskID, "error", err)
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeRunTransitionError(w, err)
 		return
 	}
 
@@ -708,7 +782,7 @@ func (h *Handler) persistTaskMessage(ctx context.Context, task db.AgentTaskQueue
 		}
 	}
 
-	inserted, err := h.Queries.CreateTaskMessage(ctx, db.CreateTaskMessageParams{
+	outcome, err := h.Queries.CreateTaskMessage(ctx, db.CreateTaskMessageParams{
 		TaskID:  task.ID,
 		RunID:   runID,
 		Seq:     int32(msg.Seq),
@@ -721,7 +795,10 @@ func (h *Handler) persistTaskMessage(ctx context.Context, task db.AgentTaskQueue
 	if err != nil {
 		return false, fmt.Errorf("persist task message: %w", err)
 	}
-	if inserted == 0 {
+	if !outcome.Active {
+		return false, service.ErrStaleRun
+	}
+	if !outcome.Inserted {
 		return false, nil
 	}
 
@@ -745,13 +822,17 @@ func (h *Handler) persistTaskMessage(ctx context.Context, task db.AgentTaskQueue
 // RecordGatewayTaskLog validates tenant ownership and normalizes a cloud
 // gateway stdout/stderr frame into the same persisted task_message stream used
 // by local daemons.
-func (h *Handler) RecordGatewayTaskLog(ctx context.Context, workspaceID, taskID string, seq int, stream, content string) error {
+func (h *Handler) RecordGatewayTaskLog(ctx context.Context, workspaceID, taskID, runID string, seq int, stream, content string) error {
 	task, err := h.TaskService.ValidateCloudGatewayTask(ctx, workspaceID, taskID)
 	if err != nil {
 		return err
 	}
-	if task.Status != "dispatched" && task.Status != "running" {
-		return fmt.Errorf("cloud gateway task is not active")
+	ref, err := daemonRunRef(taskID, runID)
+	if err != nil {
+		return err
+	}
+	if _, err := h.TaskService.Lifecycle.AssertRunning(ctx, ref); err != nil {
+		return err
 	}
 
 	messageType := "text"
@@ -764,17 +845,13 @@ func (h *Handler) RecordGatewayTaskLog(ctx context.Context, workspaceID, taskID 
 	if err := validateTaskMessage(msg); err != nil {
 		return err
 	}
-	run, err := h.Queries.GetLatestRunningTaskRun(ctx, task.ID)
-	if err != nil {
-		return fmt.Errorf("cloud gateway task has no active run: %w", err)
-	}
 	traceID := ""
 	if h.TraceService != nil && h.TraceService.TraceService != nil {
-		if trace, lookupErr := h.TraceService.GetTraceByRun(ctx, uuidToString(run.ID)); lookupErr == nil {
+		if trace, lookupErr := h.TraceService.GetTraceByRun(ctx, runID); lookupErr == nil {
 			traceID = trace.ID
 		}
 	}
-	_, err = h.persistTaskMessage(ctx, task, run.ID, workspaceID, traceID, msg)
+	_, err = h.persistTaskMessage(ctx, task, ref.RunID, workspaceID, traceID, msg)
 	return err
 }
 
@@ -841,6 +918,10 @@ func (h *Handler) ReportTaskMessages(w http.ResponseWriter, r *http.Request) {
 
 	for _, msg := range req.Messages {
 		if _, err := h.persistTaskMessage(r.Context(), task, runID, workspaceID, traceID, msg); err != nil {
+			if errors.Is(err, service.ErrStaleRun) {
+				writeRunTransitionError(w, err)
+				return
+			}
 			slog.Error("report task messages: persist failed", "task_id", taskID, "error", err)
 			writeError(w, http.StatusInternalServerError, "failed to persist task messages")
 			return

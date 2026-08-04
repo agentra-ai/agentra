@@ -11,6 +11,7 @@ type Message struct {
 // TaskDispatchPayload is sent from server to daemon when a task is assigned.
 type TaskDispatchPayload struct {
 	TaskID      string `json:"task_id"`
+	RunID       string `json:"run_id"`
 	IssueID     string `json:"issue_id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
@@ -19,6 +20,7 @@ type TaskDispatchPayload struct {
 // TaskProgressPayload is sent from daemon to server during task execution.
 type TaskProgressPayload struct {
 	TaskID  string `json:"task_id"`
+	RunID   string `json:"run_id"`
 	Summary string `json:"summary"`
 	Step    int    `json:"step,omitempty"`
 	Total   int    `json:"total,omitempty"`
@@ -27,6 +29,7 @@ type TaskProgressPayload struct {
 // TaskCompletedPayload is sent from daemon to server when a task finishes.
 type TaskCompletedPayload struct {
 	TaskID     string          `json:"task_id"`
+	RunID      string          `json:"run_id,omitempty"`
 	PRURL      string          `json:"pr_url,omitempty"`
 	Output     string          `json:"output,omitempty"`
 	DurationMs int64           `json:"duration_ms,omitempty"`

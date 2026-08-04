@@ -129,7 +129,7 @@ type AgentTaskResponse struct {
 	RuntimeType      string         `json:"runtime_type"`                 // "local" or "cloud"
 	TaskType         string         `json:"task_type,omitempty"`          // "standard" (default) or loop_plan/develop/review/fix
 	LoopID           string         `json:"loop_id,omitempty"`            // set when TaskType starts with "loop_"; identifies the loop row in `loops`
-	RunID            string         `json:"run_id,omitempty"`             // current execution attempt; populated by the start response
+	RunID            string         `json:"run_id,omitempty"`             // active execution attempt, allocated when the task is dispatched
 	Branch           string         `json:"branch,omitempty"`             // for loop_review/loop_fix: the develop stage's branch from loops.branch_name
 	Iteration        int            `json:"iteration,omitempty"`          // for loop_fix: the current fix iteration from loops.iteration
 }
@@ -165,6 +165,7 @@ func taskToResponse(t db.AgentTaskQueue) AgentTaskResponse {
 		RuntimeType:      t.RuntimeType,
 		TaskType:         t.TaskType,
 		LoopID:           uuidToString(t.LoopID),
+		RunID:            uuidToString(t.ActiveRunID),
 	}
 }
 

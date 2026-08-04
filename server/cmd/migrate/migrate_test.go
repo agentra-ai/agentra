@@ -82,10 +82,14 @@ func TestMigrationsApplyCleanlyAgainstFreshSchema(t *testing.T) {
 	sort.Strings(files)
 
 	var historicalTaskID string
+	var activeRunHistory activeRunHistoryFixture
 	for _, file := range files {
 		version := extractVersion(file)
 		if version == "049_run_identity" {
 			historicalTaskID = seedRunIdentityHistory(t, ctx, pool)
+		}
+		if version == "050_active_run_lifecycle" {
+			activeRunHistory = seedActiveRunHistory(t, ctx, pool)
 		}
 		sqlBytes, err := os.ReadFile(file)
 		if err != nil {
@@ -105,6 +109,7 @@ func TestMigrationsApplyCleanlyAgainstFreshSchema(t *testing.T) {
 	}
 
 	assertRunIdentityHistory(t, ctx, pool, historicalTaskID)
+	assertActiveRunHistory(t, ctx, pool, activeRunHistory)
 
 	// Representative tables from each previously-broken migration plus the
 	// core tables the schema is built around. If any of these are missing,
@@ -142,6 +147,193 @@ func TestMigrationsApplyCleanlyAgainstFreshSchema(t *testing.T) {
 		if !exists {
 			t.Errorf("expected table %q to exist after migrations, but it does not", table)
 		}
+	}
+
+	assertActiveRunLifecycleRollback(t, ctx, pool, migrationsDir, activeRunHistory)
+}
+
+type activeRunHistoryFixture struct {
+	runningTaskID    string
+	dispatchedTaskID string
+	newestRunID      string
+	olderRunID       string
+}
+
+// seedActiveRunHistory captures the states left by the pre-050 lifecycle:
+// retries could leave duplicate running Runs, while a dispatched Work Item did
+// not receive a Run until its runtime acknowledged start.
+func seedActiveRunHistory(t *testing.T, ctx context.Context, pool *pgxpool.Pool) activeRunHistoryFixture {
+	t.Helper()
+	var workspaceID, runtimeID, agentID, userID string
+	if err := pool.QueryRow(ctx, `
+		SELECT a.workspace_id, a.runtime_id, a.id, a.owner_id
+		FROM agent a
+		ORDER BY a.created_at
+		LIMIT 1
+	`).Scan(&workspaceID, &runtimeID, &agentID, &userID); err != nil {
+		t.Fatalf("load active-run migration principals: %v", err)
+	}
+
+	createIssue := func(title string) string {
+		var issueID string
+		if err := pool.QueryRow(ctx, `
+			INSERT INTO issue (workspace_id, number, title, creator_type, creator_id)
+			VALUES (
+				$1,
+				(SELECT COALESCE(max(number), 0) + 1 FROM issue WHERE workspace_id = $1),
+				$2,
+				'member',
+				$3
+			)
+			RETURNING id
+		`, workspaceID, title, userID).Scan(&issueID); err != nil {
+			t.Fatalf("seed active-run issue: %v", err)
+		}
+		return issueID
+	}
+
+	fixture := activeRunHistoryFixture{}
+	runningIssueID := createIssue("Duplicate active Runs")
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO agent_task_queue (
+			agent_id, issue_id, status, runtime_id, dispatched_at, started_at,
+			session_id, work_dir
+		)
+		VALUES (
+			$1, $2, 'running', $3, now() - interval '5 minutes',
+			now() - interval '4 minutes', 'resume-session', '/tmp/resume-work'
+		)
+		RETURNING id
+	`, agentID, runningIssueID, runtimeID).Scan(&fixture.runningTaskID); err != nil {
+		t.Fatalf("seed running work item: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO task_runs (task_id, agent_id, status, started_at, created_at)
+		VALUES ($1, $2, 'running', now() - interval '4 minutes', now() - interval '4 minutes')
+		RETURNING id
+	`, fixture.runningTaskID, agentID).Scan(&fixture.olderRunID); err != nil {
+		t.Fatalf("seed older active run: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO task_runs (task_id, agent_id, status, started_at, created_at)
+		VALUES ($1, $2, 'running', now() - interval '2 minutes', now() - interval '2 minutes')
+		RETURNING id
+	`, fixture.runningTaskID, agentID).Scan(&fixture.newestRunID); err != nil {
+		t.Fatalf("seed newest active run: %v", err)
+	}
+
+	dispatchedIssueID := createIssue("Legacy dispatched Work Item")
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO agent_task_queue (
+			agent_id, issue_id, status, runtime_id, dispatched_at
+		)
+		VALUES ($1, $2, 'dispatched', $3, now())
+		RETURNING id
+	`, agentID, dispatchedIssueID, runtimeID).Scan(&fixture.dispatchedTaskID); err != nil {
+		t.Fatalf("seed dispatched work item: %v", err)
+	}
+	return fixture
+}
+
+func assertActiveRunHistory(t *testing.T, ctx context.Context, pool *pgxpool.Pool, fixture activeRunHistoryFixture) {
+	t.Helper()
+	if fixture.runningTaskID == "" || fixture.dispatchedTaskID == "" {
+		t.Fatal("active-run lifecycle migration fixture was not created")
+	}
+
+	var activeRunID, sessionID, workDir string
+	var activeCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT atq.active_run_id, tr.session_id, tr.work_dir,
+		       (SELECT count(*) FROM task_runs active
+		        WHERE active.task_id = atq.id AND active.status IN ('dispatched', 'running'))
+		FROM agent_task_queue atq
+		JOIN task_runs tr ON tr.id = atq.active_run_id
+		WHERE atq.id = $1 AND atq.status = 'running'
+	`, fixture.runningTaskID).Scan(&activeRunID, &sessionID, &workDir, &activeCount); err != nil {
+		t.Fatalf("read repaired running lifecycle: %v", err)
+	}
+	if activeRunID != fixture.newestRunID || activeCount != 1 || sessionID != "resume-session" || workDir != "/tmp/resume-work" {
+		t.Fatalf("repaired running lifecycle = run:%s count:%d session:%q work:%q", activeRunID, activeCount, sessionID, workDir)
+	}
+
+	var olderStatus string
+	var olderCompleted bool
+	if err := pool.QueryRow(ctx, `
+		SELECT status, completed_at IS NOT NULL FROM task_runs WHERE id = $1
+	`, fixture.olderRunID).Scan(&olderStatus, &olderCompleted); err != nil {
+		t.Fatalf("read superseded run: %v", err)
+	}
+	if olderStatus != "failed" || !olderCompleted {
+		t.Fatalf("superseded run = status:%q completed:%v, want failed/true", olderStatus, olderCompleted)
+	}
+
+	var dispatchedRunID, dispatchedStatus string
+	if err := pool.QueryRow(ctx, `
+		SELECT atq.active_run_id, tr.status
+		FROM agent_task_queue atq
+		JOIN task_runs tr ON tr.id = atq.active_run_id
+		WHERE atq.id = $1
+	`, fixture.dispatchedTaskID).Scan(&dispatchedRunID, &dispatchedStatus); err != nil {
+		t.Fatalf("read repaired dispatched lifecycle: %v", err)
+	}
+	if dispatchedRunID == "" || dispatchedStatus != "dispatched" {
+		t.Fatalf("repaired dispatched lifecycle = run:%q status:%q", dispatchedRunID, dispatchedStatus)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO task_runs (task_id, agent_id, status, started_at)
+		SELECT id, agent_id, 'running', now() FROM agent_task_queue WHERE id = $1
+	`, fixture.runningTaskID); err == nil {
+		t.Fatal("active Run uniqueness accepted a second running Run")
+	}
+}
+
+func assertActiveRunLifecycleRollback(
+	t *testing.T,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	migrationsDir string,
+	fixture activeRunHistoryFixture,
+) {
+	t.Helper()
+	downFile := filepath.Join(migrationsDir, "050_active_run_lifecycle.down.sql")
+	sqlBytes, err := os.ReadFile(downFile)
+	if err != nil {
+		t.Fatalf("read active-run rollback: %v", err)
+	}
+	if _, err := pool.Exec(ctx, string(sqlBytes)); err != nil {
+		t.Fatalf("rollback active-run lifecycle: %v", err)
+	}
+
+	for _, target := range []struct {
+		table  string
+		column string
+	}{
+		{table: "agent_task_queue", column: "active_run_id"},
+		{table: "task_runs", column: "session_id"},
+		{table: "task_runs", column: "work_dir"},
+	} {
+		var exists bool
+		if err := pool.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_schema = current_schema()
+				  AND table_name = $1
+				  AND column_name = $2
+			)
+		`, target.table, target.column).Scan(&exists); err != nil {
+			t.Fatalf("check rolled-back column %s.%s: %v", target.table, target.column, err)
+		}
+		if exists {
+			t.Fatalf("column %s.%s still exists after rollback", target.table, target.column)
+		}
+	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE task_runs SET status = 'dispatched' WHERE id = $1
+	`, fixture.newestRunID); err == nil {
+		t.Fatal("rolled-back task_runs status constraint accepted dispatched")
 	}
 }
 

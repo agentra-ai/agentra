@@ -1,7 +1,7 @@
 # M3A Durable Run-Aware Lifecycle Spine
 
-> 日期：2026-08-04  
-> 状态：设计收口；M3A-01a 第一条纵向切片已实现  
+> 日期：2026-08-05
+> 状态：M3A-01a 本地验收通过；M3A-01b outbox 待实施
 > 范围：`M3-01` 的执行事实统一，不提前实现 Work Graph scheduler
 
 ## 问题定义
@@ -36,28 +36,41 @@ Loop 的易丢进程内推进以及“缺 task 就重跑”的恢复猜测。否
 
 ### M3A-01a — Run Identity & Attempt Isolation
 
-- Work Item 从 dispatched → running 时原子创建 Run，并向 daemon 返回 `run_id`；
+- Work Item 在 claim/dispatch 时原子创建 Run 并写入 `active_run_id`，然后向
+  daemon 或 Cloud Gateway 返回同一个 `run_id`；
 - message、session checkpoint、complete 和 fail callback 必须携带 `run_id`；
 - server 只接受当前 active Run 的 callback，旧 Run callback 明确冲突；
 - message 唯一键迁移为 `(run_id, seq)`；
 - execution Trace 绑定 `run_id`，停止按 task 的“最新记录”猜 attempt；
 - retry 回归证明两个 Run 都能保留从 1 开始的消息序列。
 
-实施状态（2026-08-04）：
+实施状态（2026-08-05）：
 
-- 已完成：dispatched → running 与 Run 创建原子化，Start API/daemon 传递
-  `run_id`；task message 和 execution Trace 绑定 Run；消息去重改为
-  `(run_id, seq)`；stale Run 消息返回冲突；前端快照和实时流按 Run 隔离；
-- 已覆盖：旧库多 Trace、少 Run 的迁移回填；同一 Work Item 两次 Run 都保存
-  `seq=1` 且读取只显示 active/latest Run；
-- 待完成：session、progress/stage、complete、fail 和 cloud terminal callback
-  携带并校验 `run_id`，usage/artifact/finalize Trace 停止按“最新 task 记录”猜 Run。
+- 已完成：claim/dispatch 原子分配 Run；`agent_task_queue.active_run_id` 成为当前
+  attempt 指针；Start、Checkpoint、Complete、Fail、Retry、Cancel 进入事务型
+  `RunLifecycle` Module；Work Item 与 Run 在同一事务锁定并校验 expected state；
+- 已完成：local daemon 与 Cloud Gateway Adapter 的 dispatch、start、log、message、
+  session、progress/stage、complete、fail、status 全链路携带并校验 `run_id`；
+- 已完成：completion usage/artifact 输出与 execution Trace 精确写入指定 Run，删除
+  “按 task 找最新 Run/Trace”的终态猜测；前端 dispatch、message、stage、terminal
+  事件按 Run 隔离，旧 Run 的延迟事件不能清空新 Run 的 live card；
+- 已覆盖：旧库重复 running Run、无 Run 的 dispatched Work Item、Run session 回填、
+  active Run 唯一约束；同一 Work Item 两次 Run 各自保存 `seq=1`；Run A 的全部
+  HTTP callback 返回 409 且不会改变运行中的 Run B 或写入 comment/metric 投影；
+  message insert 与 terminal transition 并发时由同一 Work Item lock 串行化，终态后
+  不会留下消息；
+- 已验证：隔离 schema migration 历史修复、7 条核心 HTTP/Cloud Gateway 回归、
+  UI Run-event 单元测试以及最终完整 `make check` 均通过。开发库没有应用未提交
+  迁移；验证使用独立端口和自动销毁的临时数据库，完成后开发站点返回 HTTP 200。
 
-因此本次落地是 M3A-01a 的可运行第一条纵向切片，不将 M3A-01a 整体标记完成。
+M3A-01a 不再受 Docker 或网络阻塞。剩余的 durable event、幂等投影和
+Engineering Loop 消费属于 M3A-01b/01c，不能混写成 M3A-01a 未完成。
 
 ### M3A-01b — Transactional Lifecycle & Durable Outbox
 
-- Start、Complete、Fail、Cancel、Retry 通过一个事务型 Lifecycle Interface 写入；
+- Start、Checkpoint、Complete、Fail、Cancel、Retry 已通过一个事务型 Lifecycle
+  Interface 写入；runtime recovery、timeout 和 bulk cancel 目前使用等价的原子 SQL，
+  后续收口到同一个 durable-event Seam；
 - 每个成功 transition 同事务追加 versioned outbox event；
 - realtime、metrics、Trace 和 notifications 改为幂等投影；
 - 注入状态提交后、事件投递前的崩溃，证明重启后事件不会丢失。
@@ -80,12 +93,13 @@ Loop 的易丢进程内推进以及“缺 task 就重跑”的恢复猜测。否
 
 ## M3A-01a 验收门
 
-- Start transition 与 Run 创建不可出现一半成功；
-- 每个 daemon callback 都被绑定到 active `run_id`；
+- claim/dispatch 与 Run 创建不可出现一半成功；
+- 每个 local daemon 与 Cloud Gateway callback 都被绑定到 active `run_id`；
 - stale callback 返回明确冲突且不改变 Work Item；
 - 同一 Work Item 连续两个 Run 可各自保存 `seq=1..N`；
 - Run A 的 session、usage、artifact 和 Trace 不进入 Run B；
-- crash-resume 继续同一 Run，普通 retry 创建新 Run；
+- process crash/retry 关闭旧 Run，新 claim 创建新 Run；新 Run 可显式继承旧 Run
+  保存的 provider session checkpoint，但不会复用旧 Run identity；
 - 数据迁移、API、daemon client、跨租户和完整 `make check` 均有回归。
 
 ## 状态判定

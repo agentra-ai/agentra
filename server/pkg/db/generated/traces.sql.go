@@ -11,6 +11,43 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const checkpointTaskRun = `-- name: CheckpointTaskRun :one
+UPDATE task_runs
+SET session_id = $2, work_dir = $3
+WHERE id = $1 AND status = 'running'
+RETURNING id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at, session_id, work_dir
+`
+
+type CheckpointTaskRunParams struct {
+	ID        pgtype.UUID `json:"id"`
+	SessionID pgtype.Text `json:"session_id"`
+	WorkDir   pgtype.Text `json:"work_dir"`
+}
+
+func (q *Queries) CheckpointTaskRun(ctx context.Context, arg CheckpointTaskRunParams) (TaskRun, error) {
+	row := q.db.QueryRow(ctx, checkpointTaskRun, arg.ID, arg.SessionID, arg.WorkDir)
+	var i TaskRun
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.AgentID,
+		&i.Status,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.DurationMs,
+		&i.ExitCode,
+		&i.TotalSteps,
+		&i.TotalTokens,
+		&i.TotalCost,
+		&i.Output,
+		&i.Error,
+		&i.CreatedAt,
+		&i.SessionID,
+		&i.WorkDir,
+	)
+	return i, err
+}
+
 const completeTaskRun = `-- name: CompleteTaskRun :one
 UPDATE task_runs SET
     status = COALESCE($2, status),
@@ -21,9 +58,11 @@ UPDATE task_runs SET
     total_tokens = $6,
     total_cost = $7,
     output = $8,
-    error = $9
+    error = $9,
+    session_id = $10,
+    work_dir = $11
 WHERE id = $1
-RETURNING id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at
+RETURNING id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at, session_id, work_dir
 `
 
 type CompleteTaskRunParams struct {
@@ -36,6 +75,8 @@ type CompleteTaskRunParams struct {
 	TotalCost   pgtype.Numeric `json:"total_cost"`
 	Output      pgtype.Text    `json:"output"`
 	Error       pgtype.Text    `json:"error"`
+	SessionID   pgtype.Text    `json:"session_id"`
+	WorkDir     pgtype.Text    `json:"work_dir"`
 }
 
 func (q *Queries) CompleteTaskRun(ctx context.Context, arg CompleteTaskRunParams) (TaskRun, error) {
@@ -49,6 +90,8 @@ func (q *Queries) CompleteTaskRun(ctx context.Context, arg CompleteTaskRunParams
 		arg.TotalCost,
 		arg.Output,
 		arg.Error,
+		arg.SessionID,
+		arg.WorkDir,
 	)
 	var i TaskRun
 	err := row.Scan(
@@ -66,6 +109,8 @@ func (q *Queries) CompleteTaskRun(ctx context.Context, arg CompleteTaskRunParams
 		&i.Output,
 		&i.Error,
 		&i.CreatedAt,
+		&i.SessionID,
+		&i.WorkDir,
 	)
 	return i, err
 }
@@ -112,39 +157,6 @@ func (q *Queries) CreateExecutionTrace(ctx context.Context, arg CreateExecutionT
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.RunID,
-	)
-	return i, err
-}
-
-const createTaskRun = `-- name: CreateTaskRun :one
-INSERT INTO task_runs (task_id, agent_id, status, started_at)
-VALUES ($1, $2, 'running', NOW())
-RETURNING id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at
-`
-
-type CreateTaskRunParams struct {
-	TaskID  pgtype.UUID `json:"task_id"`
-	AgentID pgtype.UUID `json:"agent_id"`
-}
-
-func (q *Queries) CreateTaskRun(ctx context.Context, arg CreateTaskRunParams) (TaskRun, error) {
-	row := q.db.QueryRow(ctx, createTaskRun, arg.TaskID, arg.AgentID)
-	var i TaskRun
-	err := row.Scan(
-		&i.ID,
-		&i.TaskID,
-		&i.AgentID,
-		&i.Status,
-		&i.StartedAt,
-		&i.CompletedAt,
-		&i.DurationMs,
-		&i.ExitCode,
-		&i.TotalSteps,
-		&i.TotalTokens,
-		&i.TotalCost,
-		&i.Output,
-		&i.Error,
-		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -243,36 +255,39 @@ func (q *Queries) GetExecutionTraceByRun(ctx context.Context, runID pgtype.UUID)
 	return i, err
 }
 
-const getExecutionTraceByTask = `-- name: GetExecutionTraceByTask :one
-SELECT id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at, run_id FROM execution_traces WHERE task_id = $1 ORDER BY created_at DESC LIMIT 1
+const getLatestTaskRun = `-- name: GetLatestTaskRun :one
+SELECT id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at, session_id, work_dir FROM task_runs
+WHERE task_id = $1
+ORDER BY created_at DESC, id DESC
+LIMIT 1
 `
 
-func (q *Queries) GetExecutionTraceByTask(ctx context.Context, taskID pgtype.UUID) (ExecutionTrace, error) {
-	row := q.db.QueryRow(ctx, getExecutionTraceByTask, taskID)
-	var i ExecutionTrace
+func (q *Queries) GetLatestTaskRun(ctx context.Context, taskID pgtype.UUID) (TaskRun, error) {
+	row := q.db.QueryRow(ctx, getLatestTaskRun, taskID)
+	var i TaskRun
 	err := row.Scan(
 		&i.ID,
 		&i.TaskID,
 		&i.AgentID,
-		&i.IssueID,
-		&i.Provider,
-		&i.Model,
-		&i.Steps,
-		&i.Tools,
-		&i.Tokens,
-		&i.Cost,
-		&i.StartTime,
-		&i.EndTime,
 		&i.Status,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.DurationMs,
+		&i.ExitCode,
+		&i.TotalSteps,
+		&i.TotalTokens,
+		&i.TotalCost,
+		&i.Output,
+		&i.Error,
 		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.RunID,
+		&i.SessionID,
+		&i.WorkDir,
 	)
 	return i, err
 }
 
 const getTaskRun = `-- name: GetTaskRun :one
-SELECT id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at FROM task_runs WHERE id = $1
+SELECT id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at, session_id, work_dir FROM task_runs WHERE id = $1
 `
 
 func (q *Queries) GetTaskRun(ctx context.Context, id pgtype.UUID) (TaskRun, error) {
@@ -293,6 +308,36 @@ func (q *Queries) GetTaskRun(ctx context.Context, id pgtype.UUID) (TaskRun, erro
 		&i.Output,
 		&i.Error,
 		&i.CreatedAt,
+		&i.SessionID,
+		&i.WorkDir,
+	)
+	return i, err
+}
+
+const getTaskRunForUpdate = `-- name: GetTaskRunForUpdate :one
+SELECT id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at, session_id, work_dir FROM task_runs WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) GetTaskRunForUpdate(ctx context.Context, id pgtype.UUID) (TaskRun, error) {
+	row := q.db.QueryRow(ctx, getTaskRunForUpdate, id)
+	var i TaskRun
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.AgentID,
+		&i.Status,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.DurationMs,
+		&i.ExitCode,
+		&i.TotalSteps,
+		&i.TotalTokens,
+		&i.TotalCost,
+		&i.Output,
+		&i.Error,
+		&i.CreatedAt,
+		&i.SessionID,
+		&i.WorkDir,
 	)
 	return i, err
 }
@@ -425,7 +470,7 @@ func (q *Queries) ListExecutionTracesByIssue(ctx context.Context, issueID pgtype
 }
 
 const listTaskRuns = `-- name: ListTaskRuns :many
-SELECT id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at FROM task_runs WHERE agent_id = $1 ORDER BY created_at DESC LIMIT $2
+SELECT id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at, session_id, work_dir FROM task_runs WHERE agent_id = $1 ORDER BY created_at DESC LIMIT $2
 `
 
 type ListTaskRunsParams struct {
@@ -457,6 +502,8 @@ func (q *Queries) ListTaskRuns(ctx context.Context, arg ListTaskRunsParams) ([]T
 			&i.Output,
 			&i.Error,
 			&i.CreatedAt,
+			&i.SessionID,
+			&i.WorkDir,
 		); err != nil {
 			return nil, err
 		}
@@ -469,7 +516,7 @@ func (q *Queries) ListTaskRuns(ctx context.Context, arg ListTaskRunsParams) ([]T
 }
 
 const listTaskRunsByTask = `-- name: ListTaskRunsByTask :many
-SELECT id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at FROM task_runs WHERE task_id = $1 ORDER BY created_at DESC
+SELECT id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at, session_id, work_dir FROM task_runs WHERE task_id = $1 ORDER BY created_at DESC
 `
 
 func (q *Queries) ListTaskRunsByTask(ctx context.Context, taskID pgtype.UUID) ([]TaskRun, error) {
@@ -496,6 +543,8 @@ func (q *Queries) ListTaskRunsByTask(ctx context.Context, taskID pgtype.UUID) ([
 			&i.Output,
 			&i.Error,
 			&i.CreatedAt,
+			&i.SessionID,
+			&i.WorkDir,
 		); err != nil {
 			return nil, err
 		}
@@ -639,6 +688,42 @@ func (q *Queries) RecordTraceSteps(ctx context.Context, arg RecordTraceStepsPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const setTaskRunRunning = `-- name: SetTaskRunRunning :one
+UPDATE task_runs
+SET status = 'running', started_at = NOW()
+WHERE id = $1 AND task_id = $2 AND status = 'dispatched'
+RETURNING id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at, session_id, work_dir
+`
+
+type SetTaskRunRunningParams struct {
+	ID     pgtype.UUID `json:"id"`
+	TaskID pgtype.UUID `json:"task_id"`
+}
+
+func (q *Queries) SetTaskRunRunning(ctx context.Context, arg SetTaskRunRunningParams) (TaskRun, error) {
+	row := q.db.QueryRow(ctx, setTaskRunRunning, arg.ID, arg.TaskID)
+	var i TaskRun
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.AgentID,
+		&i.Status,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.DurationMs,
+		&i.ExitCode,
+		&i.TotalSteps,
+		&i.TotalTokens,
+		&i.TotalCost,
+		&i.Output,
+		&i.Error,
+		&i.CreatedAt,
+		&i.SessionID,
+		&i.WorkDir,
+	)
+	return i, err
 }
 
 const updateTraceTokens = `-- name: UpdateTraceTokens :exec

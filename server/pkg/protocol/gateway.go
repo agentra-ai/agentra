@@ -31,6 +31,7 @@ type GatewayEnvelope struct {
 type GatewayTaskDispatchMessage struct {
 	Type   string         `json:"type"`
 	TaskID string         `json:"task_id"`
+	RunID  string         `json:"run_id"`
 	Config map[string]any `json:"config"`
 }
 
@@ -42,6 +43,7 @@ type GatewayTaskCancelMessage struct {
 type GatewayTaskDispatchedMessage struct {
 	Type        string `json:"type"`
 	TaskID      string `json:"task_id"`
+	RunID       string `json:"run_id"`
 	ContainerID string `json:"container_id"`
 }
 
@@ -50,6 +52,7 @@ type GatewayTaskDispatchedMessage struct {
 type GatewayTaskLogsMessage struct {
 	Type    string `json:"type"`
 	TaskID  string `json:"task_id"`
+	RunID   string `json:"run_id"`
 	Seq     int    `json:"seq"`
 	Stream  string `json:"stream"`
 	Content string `json:"content"`
@@ -58,6 +61,7 @@ type GatewayTaskLogsMessage struct {
 type GatewayTaskCompletedMessage struct {
 	Type     string `json:"type"`
 	TaskID   string `json:"task_id"`
+	RunID    string `json:"run_id"`
 	ExitCode int    `json:"exit_code"`
 	Output   string `json:"output,omitempty"`
 }
@@ -65,6 +69,7 @@ type GatewayTaskCompletedMessage struct {
 type GatewayTaskFailedMessage struct {
 	Type      string `json:"type"`
 	TaskID    string `json:"task_id"`
+	RunID     string `json:"run_id"`
 	Error     string `json:"error"`
 	Retryable bool   `json:"retryable"`
 }

@@ -25,7 +25,7 @@ type WSClient struct {
 	logger      *slog.Logger
 
 	// Callbacks set by Gateway
-	OnTaskDispatch func(taskID string, config map[string]any)
+	OnTaskDispatch func(taskID, runID string, config map[string]any)
 	OnTaskCancel   func(taskID string)
 }
 
@@ -119,11 +119,11 @@ func (c *WSClient) handleMessage(message []byte) error {
 		if err := json.Unmarshal(message, &event); err != nil {
 			return fmt.Errorf("decode task dispatch: %w", err)
 		}
-		if strings.TrimSpace(event.TaskID) == "" {
-			return fmt.Errorf("task dispatch: task_id is required")
+		if strings.TrimSpace(event.TaskID) == "" || strings.TrimSpace(event.RunID) == "" {
+			return fmt.Errorf("task dispatch: task_id and run_id are required")
 		}
 		if c.OnTaskDispatch != nil {
-			c.OnTaskDispatch(event.TaskID, event.Config)
+			c.OnTaskDispatch(event.TaskID, event.RunID, event.Config)
 		}
 		return nil
 	case protocol.EventTaskCancel:
@@ -145,41 +145,45 @@ func (c *WSClient) handleMessage(message []byte) error {
 	}
 }
 
-func (c *WSClient) SendTaskDispatched(taskID, containerID string) error {
+func (c *WSClient) SendTaskDispatched(taskID, runID, containerID string) error {
 	return c.send(protocol.GatewayTaskDispatchedMessage{
 		Type:        protocol.EventTaskDispatched,
 		TaskID:      taskID,
+		RunID:       runID,
 		ContainerID: containerID,
 	})
 }
 
-func (c *WSClient) SendTaskLogs(taskID string, seq int, stream, content string) error {
+func (c *WSClient) SendTaskLogs(taskID, runID string, seq int, stream, content string) error {
 	return c.send(protocol.GatewayTaskLogsMessage{
 		Type:    protocol.EventTaskLogs,
 		TaskID:  taskID,
+		RunID:   runID,
 		Seq:     seq,
 		Stream:  stream,
 		Content: content,
 	})
 }
 
-func (c *WSClient) SendTaskCompleted(taskID string, exitCode int, output string) error {
+func (c *WSClient) SendTaskCompleted(taskID, runID string, exitCode int, output string) error {
 	return c.send(protocol.GatewayTaskCompletedMessage{
 		Type:     protocol.EventTaskCompleted,
 		TaskID:   taskID,
+		RunID:    runID,
 		ExitCode: exitCode,
 		Output:   output,
 	})
 }
 
-func (c *WSClient) SendTaskFailed(taskID, errorMsg string) error {
-	return c.SendTaskFailedWithRetry(taskID, errorMsg, true)
+func (c *WSClient) SendTaskFailed(taskID, runID, errorMsg string) error {
+	return c.SendTaskFailedWithRetry(taskID, runID, errorMsg, true)
 }
 
-func (c *WSClient) SendTaskFailedWithRetry(taskID, errorMsg string, retryable bool) error {
+func (c *WSClient) SendTaskFailedWithRetry(taskID, runID, errorMsg string, retryable bool) error {
 	return c.send(protocol.GatewayTaskFailedMessage{
 		Type:      protocol.EventTaskFailed,
 		TaskID:    taskID,
+		RunID:     runID,
 		Error:     errorMsg,
 		Retryable: retryable,
 	})

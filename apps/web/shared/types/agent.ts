@@ -55,6 +55,7 @@ export interface AgentTrigger {
 
 export interface AgentTask {
   id: string;
+  run_id?: string;
   agent_id: string;
   runtime_id: string;
   issue_id: string;

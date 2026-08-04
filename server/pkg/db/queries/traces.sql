@@ -1,10 +1,26 @@
--- name: CreateTaskRun :one
-INSERT INTO task_runs (task_id, agent_id, status, started_at)
-VALUES ($1, $2, 'running', NOW())
-RETURNING *;
-
 -- name: GetTaskRun :one
 SELECT * FROM task_runs WHERE id = $1;
+
+-- name: GetLatestTaskRun :one
+SELECT * FROM task_runs
+WHERE task_id = $1
+ORDER BY created_at DESC, id DESC
+LIMIT 1;
+
+-- name: GetTaskRunForUpdate :one
+SELECT * FROM task_runs WHERE id = $1 FOR UPDATE;
+
+-- name: SetTaskRunRunning :one
+UPDATE task_runs
+SET status = 'running', started_at = NOW()
+WHERE id = $1 AND task_id = $2 AND status = 'dispatched'
+RETURNING *;
+
+-- name: CheckpointTaskRun :one
+UPDATE task_runs
+SET session_id = $2, work_dir = $3
+WHERE id = $1 AND status = 'running'
+RETURNING *;
 
 -- name: CompleteTaskRun :one
 UPDATE task_runs SET
@@ -16,7 +32,9 @@ UPDATE task_runs SET
     total_tokens = $6,
     total_cost = $7,
     output = $8,
-    error = $9
+    error = $9,
+    session_id = $10,
+    work_dir = $11
 WHERE id = $1
 RETURNING *;
 
@@ -52,9 +70,6 @@ RETURNING *;
 
 -- name: GetExecutionTrace :one
 SELECT * FROM execution_traces WHERE id = $1;
-
--- name: GetExecutionTraceByTask :one
-SELECT * FROM execution_traces WHERE task_id = $1 ORDER BY created_at DESC LIMIT 1;
 
 -- name: GetExecutionTraceByRun :one
 SELECT * FROM execution_traces WHERE run_id = $1;

@@ -58,7 +58,7 @@ func TestWSClientConnectUsesAuthorizationAndCanonicalProtocol(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	defer client.conn.Close()
-	if err := client.SendTaskCompleted("task-1", 19, "failed"); err != nil {
+	if err := client.SendTaskCompleted("task-1", "run-1", 19, "failed"); err != nil {
 		t.Fatalf("send completed: %v", err)
 	}
 
@@ -77,7 +77,7 @@ func TestWSClientConnectUsesAuthorizationAndCanonicalProtocol(t *testing.T) {
 		if err := json.Unmarshal(got.message, &message); err != nil {
 			t.Fatal(err)
 		}
-		if message.TaskID != "task-1" || message.ExitCode != 19 {
+		if message.TaskID != "task-1" || message.RunID != "run-1" || message.ExitCode != 19 {
 			t.Fatalf("message = %+v", message)
 		}
 	case <-time.After(2 * time.Second):

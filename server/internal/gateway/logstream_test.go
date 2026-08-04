@@ -10,6 +10,7 @@ import (
 
 type capturedLogFrame struct {
 	taskID  string
+	runID   string
 	seq     int
 	stream  string
 	content string
@@ -20,18 +21,18 @@ type capturingLogSender struct {
 	errAt  int
 }
 
-func (s *capturingLogSender) SendTaskLogs(taskID string, seq int, stream, content string) error {
+func (s *capturingLogSender) SendTaskLogs(taskID, runID string, seq int, stream, content string) error {
 	if s.errAt > 0 && seq == s.errAt {
 		return fmt.Errorf("send failed")
 	}
-	s.frames = append(s.frames, capturedLogFrame{taskID: taskID, seq: seq, stream: stream, content: content})
+	s.frames = append(s.frames, capturedLogFrame{taskID: taskID, runID: runID, seq: seq, stream: stream, content: content})
 	return nil
 }
 
 func TestTaskLogEmitterChunksAndSequencesAcrossStreams(t *testing.T) {
 	sender := &capturingLogSender{}
 	tail := newBoundedTailBuffer(protocol.GatewayTaskResultBytes)
-	emitter := &taskLogEmitter{sender: sender, taskID: "task-1", tail: tail}
+	emitter := &taskLogEmitter{sender: sender, taskID: "task-1", runID: "run-1", tail: tail}
 
 	stdout := strings.Repeat("a", protocol.GatewayLogChunkBytes+7)
 	if _, err := emitter.writer(protocol.GatewayStreamStdout).Write([]byte(stdout)); err != nil {
@@ -45,6 +46,9 @@ func TestTaskLogEmitterChunksAndSequencesAcrossStreams(t *testing.T) {
 		t.Fatalf("frames = %d, want 3", len(sender.frames))
 	}
 	for i, frame := range sender.frames {
+		if frame.runID != "run-1" {
+			t.Fatalf("frame %d run_id = %q", i, frame.runID)
+		}
 		if frame.seq != i+1 {
 			t.Fatalf("frame %d seq = %d, want %d", i, frame.seq, i+1)
 		}

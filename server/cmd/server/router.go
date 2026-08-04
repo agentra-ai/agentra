@@ -498,61 +498,64 @@ func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
 		return task, true
 	}
 
-	hub.GatewayHub.OnTaskDispatched = func(gatewayID, workspaceID, taskID, containerID string) {
+	hub.GatewayHub.OnTaskDispatched = func(gatewayID, workspaceID, taskID, runID, containerID string) {
 		ctx := context.Background()
 		task, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskDispatched)
 		if !ok {
 			return
 		}
-		if task.Status == "running" {
+		ref := service.RunRef{WorkItemID: task.ID, RunID: parseUUID(runID)}
+		if task.Status == "running" && task.ActiveRunID == ref.RunID {
 			return
 		}
 		if task.Status != "dispatched" {
 			slog.Warn("gateway dispatched: invalid task state", "gateway_id", gatewayID, "task_id", taskID, "status", task.Status)
 			return
 		}
-		if _, err := h.TaskService.StartTask(ctx, task.ID); err != nil {
+		if _, err := h.TaskService.StartTask(ctx, ref); err != nil {
 			slog.Error("gateway dispatched: failed to start task", "gateway_id", gatewayID, "task_id", taskID, "container_id", containerID, "error", err)
 		}
 	}
 
-	hub.GatewayHub.OnTaskComplete = func(gatewayID, workspaceID, taskID string, exitCode int, output string) {
+	hub.GatewayHub.OnTaskComplete = func(gatewayID, workspaceID, taskID, runID string, exitCode int, output string) {
 		ctx := context.Background()
 		task, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskCompleted)
 		if !ok {
 			return
 		}
+		ref := service.RunRef{WorkItemID: task.ID, RunID: parseUUID(runID)}
 		output = boundedGatewayText(output)
 		// Exit code 0 = success, non-zero = failure
 		if exitCode == 0 {
-			result, err := json.Marshal(protocol.TaskCompletedPayload{TaskID: taskID, Output: output})
+			result, err := json.Marshal(protocol.TaskCompletedPayload{TaskID: taskID, RunID: runID, Output: output})
 			if err != nil {
 				slog.Error("gateway complete: marshal result failed", "task_id", taskID, "error", err)
 				return
 			}
-			_, err = h.TaskService.CompleteTask(ctx, task.ID, result, "", "")
+			_, err = h.TaskService.CompleteTask(ctx, ref, result, "", "")
 			if err != nil {
 				slog.Error("gateway complete: failed", "task_id", taskID, "error", err)
 			}
 		} else {
-			_, err := h.TaskService.FailTask(ctx, task.ID, output)
+			_, err := h.TaskService.FailTask(ctx, ref, output)
 			if err != nil {
 				slog.Error("gateway fail: failed", "task_id", taskID, "error", err)
 			}
 		}
 	}
 
-	hub.GatewayHub.OnTaskFail = func(gatewayID, workspaceID, taskID string, errorMsg string, retryable bool) {
+	hub.GatewayHub.OnTaskFail = func(gatewayID, workspaceID, taskID, runID string, errorMsg string, retryable bool) {
 		ctx := context.Background()
 		task, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskFailed)
 		if !ok {
 			return
 		}
+		ref := service.RunRef{WorkItemID: task.ID, RunID: parseUUID(runID)}
 		errorMsg = boundedGatewayText(errorMsg)
 
 		// If the failure is retryable, attempt to retry the task
 		if retryable {
-			if task, retried, err := h.TaskService.RetryTask(ctx, task.ID); err != nil {
+			if task, retried, err := h.TaskService.RetryTask(ctx, ref, errorMsg); err != nil {
 				slog.Error("gateway fail: retry failed", "task_id", taskID, "error", err)
 				// Fall through to mark as failed
 			} else if retried {
@@ -565,14 +568,14 @@ func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
 			}
 		}
 
-		_, err := h.TaskService.FailTask(ctx, task.ID, errorMsg)
+		_, err := h.TaskService.FailTask(ctx, ref, errorMsg)
 		if err != nil {
 			slog.Error("gateway fail: failed", "task_id", taskID, "error", err)
 		}
 	}
 
-	hub.GatewayHub.OnTaskLogs = func(gatewayID, workspaceID, taskID string, seq int, stream, content string) {
-		if err := h.RecordGatewayTaskLog(context.Background(), workspaceID, taskID, seq, stream, content); err != nil {
+	hub.GatewayHub.OnTaskLogs = func(gatewayID, workspaceID, taskID, runID string, seq int, stream, content string) {
+		if err := h.RecordGatewayTaskLog(context.Background(), workspaceID, taskID, runID, seq, stream, content); err != nil {
 			slog.Warn("gateway logs rejected", "gateway_id", gatewayID, "workspace_id", workspaceID, "task_id", taskID, "seq", seq, "error", err)
 		}
 	}

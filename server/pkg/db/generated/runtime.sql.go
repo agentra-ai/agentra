@@ -12,13 +12,27 @@ import (
 )
 
 const failTasksForOfflineRuntimes = `-- name: FailTasksForOfflineRuntimes :many
-UPDATE agent_task_queue
-SET status = 'failed', completed_at = now(), error = 'runtime went offline'
-WHERE status IN ('dispatched', 'running')
-  AND runtime_id IN (
-    SELECT id FROM agent_runtime WHERE status = 'offline'
-  )
-RETURNING id, agent_id, issue_id
+WITH targets AS (
+    SELECT atq.id, atq.active_run_id
+    FROM agent_task_queue atq
+    WHERE atq.status IN ('dispatched', 'running')
+      AND atq.runtime_id IN (
+        SELECT id FROM agent_runtime WHERE status = 'offline'
+      )
+    FOR UPDATE
+), closed_runs AS (
+    UPDATE task_runs tr
+    SET status = 'failed', completed_at = NOW(), error = 'runtime went offline'
+    FROM targets
+    WHERE tr.id = targets.active_run_id
+      AND tr.status IN ('dispatched', 'running')
+    RETURNING tr.id
+)
+UPDATE agent_task_queue atq
+SET status = 'failed', completed_at = now(), error = 'runtime went offline', active_run_id = NULL
+FROM targets
+WHERE atq.id = targets.id
+RETURNING atq.id, atq.agent_id, atq.issue_id
 `
 
 type FailTasksForOfflineRuntimesRow struct {
@@ -208,7 +222,27 @@ func (q *Queries) MarkStaleRuntimesOffline(ctx context.Context, staleSeconds flo
 }
 
 const recoverTasksForRuntime = `-- name: RecoverTasksForRuntime :many
-UPDATE agent_task_queue
+WITH targets AS (
+    SELECT id, active_run_id
+    FROM agent_task_queue atq
+    WHERE atq.runtime_id = $1
+      AND atq.runtime_type = 'local'
+      AND (
+          atq.status IN ('dispatched', 'running')
+          OR (atq.status = 'failed' AND atq.error = 'runtime went offline')
+      )
+    FOR UPDATE
+), closed_runs AS (
+    UPDATE task_runs tr
+    SET status = 'failed',
+        completed_at = NOW(),
+        error = 'runtime restarted; task queued for resume'
+    FROM targets
+    WHERE tr.id = targets.active_run_id
+      AND tr.status IN ('dispatched', 'running')
+    RETURNING tr.id
+)
+UPDATE agent_task_queue atq
 SET status = CASE
         WHEN retry_count < max_retries THEN 'queued'
         ELSE 'failed'
@@ -226,53 +260,32 @@ SET status = CASE
         ELSE retry_count
     END,
     dispatched_at = NULL,
-    started_at = NULL
-WHERE runtime_id = $1
-  AND runtime_type = 'local'
-  AND (
-      status IN ('dispatched', 'running')
-      OR (status = 'failed' AND error = 'runtime went offline')
-  )
-RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id
+    started_at = NULL,
+    active_run_id = NULL
+FROM targets
+WHERE atq.id = targets.id
+RETURNING atq.id AS task_id, targets.active_run_id AS run_id
 `
+
+type RecoverTasksForRuntimeRow struct {
+	TaskID pgtype.UUID `json:"task_id"`
+	RunID  pgtype.UUID `json:"run_id"`
+}
 
 // A daemon registration represents a fresh process for this stable runtime
 // identity. Requeue orphaned work within its retry budget so the new process
 // can resume from the in-flight session checkpoint; fail closed once the
 // budget is exhausted.
-func (q *Queries) RecoverTasksForRuntime(ctx context.Context, runtimeID pgtype.UUID) ([]AgentTaskQueue, error) {
+func (q *Queries) RecoverTasksForRuntime(ctx context.Context, runtimeID pgtype.UUID) ([]RecoverTasksForRuntimeRow, error) {
 	rows, err := q.db.Query(ctx, recoverTasksForRuntime, runtimeID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []AgentTaskQueue{}
+	items := []RecoverTasksForRuntimeRow{}
 	for rows.Next() {
-		var i AgentTaskQueue
-		if err := rows.Scan(
-			&i.ID,
-			&i.AgentID,
-			&i.IssueID,
-			&i.Status,
-			&i.Priority,
-			&i.DispatchedAt,
-			&i.StartedAt,
-			&i.CompletedAt,
-			&i.Result,
-			&i.Error,
-			&i.CreatedAt,
-			&i.Context,
-			&i.RuntimeID,
-			&i.SessionID,
-			&i.WorkDir,
-			&i.TriggerCommentID,
-			&i.RuntimeType,
-			&i.CloudRuntimeID,
-			&i.RetryCount,
-			&i.MaxRetries,
-			&i.TaskType,
-			&i.LoopID,
-		); err != nil {
+		var i RecoverTasksForRuntimeRow
+		if err := rows.Scan(&i.TaskID, &i.RunID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

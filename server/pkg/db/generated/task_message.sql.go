@@ -11,10 +11,38 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createTaskMessage = `-- name: CreateTaskMessage :execrows
-INSERT INTO task_message (task_id, run_id, seq, type, tool, content, input, output)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-ON CONFLICT (run_id, seq) DO NOTHING
+const createTaskMessage = `-- name: CreateTaskMessage :one
+WITH active AS MATERIALIZED (
+    SELECT atq.id
+    FROM agent_task_queue atq
+    WHERE atq.id = $1
+      AND atq.active_run_id = $2
+      AND atq.status = 'running'
+      AND EXISTS (
+          SELECT 1 FROM task_runs tr
+          WHERE tr.id = $2
+            AND tr.task_id = $1
+            AND tr.status = 'running'
+      )
+    FOR UPDATE OF atq
+), inserted AS (
+    INSERT INTO task_message (task_id, run_id, seq, type, tool, content, input, output)
+    SELECT
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8
+    FROM active
+    ON CONFLICT (run_id, seq) DO NOTHING
+    RETURNING 1
+)
+SELECT
+    EXISTS (SELECT 1 FROM active) AS active,
+    EXISTS (SELECT 1 FROM inserted) AS inserted
 `
 
 type CreateTaskMessageParams struct {
@@ -28,8 +56,16 @@ type CreateTaskMessageParams struct {
 	Output  pgtype.Text `json:"output"`
 }
 
-func (q *Queries) CreateTaskMessage(ctx context.Context, arg CreateTaskMessageParams) (int64, error) {
-	result, err := q.db.Exec(ctx, createTaskMessage,
+type CreateTaskMessageRow struct {
+	Active   bool `json:"active"`
+	Inserted bool `json:"inserted"`
+}
+
+// Lock the Work Item before checking its active Run. Terminal Lifecycle
+// transitions take the same lock first, so a message can never commit after
+// its Run is completed, failed, retried, or cancelled.
+func (q *Queries) CreateTaskMessage(ctx context.Context, arg CreateTaskMessageParams) (CreateTaskMessageRow, error) {
+	row := q.db.QueryRow(ctx, createTaskMessage,
 		arg.TaskID,
 		arg.RunID,
 		arg.Seq,
@@ -39,10 +75,9 @@ func (q *Queries) CreateTaskMessage(ctx context.Context, arg CreateTaskMessagePa
 		arg.Input,
 		arg.Output,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	var i CreateTaskMessageRow
+	err := row.Scan(&i.Active, &i.Inserted)
+	return i, err
 }
 
 const deleteTaskMessages = `-- name: DeleteTaskMessages :exec
@@ -56,8 +91,11 @@ func (q *Queries) DeleteTaskMessages(ctx context.Context, taskID pgtype.UUID) er
 }
 
 const getActiveTaskRun = `-- name: GetActiveTaskRun :one
-SELECT id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at FROM task_runs
-WHERE task_id = $1 AND id = $2 AND status = 'running'
+SELECT tr.id, tr.task_id, tr.agent_id, tr.status, tr.started_at, tr.completed_at, tr.duration_ms, tr.exit_code, tr.total_steps, tr.total_tokens, tr.total_cost, tr.output, tr.error, tr.created_at, tr.session_id, tr.work_dir FROM task_runs tr
+WHERE tr.task_id = $1
+  AND tr.id = $2
+  AND tr.status = 'running'
+  AND tr.id = (SELECT atq.active_run_id FROM agent_task_queue atq WHERE atq.id = $1)
 `
 
 type GetActiveTaskRunParams struct {
@@ -83,35 +121,8 @@ func (q *Queries) GetActiveTaskRun(ctx context.Context, arg GetActiveTaskRunPara
 		&i.Output,
 		&i.Error,
 		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getLatestRunningTaskRun = `-- name: GetLatestRunningTaskRun :one
-SELECT id, task_id, agent_id, status, started_at, completed_at, duration_ms, exit_code, total_steps, total_tokens, total_cost, output, error, created_at FROM task_runs
-WHERE task_id = $1 AND status = 'running'
-ORDER BY created_at DESC
-LIMIT 1
-`
-
-func (q *Queries) GetLatestRunningTaskRun(ctx context.Context, taskID pgtype.UUID) (TaskRun, error) {
-	row := q.db.QueryRow(ctx, getLatestRunningTaskRun, taskID)
-	var i TaskRun
-	err := row.Scan(
-		&i.ID,
-		&i.TaskID,
-		&i.AgentID,
-		&i.Status,
-		&i.StartedAt,
-		&i.CompletedAt,
-		&i.DurationMs,
-		&i.ExitCode,
-		&i.TotalSteps,
-		&i.TotalTokens,
-		&i.TotalCost,
-		&i.Output,
-		&i.Error,
-		&i.CreatedAt,
+		&i.SessionID,
+		&i.WorkDir,
 	)
 	return i, err
 }

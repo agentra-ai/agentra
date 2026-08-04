@@ -34,10 +34,11 @@ or merge the observations from an earlier Run.
 
 ### Run
 
-A Run is one execution attempt of a Work Item. It begins when the Work Item
-transitions from dispatched to running and has a stable `run_id`. Messages,
-provider session checkpoints, usage, artifacts, and Trace data belong to that
-Run. A Run has exactly one terminal outcome.
+A Run is one execution attempt of a Work Item. Its stable `run_id` is allocated
+when the Work Item is dispatched, before a local daemon or Cloud Gateway starts
+provisioning; execution begins when both records transition to running.
+Messages, provider session checkpoints, usage, artifacts, and Trace data belong
+to that Run. A Run has exactly one terminal outcome.
 
 ### Trace
 
@@ -68,8 +69,10 @@ projections of that persisted fact.
 ## Lifecycle invariants
 
 - A Work Item is the logical request; a Run is one attempt.
-- Every running Work Item has exactly one active Run.
-- Daemon callbacks must identify the Run they belong to.
+- Every dispatched or running Work Item has exactly one active Run, and their
+  statuses agree.
+- Local daemon and Cloud Gateway callbacks must identify the Run they belong
+  to.
 - Message sequence numbers are unique within a Run, not across all retries of a
   Work Item.
 - A terminal callback for an old Run cannot complete or fail a newer Run.

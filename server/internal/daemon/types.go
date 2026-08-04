@@ -38,7 +38,7 @@ type Task struct {
 	TriggerCommentID string     `json:"trigger_comment_id,omitempty"` // comment that triggered this task
 	TaskType         string     `json:"task_type,omitempty"`          // "standard" (default) or loop_plan/develop/review/fix
 	LoopID           string     `json:"loop_id,omitempty"`            // set when TaskType starts with "loop_"; identifies the loop row in `loops`
-	RunID            string     `json:"run_id,omitempty"`             // execution attempt identity assigned when the task starts
+	RunID            string     `json:"run_id,omitempty"`             // execution attempt identity allocated when the task is dispatched
 	Branch           string     `json:"branch,omitempty"`             // for loop_review/loop_fix: the develop stage's branch from loops.branch_name
 	Iteration        int        `json:"iteration,omitempty"`          // for loop_fix: the current fix iteration from loops.iteration
 }

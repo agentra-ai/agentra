@@ -132,6 +132,7 @@ type AgentTaskQueue struct {
 	MaxRetries       int32              `json:"max_retries"`
 	TaskType         string             `json:"task_type"`
 	LoopID           pgtype.UUID        `json:"loop_id"`
+	ActiveRunID      pgtype.UUID        `json:"active_run_id"`
 }
 
 type Attachment struct {
@@ -555,6 +556,8 @@ type TaskRun struct {
 	Output      pgtype.Text        `json:"output"`
 	Error       pgtype.Text        `json:"error"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	SessionID   pgtype.Text        `json:"session_id"`
+	WorkDir     pgtype.Text        `json:"work_dir"`
 }
 
 type TeamMemory struct {
