@@ -85,6 +85,32 @@ jobs:
       - name: Test
         run: cd server && go test ./...
 
+  runtime-conformance:
+    name: Runtime conformance (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Run hermetic runtime contract
+        run: go test ./pkg/agent ./pkg/redact
+        working-directory: server
+
+      - name: Run runtime race detector
+        if: runner.os == 'Linux'
+        run: go test -race ./pkg/agent ./pkg/redact
+        working-directory: server
+
   installers:
     name: Installers (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
