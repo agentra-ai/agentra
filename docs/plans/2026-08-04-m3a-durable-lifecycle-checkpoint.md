@@ -1,7 +1,7 @@
 # M3A Durable Run-Aware Lifecycle Spine
 
 > 日期：2026-08-05
-> 状态：M3A-01a 本地验收通过；M3A-01b outbox 待实施
+> 状态：M3A-01a/01b 本地验收通过；M3A-01c 终态 consumer 分片通过
 > 范围：`M3-01` 的执行事实统一，不提前实现 Work Graph scheduler
 
 ## 问题定义
@@ -68,19 +68,35 @@ Engineering Loop 消费属于 M3A-01b/01c，不能混写成 M3A-01a 未完成。
 
 ### M3A-01b — Transactional Lifecycle & Durable Outbox
 
-- Start、Checkpoint、Complete、Fail、Cancel、Retry 已通过一个事务型 Lifecycle
-  Interface 写入；runtime recovery、timeout 和 bulk cancel 目前使用等价的原子 SQL，
-  后续收口到同一个 durable-event Seam；
-- 每个成功 transition 同事务追加 versioned outbox event；
-- realtime、metrics、Trace 和 notifications 改为幂等投影；
-- 注入状态提交后、事件投递前的崩溃，证明重启后事件不会丢失。
+- 已完成：Start、Checkpoint、Complete、Fail、Cancel、Retry 通过同一个事务型
+  `RunLifecycle` Interface 写入，并在同一事务追加 versioned lifecycle event；
+- 已完成：outbox worker 按 Work Item 保序 claim，使用 lease 与 fencing token 防止旧 worker
+  ack 新 lease，失败采用指数退避，并在达到上限后进入 dead letter；
+- 已完成：Trace、comment、metric、activity 和 inbox 以 event ID 或 Run ID 幂等投影；
+  realtime 明确采用 at-least-once 语义，并把 durable event ID 传给下游；
+- 已覆盖：投影提交后、outbox ack 前模拟崩溃并重放，同一 comment 和 metric 只写一次，
+  realtime 可以重复；worker 随后仍能确认原事件。
+
+`runtime recovery`、stale task sweeper 和 issue bulk cancel 仍使用原子 SQL 或直接投影，
+尚未追加 durable lifecycle event。它们是 M3A-01b 的下一收口分片，不能因主 callback
+路径通过而误报为全部 Transition 已统一。activity/inbox listener 已具备 event ID 幂等键，
+但 listener 自身的数据库错误尚未反馈给 outbox ack；将其升级为独立 durable consumer
+是下一分片的一部分。
 
 ### M3A-01c — Idempotent Engineering Loop Consumer
 
-- Loop 按 outbox event ID/version 幂等消费；
-- stage Work Item 创建与 Loop transition 原子化或使用唯一幂等键；
-- 注入完成后崩溃、消费中崩溃和重复投递，证明不会重复 stage；
-- 删除 Loop 对易丢 goroutine 事件和“缺 in-flight task 就重排”的依赖。
+- 已完成终态分片：Loop 使用独立 receipt/delivery 按 outbox event ID/version 幂等消费；
+- 已完成：consumer 锁定 Loop 并精确读取事件中的 `run_id`，stage Work Item 创建与
+  Loop transition 在一个数据库事务提交；`StartLoop` 的首个 Work Item 与 started 状态
+  也改为原子提交；
+- 已覆盖：两个 worker 并发 claim 只推进一次，重复 durable fact 只生成 receipt，启动恢复
+  发现待消费终态事件时不会重排当前 stage；
+- 已删除：Loop 对终态 Bus/goroutine 的订阅、按“最新 Run”猜结果的查询，以及“缺
+  in-flight task 就重排”的终态恢复路径。
+
+进度和 stage live signal 仍有意保持 ephemeral；它们不是决定 Loop 状态的事实。
+Claim/dispatch delivery、Cloud Gateway 幂等 ack 和完整 Work Graph stage-template adapter
+不属于本终态 consumer 分片。
 
 ## 暂不进入本检查点
 
@@ -105,5 +121,10 @@ Engineering Loop 消费属于 M3A-01b/01c，不能混写成 M3A-01a 未完成。
 ## 状态判定
 
 - M2A：本地完成，等待托管 CI 与真实 provider smoke；
-- M3A-01：本地可推进，不受 M2A 外部证据阻塞；
+- M3A-01：主 callback 的 durable lifecycle spine 与 Loop 终态 consumer 本地通过；
+  recovery/sweeper/bulk cancel 旁路仍需收口，随后验证 Cloud dispatch 幂等交付；
 - 北极星 M0–M8：持续进行，不再使用单一 `blocked` 终态表达所有检查点。
+
+最终本地验证（2026-08-05）：完整 `make check` 通过，覆盖截至 051 的隔离迁移、
+Go/TypeScript 单元与集成测试及 E2E；临时数据库自动销毁，未对开发库应用迁移。
+运行中的 `https://web.agentra.orb.local/` 随后返回 HTTP 200。

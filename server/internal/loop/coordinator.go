@@ -2,10 +2,10 @@
 // drives an issue from open to mergeable PR by chaining Plan → Develop →
 // Review → Fix stages implemented as agent_task_queue rows.
 //
-// The Coordinator in this file is the brain: it watches task:completed events
-// and advances loops through their stages. decideNextStage is a pure function
-// — no I/O, no goroutines — so the state machine is trivially testable. The
-// I/O lives in processTaskCompleted and applyDecision.
+// The Coordinator in this file owns the state-machine decisions. Durable Run
+// lifecycle facts enter through LifecycleProjector, which applies each
+// decision and its next Work Item in one transaction. decideNextStage remains
+// pure — no I/O or goroutines — so the policy is independently testable.
 package loop
 
 import (
@@ -19,7 +19,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/util"
 	dbpkg "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
@@ -73,43 +72,52 @@ type Decision struct {
 	iterationBump int
 }
 
-// Coordinator drives loops forward by reacting to task:completed events.
-// The pure decideNextStage function holds the state machine; everything
-// else is I/O.
+// Coordinator drives loops forward from durable lifecycle facts. The pure
+// decideNextStage function holds the state machine; everything else is I/O.
 type Coordinator struct {
 	queries *dbpkg.Queries
-	bus     *events.Bus
 	store   *Store
+	starter lifecycleTxStarter
 }
 
-func NewCoordinator(q *dbpkg.Queries, bus *events.Bus) *Coordinator {
-	return &Coordinator{queries: q, bus: bus, store: NewStore(q)}
+func NewCoordinator(q *dbpkg.Queries, starter lifecycleTxStarter) *Coordinator {
+	return &Coordinator{queries: q, store: NewStore(q), starter: starter}
 }
 
 // StartLoop transitions a freshly created (status=pending, no stage) loop to
 // status=running with current_stage=plan and enqueues the first loop_plan
 // task. It is the production entry point that runs synchronously from the
-// CreateLoop HTTP handler — the rest of the state machine is event-driven
-// (HandleTaskCompleted / HandleTaskFailed), but the plan stage has no
-// preceding task to fire on, so the handler must kick it off explicitly.
+// CreateLoop HTTP handler. Subsequent stages advance through the durable
+// LifecycleProjector, while the plan stage has no preceding Run event.
 //
 // Policy: StartLoop is intentionally NOT idempotent. It refuses to re-start
 // a loop that is not in 'pending' status, so callers cannot accidentally
 // create a second loop_plan task for a loop that is already running.
 //
-// Errors are returned to the caller. The Coordinator's own event handlers
-// (HandleTaskCompleted / HandleTaskFailed) swallow errors and log them
-// because they run on a goroutine; StartLoop runs in a request goroutine
-// and the caller (the HTTP handler) wants to know if the first task
-// failed to enqueue.
+// Errors are returned because StartLoop runs in the request goroutine and the
+// handler must know whether the first task was enqueued.
 func (c *Coordinator) StartLoop(ctx context.Context, loopID string) error {
-	l, err := c.store.GetLoop(ctx, loopID)
+	if c.starter == nil {
+		return fmt.Errorf("start loop: transaction store is unavailable")
+	}
+	tx, err := c.starter.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("load loop: %w", err)
+		return fmt.Errorf("begin start loop: %w", err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	q := c.queries.WithTx(tx)
+	row, err := q.GetLoopForUpdate(ctx, util.ParseUUID(loopID))
+	if err != nil {
+		return fmt.Errorf("lock loop: %w", err)
+	}
+	l, err := rowToLoop(row)
+	if err != nil {
+		return fmt.Errorf("decode loop: %w", err)
 	}
 	if l.Status != StatusPending {
 		return fmt.Errorf("loop %s: StartLoop requires status=pending, got %q", l.ID, l.Status)
 	}
+	txCoordinator := &Coordinator{queries: q, store: NewStore(q), starter: c.starter}
 
 	// createTaskForStage handles CreateAgentTask (including the agent->runtime
 	// lookup for the NOT NULL FK) and the UpdateStatus(Status: running,
@@ -121,7 +129,7 @@ func (c *Coordinator) StartLoop(ctx context.Context, loopID string) error {
 	// (CHECK violation) and NULL for current_stage (clobbering the stage
 	// we just set).
 	plan := StagePlan
-	if err := c.createTaskForStage(ctx, l, Decision{
+	if err := txCoordinator.createTaskForStage(ctx, l, Decision{
 		action:   actionCreateTask,
 		taskType: taskTypePlan,
 	}); err != nil {
@@ -132,12 +140,15 @@ func (c *Coordinator) StartLoop(ctx context.Context, loopID string) error {
 	// is a one-way set on the first transition to running.
 	now := nowUTC()
 	running := StatusRunning
-	if _, err := c.store.UpdateStatus(ctx, l.ID, UpdateStatusInput{
+	if _, err := txCoordinator.store.UpdateStatus(ctx, l.ID, UpdateStatusInput{
 		Status:       &running,
 		CurrentStage: &plan,
 		StartedAt:    &now,
 	}); err != nil {
 		return fmt.Errorf("stamp started_at: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit start loop: %w", err)
 	}
 
 	slog.Info("loop coordinator: started loop",
@@ -183,62 +194,6 @@ func (c *Coordinator) decideNextStage(l *Loop, lastResult *TaskResult) Decision 
 	return Decision{action: actionNoop}
 }
 
-// HandleTaskCompleted is the events.Handler entry point. The bus publisher
-// is synchronous, so this method returns immediately and the I/O happens on
-// a goroutine. Failures inside the goroutine are logged (not returned).
-func (c *Coordinator) HandleTaskCompleted(e events.Event) {
-	go c.processTaskCompleted(context.Background(), e)
-}
-
-// HandleTaskFailed handles task:failed events. The bus publisher is
-// synchronous, so this method returns immediately and the I/O happens on
-// a goroutine. Failures inside the goroutine are logged (not returned).
-func (c *Coordinator) HandleTaskFailed(e events.Event) {
-	go c.processTaskFailed(context.Background(), e)
-}
-
-func (c *Coordinator) processTaskFailed(ctx context.Context, e events.Event) {
-	taskID, ok := eventTaskID(e)
-	if !ok {
-		return
-	}
-	task, err := c.queries.GetAgentTask(ctx, util.ParseUUID(taskID))
-	if err != nil {
-		return
-	}
-	if !task.LoopID.Valid {
-		return
-	}
-	l, err := c.store.GetLoop(ctx, util.UUIDToString(task.LoopID))
-	if err != nil {
-		return
-	}
-	if l.Status != StatusRunning {
-		return
-	}
-
-	// Classify the error. The event payload may include an "error" string;
-	// absent that, the default is unrecoverable so the operator sees a clear
-	// "unclassified" signal rather than a misleading specific reason.
-	reason := FailureUnrecoverable
-	if msg, ok := e.Payload.(map[string]any); ok {
-		if errMsg, ok := msg["error"].(string); ok && errMsg != "" {
-			reason = classifyError(errMsg)
-		}
-	}
-
-	now := nowUTC()
-	failed := StatusFailed
-	if _, err := c.store.UpdateStatus(ctx, l.ID, UpdateStatusInput{
-		Status:        &failed,
-		FailureReason: ptrString(string(reason)),
-		CompletedAt:   &now,
-	}); err != nil {
-		slog.Error("loop coordinator: mark loop failed",
-			"loop_id", l.ID, "task_id", task.ID, "err", err)
-	}
-}
-
 // classifyError maps an error message from a failed task to a FailureReason.
 // Conservative: when in doubt, return FailureUnrecoverable so the operator
 // sees a clear "unclassified" signal rather than a misleading specific
@@ -257,8 +212,6 @@ func classifyError(msg string) FailureReason {
 	}
 	return FailureUnrecoverable
 }
-
-func ptrString(s string) *string { return &s }
 
 // RestoreOnStartup re-arms loops that were running/paused when the server
 // last stopped. For each one we either re-enqueue the current stage's task
@@ -319,6 +272,17 @@ func (c *Coordinator) restoreOne(ctx context.Context, l *Loop) error {
 		// and the coordinator's normal handler will advance the loop.
 		return nil
 	}
+	pendingTerminal, err := c.queries.HasPendingEngineeringLoopLifecycleEvent(ctx, dbpkg.HasPendingEngineeringLoopLifecycleEventParams{
+		LoopID: util.ParseUUID(l.ID), TaskType: taskType,
+	})
+	if err != nil {
+		return fmt.Errorf("check pending lifecycle event: %w", err)
+	}
+	if pendingTerminal {
+		// The durable consumer will advance this stage. Re-enqueueing here would
+		// duplicate work after a crash between Run completion and projection.
+		return nil
+	}
 
 	resolvedAgent, err := c.resolveStageAgent(ctx, l, taskType)
 	if err != nil {
@@ -359,32 +323,6 @@ func (c *Coordinator) restoreOne(ctx context.Context, l *Loop) error {
 	slog.Info("loop coordinator: restored loop by re-enqueuing task",
 		"loop_id", l.ID, "task_type", taskType)
 	return nil
-}
-
-func (c *Coordinator) processTaskCompleted(ctx context.Context, e events.Event) {
-	taskID, ok := eventTaskID(e)
-	if !ok {
-		return
-	}
-	task, err := c.queries.GetAgentTask(ctx, util.ParseUUID(taskID))
-	if err != nil {
-		return
-	}
-	if !task.LoopID.Valid {
-		return
-	}
-	loop, err := c.store.GetLoop(ctx, util.UUIDToString(task.LoopID))
-	if err != nil {
-		return
-	}
-
-	result := latestTaskResult(ctx, c.queries, task.ID)
-	if err := c.applyDecision(ctx, loop, c.decideNextStage(loop, result)); err != nil {
-		slog.Error("loop coordinator: apply decision failed",
-			"loop_id", loop.ID,
-			"task_id", task.ID,
-			"err", err)
-	}
 }
 
 // applyDecision performs the I/O implied by a Decision.

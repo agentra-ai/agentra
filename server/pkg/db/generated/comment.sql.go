@@ -14,7 +14,7 @@ import (
 const createComment = `-- name: CreateComment :one
 INSERT INTO comment (issue_id, workspace_id, author_type, author_id, content, type, parent_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id
+RETURNING id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id, lifecycle_event_id
 `
 
 type CreateCommentParams struct {
@@ -49,6 +49,57 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 		&i.UpdatedAt,
 		&i.ParentID,
 		&i.WorkspaceID,
+		&i.LifecycleEventID,
+	)
+	return i, err
+}
+
+const createCommentForLifecycleEvent = `-- name: CreateCommentForLifecycleEvent :one
+INSERT INTO comment (
+    issue_id, workspace_id, author_type, author_id, content, type, parent_id,
+    lifecycle_event_id
+)
+VALUES ($1, $2, $3, $4, $5, $6, $8, $7)
+ON CONFLICT (lifecycle_event_id) WHERE lifecycle_event_id IS NOT NULL
+DO UPDATE SET lifecycle_event_id = EXCLUDED.lifecycle_event_id
+RETURNING id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id, lifecycle_event_id
+`
+
+type CreateCommentForLifecycleEventParams struct {
+	IssueID          pgtype.UUID `json:"issue_id"`
+	WorkspaceID      pgtype.UUID `json:"workspace_id"`
+	AuthorType       string      `json:"author_type"`
+	AuthorID         pgtype.UUID `json:"author_id"`
+	Content          string      `json:"content"`
+	Type             string      `json:"type"`
+	LifecycleEventID pgtype.UUID `json:"lifecycle_event_id"`
+	ParentID         pgtype.UUID `json:"parent_id"`
+}
+
+func (q *Queries) CreateCommentForLifecycleEvent(ctx context.Context, arg CreateCommentForLifecycleEventParams) (Comment, error) {
+	row := q.db.QueryRow(ctx, createCommentForLifecycleEvent,
+		arg.IssueID,
+		arg.WorkspaceID,
+		arg.AuthorType,
+		arg.AuthorID,
+		arg.Content,
+		arg.Type,
+		arg.LifecycleEventID,
+		arg.ParentID,
+	)
+	var i Comment
+	err := row.Scan(
+		&i.ID,
+		&i.IssueID,
+		&i.AuthorType,
+		&i.AuthorID,
+		&i.Content,
+		&i.Type,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ParentID,
+		&i.WorkspaceID,
+		&i.LifecycleEventID,
 	)
 	return i, err
 }
@@ -63,7 +114,7 @@ func (q *Queries) DeleteComment(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getComment = `-- name: GetComment :one
-SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id FROM comment
+SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id, lifecycle_event_id FROM comment
 WHERE id = $1
 `
 
@@ -81,12 +132,13 @@ func (q *Queries) GetComment(ctx context.Context, id pgtype.UUID) (Comment, erro
 		&i.UpdatedAt,
 		&i.ParentID,
 		&i.WorkspaceID,
+		&i.LifecycleEventID,
 	)
 	return i, err
 }
 
 const getCommentInWorkspace = `-- name: GetCommentInWorkspace :one
-SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id FROM comment
+SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id, lifecycle_event_id FROM comment
 WHERE id = $1 AND workspace_id = $2
 `
 
@@ -109,12 +161,13 @@ func (q *Queries) GetCommentInWorkspace(ctx context.Context, arg GetCommentInWor
 		&i.UpdatedAt,
 		&i.ParentID,
 		&i.WorkspaceID,
+		&i.LifecycleEventID,
 	)
 	return i, err
 }
 
 const listComments = `-- name: ListComments :many
-SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id FROM comment
+SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id, lifecycle_event_id FROM comment
 WHERE issue_id = $1 AND workspace_id = $2
 ORDER BY created_at ASC
 `
@@ -144,6 +197,7 @@ func (q *Queries) ListComments(ctx context.Context, arg ListCommentsParams) ([]C
 			&i.UpdatedAt,
 			&i.ParentID,
 			&i.WorkspaceID,
+			&i.LifecycleEventID,
 		); err != nil {
 			return nil, err
 		}
@@ -160,7 +214,7 @@ UPDATE comment SET
     content = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id
+RETURNING id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id, lifecycle_event_id
 `
 
 type UpdateCommentParams struct {
@@ -182,6 +236,7 @@ func (q *Queries) UpdateComment(ctx context.Context, arg UpdateCommentParams) (C
 		&i.UpdatedAt,
 		&i.ParentID,
 		&i.WorkspaceID,
+		&i.LifecycleEventID,
 	)
 	return i, err
 }

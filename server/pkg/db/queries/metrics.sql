@@ -1,17 +1,19 @@
 -- name: InsertAgentTaskMetric :one
 INSERT INTO agent_task_metrics (
-    workspace_id, task_id, issue_id,
+    workspace_id, task_id, issue_id, run_id,
     provider, model, runtime_mode,
     task_type, issue_priority,
     status, error_category,
     duration_ms, token_input, token_output, cost_usd
 ) VALUES (
-    $1, $2, $3,
-    $4, $5, $6,
-    $7, $8,
-    $9, $10,
-    $11, $12, $13, $14
+    $1, $2, $3, $4,
+    $5, $6, $7,
+    $8, $9,
+    $10, $11,
+    $12, $13, $14, $15
 )
+ON CONFLICT (run_id) WHERE run_id IS NOT NULL
+DO UPDATE SET run_id = EXCLUDED.run_id
 RETURNING *;
 
 -- name: GetMetricsSummary :many

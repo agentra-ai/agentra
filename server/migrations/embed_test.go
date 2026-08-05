@@ -7,7 +7,7 @@ func TestLatestVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LatestVersion() error = %v", err)
 	}
-	if version != "050_active_run_lifecycle" {
-		t.Fatalf("LatestVersion() = %q, want %q", version, "050_active_run_lifecycle")
+	if version != "051_lifecycle_outbox" {
+		t.Fatalf("LatestVersion() = %q, want %q", version, "051_lifecycle_outbox")
 	}
 }

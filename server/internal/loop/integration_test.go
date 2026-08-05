@@ -9,26 +9,19 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/agentra-ai/agentra/server/internal/events"
 	looppkg "github.com/agentra-ai/agentra/server/internal/loop"
 	dbpkg "github.com/agentra-ai/agentra/server/pkg/db/generated"
-	"github.com/agentra-ai/agentra/server/pkg/protocol"
 )
 
 // TestIntegration_PlanDevelopReviewApprovedDone walks a loop through the full
 // happy path: Plan completes -> Develop completes -> Review approves -> Done.
-// Uses the real events.Bus so the Coordinator handlers run end-to-end.
+// Uses the durable event projector so the production transaction path runs end-to-end.
 func TestIntegration_PlanDevelopReviewApprovedDone(t *testing.T) {
 	pool := testPool(t)
 	q := dbpkg.New(pool)
-	bus := events.New()
-	coord := looppkg.NewCoordinator(q, bus)
+	coord := looppkg.NewCoordinator(q, pool)
+	projector := looppkg.NewLifecycleProjector(pool, q, coord)
 	store := looppkg.NewStore(q)
-
-	// Mirror the wiring in cmd/server/loop_coordinator.go: subscribe the
-	// Coordinator's task lifecycle handlers to the bus.
-	bus.Subscribe(protocol.EventTaskCompleted, coord.HandleTaskCompleted)
-	bus.Subscribe(protocol.EventTaskFailed, coord.HandleTaskFailed)
 
 	wsID := uuid.NewString()
 	issueID := uuid.NewString()
@@ -58,11 +51,11 @@ func TestIntegration_PlanDevelopReviewApprovedDone(t *testing.T) {
 	}
 
 	// Plan completes -> next stage should be develop.
-	seedAndEmitTaskCompleted(t, pool, agentID, bus, loopRow.ID, "loop_plan", nil)
+	seedAndProjectTaskCompleted(t, pool, agentID, projector, loopRow.ID, "loop_plan", nil)
 	waitForStage(t, store, loopRow.ID, looppkg.StageDevelop)
 
 	// Develop completes -> next stage should be review.
-	seedAndEmitTaskCompleted(t, pool, agentID, bus, loopRow.ID, "loop_develop", nil)
+	seedAndProjectTaskCompleted(t, pool, agentID, projector, loopRow.ID, "loop_develop", nil)
 	waitForStage(t, store, loopRow.ID, looppkg.StageReview)
 
 	// Review approves -> loop should be done.
@@ -74,7 +67,7 @@ func TestIntegration_PlanDevelopReviewApprovedDone(t *testing.T) {
 		PRNumber:       intPtr(42),
 		BranchName:     "loop/issue-1-0",
 	}
-	seedAndEmitTaskCompleted(t, pool, agentID, bus, loopRow.ID, "loop_review", result)
+	seedAndProjectTaskCompleted(t, pool, agentID, projector, loopRow.ID, "loop_review", result)
 	waitForStatus(t, store, loopRow.ID, looppkg.StatusDone)
 
 	// Final state assertions.
@@ -87,70 +80,27 @@ func TestIntegration_PlanDevelopReviewApprovedDone(t *testing.T) {
 	}
 }
 
-// seedAndEmitTaskCompleted inserts a task in agent_task_queue and (optionally)
-// a task_run with the given output JSON, then publishes a task:completed event.
-// The Coordinator's handler will see the event and run the state machine.
-func seedAndEmitTaskCompleted(
+// seedAndProjectTaskCompleted inserts an exact terminal Run + durable event,
+// then drives the production Engineering Loop projector synchronously.
+func seedAndProjectTaskCompleted(
 	t *testing.T,
 	pool *pgxpool.Pool,
 	agentID string,
-	bus *events.Bus,
+	projector *looppkg.LifecycleProjector,
 	loopID, taskType string,
 	result *looppkg.TaskResult,
 ) {
 	t.Helper()
-	ctx := context.Background()
-	taskID := uuid.NewString()
-
-	// Look up the agent's runtime_id (agent_task_queue.runtime_id is NOT NULL,
-	// added in migration 004).
-	var runtimeID string
-	if err := pool.QueryRow(ctx, `SELECT runtime_id FROM agent WHERE id = $1`, agentID).Scan(&runtimeID); err != nil {
-		t.Fatalf("lookup agent.runtime_id: %v", err)
-	}
-
-	// Mark any prior in-flight task of this type for the same loop as
-	// 'completed'. The Coordinator's previous stage created a 'queued' task
-	// (default status) when advancing the state machine; without this update
-	// the unique index `idx_one_pending_task_per_issue` would block the
-	// Coordinator's next stage from inserting its own queued task.
-	if _, err := pool.Exec(ctx, `
-		UPDATE agent_task_queue
-		SET status = 'completed', completed_at = NOW()
-		WHERE loop_id = $1 AND task_type = $2 AND status IN ('queued', 'dispatched', 'running')`,
-		loopID, taskType); err != nil {
-		t.Fatalf("mark prior task complete: %v", err)
-	}
-
-	// Insert the agent_task_queue row. The Coordinator only reads id, agent_id,
-	// task_type, and loop_id; we use defaults for the other columns.
-	_, err := pool.Exec(ctx, `
-		INSERT INTO agent_task_queue (id, agent_id, runtime_id, issue_id, status, priority, task_type, loop_id, created_at)
-		VALUES ($1, $2, $3, (SELECT issue_id FROM loops WHERE id = $4), 'completed', 1, $5, $4, NOW())`,
-		taskID, agentID, runtimeID, loopID, taskType)
-	if err != nil {
-		t.Fatalf("seed task: %v", err)
-	}
-
-	// Insert the task_run row with the result JSON (or empty for plan/develop).
 	var output string
 	if result != nil {
 		b, _ := json.Marshal(result)
 		output = string(b)
 	}
-	_, err = pool.Exec(ctx, `
-		INSERT INTO task_runs (id, task_id, agent_id, status, output, started_at, created_at)
-		VALUES ($1, $2, $3, 'completed', $4, NOW(), NOW())`,
-		uuid.NewString(), taskID, agentID, output)
-	if err != nil {
-		t.Fatalf("seed task_run: %v", err)
+	seedTerminalLifecycleEvent(t, pool, loopID, agentID, taskType, "run.completed", output, "")
+	processed, err := projector.ProcessNext(context.Background())
+	if err != nil || !processed {
+		t.Fatalf("project completed task = processed:%v err:%v", processed, err)
 	}
-
-	// Publish the event. The Coordinator handler runs in a goroutine.
-	bus.Publish(events.Event{
-		Type:    protocol.EventTaskCompleted,
-		Payload: map[string]any{"task_id": taskID},
-	})
 }
 
 // waitForStage polls the store until the loop's current_stage matches,
@@ -233,8 +183,7 @@ func intPtr(i int) *int { return &i }
 func TestIntegration_StartLoop_TransitionsPendingToRunning(t *testing.T) {
 	pool := testPool(t)
 	q := dbpkg.New(pool)
-	bus := events.New()
-	coord := looppkg.NewCoordinator(q, bus)
+	coord := looppkg.NewCoordinator(q, pool)
 	store := looppkg.NewStore(q)
 
 	wsID := uuid.NewString()
@@ -298,8 +247,7 @@ func TestIntegration_StartLoop_TransitionsPendingToRunning(t *testing.T) {
 func TestIntegration_StartLoop_RefusesNonPending(t *testing.T) {
 	pool := testPool(t)
 	q := dbpkg.New(pool)
-	bus := events.New()
-	coord := looppkg.NewCoordinator(q, bus)
+	coord := looppkg.NewCoordinator(q, pool)
 	store := looppkg.NewStore(q)
 
 	wsID := uuid.NewString()
@@ -326,5 +274,51 @@ func TestIntegration_StartLoop_RefusesNonPending(t *testing.T) {
 
 	if err := coord.StartLoop(ctx, loopRow.ID); err == nil {
 		t.Error("expected StartLoop to refuse non-pending loop, got nil error")
+	}
+}
+
+// TestIntegration_StartLoop_RollsBackOnInvalidStageAgent proves that the first
+// Work Item and the pending->running transition share one transaction. A bad
+// stage override must leave neither half committed.
+func TestIntegration_StartLoop_RollsBackOnInvalidStageAgent(t *testing.T) {
+	pool := testPool(t)
+	q := dbpkg.New(pool)
+	coord := looppkg.NewCoordinator(q, pool)
+	store := looppkg.NewStore(q)
+
+	wsID := uuid.NewString()
+	issueID := uuid.NewString()
+	agentID := uuid.NewString()
+	seedWorkspaceAndIssue(t, pool, wsID, issueID)
+	seedAgent(t, pool, wsID, agentID)
+	t.Cleanup(func() {
+		cleanupLoopData(t, pool, wsID, issueID, agentID)
+	})
+
+	ctx := context.Background()
+	loopRow, err := store.CreateLoop(ctx, looppkg.CreateLoopInput{
+		IssueID: issueID, WorkspaceID: wsID, AgentID: &agentID,
+		Config: []byte(`{"stage_agents":{"plan":"not-a-uuid"}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := coord.StartLoop(ctx, loopRow.ID); err == nil {
+		t.Fatal("expected StartLoop to reject invalid plan agent")
+	}
+
+	got, err := store.GetLoop(ctx, loopRow.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != looppkg.StatusPending || got.CurrentStage != nil || got.StartedAt != nil {
+		t.Fatalf("failed StartLoop changed loop: status=%q stage=%v started_at=%v", got.Status, got.CurrentStage, got.StartedAt)
+	}
+	var tasks int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM agent_task_queue WHERE loop_id = $1`, loopRow.ID).Scan(&tasks); err != nil {
+		t.Fatal(err)
+	}
+	if tasks != 0 {
+		t.Fatalf("failed StartLoop committed %d Work Items", tasks)
 	}
 }

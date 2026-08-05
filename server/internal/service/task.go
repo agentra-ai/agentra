@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -201,21 +200,12 @@ func (s *TaskService) CancelTasksForIssue(ctx context.Context, issueID pgtype.UU
 // CancelTask cancels a single task by ID. It broadcasts a task:cancelled event
 // so frontends can update immediately.
 func (s *TaskService) CancelTask(ctx context.Context, taskID pgtype.UUID) (*db.AgentTaskQueue, error) {
-	task, runID, err := s.Lifecycle.Cancel(ctx, taskID)
+	task, _, err := s.Lifecycle.Cancel(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("cancel task: %w", err)
 	}
 
 	slog.Info("task cancelled", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
-
-	// Reconcile agent status
-	s.ReconcileAgentStatus(ctx, task.AgentID)
-	if runID.Valid {
-		s.endExecutionTrace(ctx, runID, "aborted")
-	}
-
-	// Broadcast cancellation as a task:failed event so frontends clear the live card
-	s.broadcastTaskEvent(ctx, protocol.EventTaskCancelled, task, runID)
 
 	return &task, nil
 }
@@ -491,77 +481,8 @@ func (s *TaskService) CompleteTask(ctx context.Context, ref RunRef, result []byt
 	}
 
 	slog.Info("task completed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
-	// End execution trace (new execution_traces table).
-	s.endExecutionTrace(ctx, ref.RunID, "completed")
-
-	// Post agent output as a comment, but only for assignment-triggered tasks.
-	// Comment-triggered tasks: the agent replies via CLI with --parent, so
-	// posting here would create a duplicate.
-	if !task.TriggerCommentID.Valid {
-		if payload.Output != "" {
-			s.createAgentComment(ctx, task.IssueID, task.AgentID, redact.Text(payload.Output), "comment", task.TriggerCommentID)
-		}
-	}
-
-	// Reconcile agent status
-	s.ReconcileAgentStatus(ctx, task.AgentID)
-
-	// Append-only telemetry record (Issue #11). Fire-and-forget: never block
-	// the completion path on a metrics write failure.
-	s.recordTaskMetric(ctx, task, "completed", payload.DurationMs, tokenInput, tokenOutput, 0, "")
-
-	// Broadcast
-	s.broadcastTaskEvent(ctx, protocol.EventTaskCompleted, task, ref.RunID)
 
 	return &task, nil
-}
-
-// recordTaskMetric writes one row to agent_task_metrics in a detached
-// 2s-timeout context. Best-effort: log a warning on failure.
-func (s *TaskService) recordTaskMetric(ctx context.Context, task db.AgentTaskQueue, status string, durationMs, tokenIn, tokenOut int64, costUsd float64, errCategory string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	issuePriority := "medium"
-	if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil && issue.Priority != "" {
-		issuePriority = issue.Priority
-	}
-
-	var pgCost pgtype.Numeric
-	if costUsd != 0 {
-		_ = pgCost.Scan(fmt.Sprintf("%.6f", costUsd))
-		pgCost.Valid = true
-	}
-
-	errMsg := pgtype.Text{String: errCategory, Valid: errCategory != ""}
-
-	// WorkspaceID is not on AgentTaskQueue; look up via issue.
-	var workspaceID pgtype.UUID
-	if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil {
-		workspaceID = issue.WorkspaceID
-	} else {
-		slog.Warn("record metric: lookup workspace failed", "task_id", util.UUIDToString(task.ID), "error", err)
-		return
-	}
-
-	if _, err := s.Queries.InsertAgentTaskMetric(ctx, db.InsertAgentTaskMetricParams{
-		WorkspaceID:   workspaceID,
-		TaskID:        task.ID,
-		IssueID:       task.IssueID,
-		Provider:      "", // resolved by join with runtime at query time
-		Model:         "",
-		RuntimeMode:   task.RuntimeType,
-		TaskType:      normalizeMetricTaskType(task.TaskType),
-		IssuePriority: issuePriority,
-		Status:        status,
-		ErrorCategory: errMsg,
-		DurationMs:    durationMs,
-		TokenInput:    int32(tokenIn),
-		TokenOutput:   int32(tokenOut),
-		CostUsd:       pgCost,
-	}); err != nil {
-		slog.Warn("record metric failed", "task_id", util.UUIDToString(task.ID), "error", err)
-	}
 }
 
 // normalizeMetricTaskType separates queue execution stages (standard,
@@ -591,11 +512,6 @@ func (s *TaskService) RetryTask(ctx context.Context, ref RunRef, errMsg string) 
 	slog.Info("task retry scheduled", "task_id", util.UUIDToString(task.ID),
 		"retry_count", task.RetryCount, "max_retries", task.MaxRetries,
 		"issue_id", util.UUIDToString(task.IssueID))
-	s.endExecutionTrace(ctx, ref.RunID, "failed")
-
-	// Broadcast retry event
-	s.broadcastTaskEvent(ctx, protocol.EventTaskRetry, task, ref.RunID)
-
 	return &task, true, nil
 }
 
@@ -622,17 +538,6 @@ func (s *TaskService) FailTask(ctx context.Context, ref RunRef, errMsg string) (
 	}
 
 	slog.Warn("task failed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID), "error", errMsg)
-
-	// End execution trace (new execution_traces table).
-	s.endExecutionTrace(ctx, ref.RunID, "failed")
-	if errMsg != "" {
-		s.createAgentComment(ctx, task.IssueID, task.AgentID, redact.Text(errMsg), "system", task.TriggerCommentID)
-	}
-	// Reconcile agent status
-	s.ReconcileAgentStatus(ctx, task.AgentID)
-
-	// Broadcast
-	s.broadcastTaskEvent(ctx, protocol.EventTaskFailed, task, ref.RunID)
 
 	return &task, nil
 }

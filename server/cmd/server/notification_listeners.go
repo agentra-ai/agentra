@@ -18,7 +18,6 @@ type mention struct {
 	ID   string // user_id, agent_id, issue_id, or "all"
 }
 
-
 // statusLabels maps DB status values to human-readable labels for notifications.
 var statusLabels = map[string]string{
 	"backlog":     "Backlog",
@@ -109,19 +108,22 @@ func notifySubscribers(
 			continue
 		}
 
-		item, err := queries.CreateInboxItem(ctx, db.CreateInboxItemParams{
-			WorkspaceID:   parseUUID(workspaceID),
-			RecipientType: "member",
-			RecipientID:   sub.UserID,
-			Type:          notifType,
-			Severity:      severity,
-			IssueID:       parseUUID(issueID),
-			Title:         title,
-			Body:          util.StrToText(body),
-			ActorType:     util.StrToText(e.ActorType),
-			ActorID:       parseUUID(e.ActorID),
-			Details:       details,
-		})
+		var item db.InboxItem
+		if e.ID != "" {
+			item, err = queries.CreateInboxItemForLifecycleEvent(ctx, db.CreateInboxItemForLifecycleEventParams{
+				WorkspaceID: parseUUID(workspaceID), RecipientType: "member", RecipientID: sub.UserID,
+				Type: notifType, Severity: severity, IssueID: parseUUID(issueID), Title: title,
+				Body: util.StrToText(body), ActorType: util.StrToText(e.ActorType),
+				ActorID: parseUUID(e.ActorID), Details: details, LifecycleEventID: parseUUID(e.ID),
+			})
+		} else {
+			item, err = queries.CreateInboxItem(ctx, db.CreateInboxItemParams{
+				WorkspaceID: parseUUID(workspaceID), RecipientType: "member", RecipientID: sub.UserID,
+				Type: notifType, Severity: severity, IssueID: parseUUID(issueID), Title: title,
+				Body: util.StrToText(body), ActorType: util.StrToText(e.ActorType),
+				ActorID: parseUUID(e.ActorID), Details: details,
+			})
+		}
 		if err != nil {
 			slog.Error("subscriber notification creation failed",
 				"subscriber_id", subID, "type", notifType, "error", err)
@@ -600,6 +602,7 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 
 		notifySubscribers(ctx, queries, bus, issueID, issue.Status, e.WorkspaceID,
 			events.Event{
+				ID:          e.ID,
 				Type:        e.Type,
 				WorkspaceID: e.WorkspaceID,
 				ActorType:   "agent",

@@ -106,6 +106,9 @@ func registerListeners(bus *events.Bus, hub *realtime.Hub) {
 			"payload":  e.Payload,
 			"actor_id": e.ActorID,
 		}
+		if e.ID != "" {
+			msg["event_id"] = e.ID
+		}
 		data, err := json.Marshal(msg)
 		if err != nil {
 			slog.Error("failed to marshal event", "event_type", e.Type, "error", err)

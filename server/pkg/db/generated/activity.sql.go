@@ -15,7 +15,7 @@ const createActivity = `-- name: CreateActivity :one
 INSERT INTO activity_log (
     workspace_id, issue_id, actor_type, actor_id, action, details
 ) VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, workspace_id, issue_id, actor_type, actor_id, action, details, created_at
+RETURNING id, workspace_id, issue_id, actor_type, actor_id, action, details, created_at, lifecycle_event_id
 `
 
 type CreateActivityParams struct {
@@ -46,12 +46,58 @@ func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) 
 		&i.Action,
 		&i.Details,
 		&i.CreatedAt,
+		&i.LifecycleEventID,
+	)
+	return i, err
+}
+
+const createActivityForLifecycleEvent = `-- name: CreateActivityForLifecycleEvent :one
+INSERT INTO activity_log (
+    workspace_id, issue_id, actor_type, actor_id, action, details,
+    lifecycle_event_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (lifecycle_event_id) WHERE lifecycle_event_id IS NOT NULL
+DO UPDATE SET lifecycle_event_id = EXCLUDED.lifecycle_event_id
+RETURNING id, workspace_id, issue_id, actor_type, actor_id, action, details, created_at, lifecycle_event_id
+`
+
+type CreateActivityForLifecycleEventParams struct {
+	WorkspaceID      pgtype.UUID `json:"workspace_id"`
+	IssueID          pgtype.UUID `json:"issue_id"`
+	ActorType        pgtype.Text `json:"actor_type"`
+	ActorID          pgtype.UUID `json:"actor_id"`
+	Action           string      `json:"action"`
+	Details          []byte      `json:"details"`
+	LifecycleEventID pgtype.UUID `json:"lifecycle_event_id"`
+}
+
+func (q *Queries) CreateActivityForLifecycleEvent(ctx context.Context, arg CreateActivityForLifecycleEventParams) (ActivityLog, error) {
+	row := q.db.QueryRow(ctx, createActivityForLifecycleEvent,
+		arg.WorkspaceID,
+		arg.IssueID,
+		arg.ActorType,
+		arg.ActorID,
+		arg.Action,
+		arg.Details,
+		arg.LifecycleEventID,
+	)
+	var i ActivityLog
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.IssueID,
+		&i.ActorType,
+		&i.ActorID,
+		&i.Action,
+		&i.Details,
+		&i.CreatedAt,
+		&i.LifecycleEventID,
 	)
 	return i, err
 }
 
 const listActivities = `-- name: ListActivities :many
-SELECT id, workspace_id, issue_id, actor_type, actor_id, action, details, created_at FROM activity_log
+SELECT id, workspace_id, issue_id, actor_type, actor_id, action, details, created_at, lifecycle_event_id FROM activity_log
 WHERE issue_id = $1
 ORDER BY created_at ASC
 LIMIT $2 OFFSET $3
@@ -81,6 +127,7 @@ func (q *Queries) ListActivities(ctx context.Context, arg ListActivitiesParams) 
 			&i.Action,
 			&i.Details,
 			&i.CreatedAt,
+			&i.LifecycleEventID,
 		); err != nil {
 			return nil, err
 		}

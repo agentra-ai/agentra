@@ -22,6 +22,7 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/realtime"
+	"github.com/agentra-ai/agentra/server/internal/service"
 	"github.com/agentra-ai/agentra/server/internal/util"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/agentra-ai/agentra/server/pkg/protocol"
@@ -29,12 +30,13 @@ import (
 )
 
 var (
-	testServer      *httptest.Server
-	testPool        *pgxpool.Pool
-	testHub         *realtime.Hub
-	testToken       string
-	testUserID      string
-	testWorkspaceID string
+	testServer          *httptest.Server
+	testPool            *pgxpool.Pool
+	testHub             *realtime.Hub
+	testToken           string
+	testUserID          string
+	testWorkspaceID     string
+	testLifecycleWorker *service.LifecycleOutboxWorker
 )
 
 // jwtSecret is resolved at runtime via auth.JWTSecret() so it respects
@@ -86,6 +88,7 @@ func TestMain(m *testing.M) {
 
 	bus := events.New()
 	registerListeners(bus, hub)
+	testLifecycleWorker = service.NewLifecycleOutboxWorker(db.New(pool), bus, service.NewTraceServiceFromPool(pool))
 	stripeClient := stripelib.NewClient("", "", "", "")
 	router := NewRouter(pool, hub, bus, stripeClient)
 	testServer = httptest.NewServer(router)
@@ -122,6 +125,19 @@ func requireIntegrationDB(t *testing.T) {
 	t.Helper()
 	if testPool == nil || testServer == nil {
 		t.Skip("integration database is not available")
+	}
+}
+
+func drainLifecycleOutbox(t *testing.T) {
+	t.Helper()
+	for {
+		processed, err := testLifecycleWorker.ProcessNext(context.Background())
+		if err != nil {
+			t.Fatalf("drain lifecycle outbox: %v", err)
+		}
+		if !processed {
+			return
+		}
 	}
 }
 
@@ -1207,11 +1223,14 @@ func TestTaskRunIdentityIsolatesRetryMessages(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	var commentsBeforeStale, metricsBeforeStale int
+	var commentsBeforeStale, metricsBeforeStale, lifecycleEventsBeforeStale int
 	if err := testPool.QueryRow(ctx, `SELECT count(*) FROM comment WHERE issue_id = $1`, issueID).Scan(&commentsBeforeStale); err != nil {
 		t.Fatal(err)
 	}
 	if err := testPool.QueryRow(ctx, `SELECT count(*) FROM agent_task_metrics WHERE task_id = $1`, taskID).Scan(&metricsBeforeStale); err != nil {
+		t.Fatal(err)
+	}
+	if err := testPool.QueryRow(ctx, `SELECT count(*) FROM lifecycle_outbox WHERE work_item_id = $1`, taskID).Scan(&lifecycleEventsBeforeStale); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1304,15 +1323,21 @@ func TestTaskRunIdentityIsolatesRetryMessages(t *testing.T) {
 		t.Fatalf("run states = old:%q current:%q session:%q work:%q", run1Status, run2Status, run2Session, run2WorkDir)
 	}
 
-	var commentsAfterStale, metricsAfterStale int
+	var commentsAfterStale, metricsAfterStale, lifecycleEventsAfterStale int
 	if err := testPool.QueryRow(ctx, `SELECT count(*) FROM comment WHERE issue_id = $1`, issueID).Scan(&commentsAfterStale); err != nil {
 		t.Fatal(err)
 	}
 	if err := testPool.QueryRow(ctx, `SELECT count(*) FROM agent_task_metrics WHERE task_id = $1`, taskID).Scan(&metricsAfterStale); err != nil {
 		t.Fatal(err)
 	}
+	if err := testPool.QueryRow(ctx, `SELECT count(*) FROM lifecycle_outbox WHERE work_item_id = $1`, taskID).Scan(&lifecycleEventsAfterStale); err != nil {
+		t.Fatal(err)
+	}
 	if commentsAfterStale != commentsBeforeStale || metricsAfterStale != metricsBeforeStale {
 		t.Fatalf("stale callbacks wrote projections: comments %d->%d metrics %d->%d", commentsBeforeStale, commentsAfterStale, metricsBeforeStale, metricsAfterStale)
+	}
+	if lifecycleEventsAfterStale != lifecycleEventsBeforeStale {
+		t.Fatalf("stale callbacks wrote lifecycle events: %d->%d", lifecycleEventsBeforeStale, lifecycleEventsAfterStale)
 	}
 }
 
@@ -1651,6 +1676,7 @@ func TestTaskCompletionPersistsUsageArtifactsAndMetrics(t *testing.T) {
 		t.Fatalf("complete task: status = %d: %s", resp.StatusCode, body)
 	}
 	resp.Body.Close()
+	drainLifecycleOutbox(t)
 
 	var resultJSON []byte
 	if err := testPool.QueryRow(context.Background(), `SELECT result FROM agent_task_queue WHERE id = $1`, taskID).Scan(&resultJSON); err != nil {
@@ -1871,6 +1897,7 @@ func TestGatewayRetryClosesRunBeforeRequeue(t *testing.T) {
 
 	testHub.GatewayHub.OnTaskDispatched("gateway-1", testWorkspaceID, taskID, run1, "container-1")
 	testHub.GatewayHub.OnTaskFail("gateway-1", testWorkspaceID, taskID, run1, "transient gateway failure", true)
+	drainLifecycleOutbox(t)
 
 	var taskStatus, run1Status, trace1Status string
 	var activeRunID *string

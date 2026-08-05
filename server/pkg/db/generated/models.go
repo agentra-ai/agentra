@@ -10,14 +10,15 @@ import (
 )
 
 type ActivityLog struct {
-	ID          pgtype.UUID        `json:"id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	IssueID     pgtype.UUID        `json:"issue_id"`
-	ActorType   pgtype.Text        `json:"actor_type"`
-	ActorID     pgtype.UUID        `json:"actor_id"`
-	Action      string             `json:"action"`
-	Details     []byte             `json:"details"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ID               pgtype.UUID        `json:"id"`
+	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
+	IssueID          pgtype.UUID        `json:"issue_id"`
+	ActorType        pgtype.Text        `json:"actor_type"`
+	ActorID          pgtype.UUID        `json:"actor_id"`
+	Action           string             `json:"action"`
+	Details          []byte             `json:"details"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	LifecycleEventID pgtype.UUID        `json:"lifecycle_event_id"`
 }
 
 type Agent struct {
@@ -107,6 +108,7 @@ type AgentTaskMetric struct {
 	TokenOutput   int32              `json:"token_output"`
 	CostUsd       pgtype.Numeric     `json:"cost_usd"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	RunID         pgtype.UUID        `json:"run_id"`
 }
 
 type AgentTaskQueue struct {
@@ -177,16 +179,17 @@ type CloudRuntimeTask struct {
 }
 
 type Comment struct {
-	ID          pgtype.UUID        `json:"id"`
-	IssueID     pgtype.UUID        `json:"issue_id"`
-	AuthorType  string             `json:"author_type"`
-	AuthorID    pgtype.UUID        `json:"author_id"`
-	Content     string             `json:"content"`
-	Type        string             `json:"type"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	ParentID    pgtype.UUID        `json:"parent_id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	ID               pgtype.UUID        `json:"id"`
+	IssueID          pgtype.UUID        `json:"issue_id"`
+	AuthorType       string             `json:"author_type"`
+	AuthorID         pgtype.UUID        `json:"author_id"`
+	Content          string             `json:"content"`
+	Type             string             `json:"type"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	ParentID         pgtype.UUID        `json:"parent_id"`
+	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
+	LifecycleEventID pgtype.UUID        `json:"lifecycle_event_id"`
 }
 
 type CommentReaction struct {
@@ -281,21 +284,22 @@ type GithubInstallation struct {
 }
 
 type InboxItem struct {
-	ID            pgtype.UUID        `json:"id"`
-	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
-	RecipientType string             `json:"recipient_type"`
-	RecipientID   pgtype.UUID        `json:"recipient_id"`
-	Type          string             `json:"type"`
-	Severity      string             `json:"severity"`
-	IssueID       pgtype.UUID        `json:"issue_id"`
-	Title         string             `json:"title"`
-	Body          pgtype.Text        `json:"body"`
-	Read          bool               `json:"read"`
-	Archived      bool               `json:"archived"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	ActorType     pgtype.Text        `json:"actor_type"`
-	ActorID       pgtype.UUID        `json:"actor_id"`
-	Details       []byte             `json:"details"`
+	ID               pgtype.UUID        `json:"id"`
+	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
+	RecipientType    string             `json:"recipient_type"`
+	RecipientID      pgtype.UUID        `json:"recipient_id"`
+	Type             string             `json:"type"`
+	Severity         string             `json:"severity"`
+	IssueID          pgtype.UUID        `json:"issue_id"`
+	Title            string             `json:"title"`
+	Body             pgtype.Text        `json:"body"`
+	Read             bool               `json:"read"`
+	Archived         bool               `json:"archived"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ActorType        pgtype.Text        `json:"actor_type"`
+	ActorID          pgtype.UUID        `json:"actor_id"`
+	Details          []byte             `json:"details"`
+	LifecycleEventID pgtype.UUID        `json:"lifecycle_event_id"`
 }
 
 type Invoice struct {
@@ -386,6 +390,38 @@ type IssueSubscriber struct {
 type IssueToLabel struct {
 	IssueID pgtype.UUID `json:"issue_id"`
 	LabelID pgtype.UUID `json:"label_id"`
+}
+
+type LifecycleEventDelivery struct {
+	EventID        pgtype.UUID        `json:"event_id"`
+	Consumer       string             `json:"consumer"`
+	Attempts       int32              `json:"attempts"`
+	AvailableAt    pgtype.Timestamptz `json:"available_at"`
+	LastError      pgtype.Text        `json:"last_error"`
+	DeadLetteredAt pgtype.Timestamptz `json:"dead_lettered_at"`
+}
+
+type LifecycleEventReceipt struct {
+	EventID     pgtype.UUID        `json:"event_id"`
+	Consumer    string             `json:"consumer"`
+	ProcessedAt pgtype.Timestamptz `json:"processed_at"`
+}
+
+type LifecycleOutbox struct {
+	ID             pgtype.UUID        `json:"id"`
+	WorkItemID     pgtype.UUID        `json:"work_item_id"`
+	RunID          pgtype.UUID        `json:"run_id"`
+	EventType      string             `json:"event_type"`
+	EventVersion   int32              `json:"event_version"`
+	Payload        []byte             `json:"payload"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	AvailableAt    pgtype.Timestamptz `json:"available_at"`
+	LockedAt       pgtype.Timestamptz `json:"locked_at"`
+	LockToken      pgtype.UUID        `json:"lock_token"`
+	ProcessedAt    pgtype.Timestamptz `json:"processed_at"`
+	DeadLetteredAt pgtype.Timestamptz `json:"dead_lettered_at"`
+	Attempts       int32              `json:"attempts"`
+	LastError      pgtype.Text        `json:"last_error"`
 }
 
 type Loop struct {

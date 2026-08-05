@@ -18,6 +18,9 @@ RETURNING *;
 -- Returns a single loop by ID, or no rows.
 SELECT * FROM loops WHERE id = $1;
 
+-- name: GetLoopForUpdate :one
+SELECT * FROM loops WHERE id = $1 FOR UPDATE;
+
 -- name: ListLoops :many
 -- Lists loops for a workspace with optional status/issue filters.
 -- limit is required and bounded to prevent unbounded scans.

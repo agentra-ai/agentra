@@ -7,6 +7,7 @@ import (
 
 // Event represents a domain event published by handlers or services.
 type Event struct {
+	ID          string // durable source event id; empty for transient events
 	Type        string // e.g. "issue:created", "inbox:new"
 	WorkspaceID string // routes to correct Hub room
 	ActorType   string // "member", "agent", or "system"

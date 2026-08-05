@@ -22,7 +22,8 @@ type RunRef struct {
 
 // RunCompletion contains the authoritative data persisted when a Run and its
 // Work Item complete. Projection-only effects (comments, metrics, realtime,
-// and the denormalized execution Trace) happen after this transition commits.
+// and the denormalized execution Trace) are recovered from the durable event
+// committed by this transition.
 type RunCompletion struct {
 	Result      []byte
 	SessionID   string
@@ -69,7 +70,7 @@ func (l *RunLifecycle) Start(ctx context.Context, ref RunRef) (db.AgentTaskQueue
 			return fmt.Errorf("start work item: %w", err)
 		}
 		task = updated
-		return nil
+		return l.appendEvent(ctx, q, LifecycleEventRunStarted, task, ref.RunID)
 	})
 	return task, err
 }
@@ -140,7 +141,7 @@ func (l *RunLifecycle) Checkpoint(ctx context.Context, ref RunRef, sessionID, wo
 			return fmt.Errorf("checkpoint work item: %w", err)
 		}
 		task = updated
-		return nil
+		return l.appendEvent(ctx, q, LifecycleEventRunCheckpoint, task, ref.RunID)
 	})
 	return task, err
 }
@@ -176,7 +177,7 @@ func (l *RunLifecycle) Complete(ctx context.Context, ref RunRef, completion RunC
 			return fmt.Errorf("complete work item: %w", err)
 		}
 		task = updated
-		return nil
+		return l.appendEvent(ctx, q, LifecycleEventRunCompleted, task, ref.RunID)
 	})
 	return task, err
 }
@@ -212,7 +213,7 @@ func (l *RunLifecycle) Fail(ctx context.Context, ref RunRef, errMsg string) (db.
 			return fmt.Errorf("fail work item: %w", err)
 		}
 		task = updated
-		return nil
+		return l.appendEvent(ctx, q, LifecycleEventRunFailed, task, ref.RunID)
 	})
 	return task, err
 }
@@ -242,7 +243,7 @@ func (l *RunLifecycle) RetryActive(ctx context.Context, ref RunRef, errMsg strin
 			return fmt.Errorf("retry work item: %w", err)
 		}
 		task = updated
-		return nil
+		return l.appendEvent(ctx, q, LifecycleEventRunRetry, task, ref.RunID)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return db.AgentTaskQueue{}, false, nil
@@ -292,6 +293,9 @@ func (l *RunLifecycle) Cancel(ctx context.Context, workItemID pgtype.UUID) (db.A
 	task, err := q.CancelAgentTask(ctx, workItemID)
 	if err != nil {
 		return db.AgentTaskQueue{}, pgtype.UUID{}, fmt.Errorf("cancel work item: %w", err)
+	}
+	if err := l.appendEvent(ctx, q, LifecycleEventRunCancelled, task, runID); err != nil {
+		return db.AgentTaskQueue{}, pgtype.UUID{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return db.AgentTaskQueue{}, pgtype.UUID{}, fmt.Errorf("commit cancel transition: %w", err)

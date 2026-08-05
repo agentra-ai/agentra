@@ -22,6 +22,17 @@ INSERT INTO inbox_item (
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
+-- name: CreateInboxItemForLifecycleEvent :one
+INSERT INTO inbox_item (
+    workspace_id, recipient_type, recipient_id,
+    type, severity, issue_id, title, body,
+    actor_type, actor_id, details, lifecycle_event_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+ON CONFLICT (lifecycle_event_id, recipient_type, recipient_id)
+    WHERE lifecycle_event_id IS NOT NULL
+DO UPDATE SET lifecycle_event_id = EXCLUDED.lifecycle_event_id
+RETURNING *;
+
 -- name: MarkInboxRead :one
 UPDATE inbox_item SET read = true
 WHERE id = $1

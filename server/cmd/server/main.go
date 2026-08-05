@@ -19,6 +19,7 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/logger"
 	"github.com/agentra-ai/agentra/server/internal/realtime"
+	"github.com/agentra-ai/agentra/server/internal/service"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
 
@@ -81,7 +82,9 @@ func main() {
 	// before any HTTP request can hit CreateLoop.
 	sweepCtx, sweepCancel := context.WithCancel(context.Background())
 	go runRuntimeSweeper(sweepCtx, queries, bus)
-	loopCoord := runLoopCoordinator(sweepCtx, queries, bus)
+	loopCoord := runLoopCoordinator(sweepCtx, pool, queries)
+	lifecycleWorker := service.NewLifecycleOutboxWorker(queries, bus, service.NewTraceServiceFromPool(pool))
+	go lifecycleWorker.Run(sweepCtx)
 
 	stripeClient := stripelib.NewClient(
 		os.Getenv("STRIPE_SECRET_KEY"),

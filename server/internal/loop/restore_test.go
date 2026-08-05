@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/agentra-ai/agentra/server/internal/events"
 	looppkg "github.com/agentra-ai/agentra/server/internal/loop"
 	dbpkg "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
@@ -20,8 +19,7 @@ import (
 func TestIntegration_RestoreOnStartup_ReenqueuesMissingTask(t *testing.T) {
 	pool := testPool(t)
 	q := dbpkg.New(pool)
-	bus := events.New()
-	coord := looppkg.NewCoordinator(q, bus)
+	coord := looppkg.NewCoordinator(q, pool)
 	store := looppkg.NewStore(q)
 
 	wsID := uuid.NewString()
@@ -77,8 +75,7 @@ func TestIntegration_RestoreOnStartup_ReenqueuesMissingTask(t *testing.T) {
 func TestIntegration_RestoreOnStartup_TimeoutsLongRunningLoop(t *testing.T) {
 	pool := testPool(t)
 	q := dbpkg.New(pool)
-	bus := events.New()
-	coord := looppkg.NewCoordinator(q, bus)
+	coord := looppkg.NewCoordinator(q, pool)
 	store := looppkg.NewStore(q)
 
 	wsID := uuid.NewString()
@@ -142,8 +139,7 @@ func TestIntegration_RestoreOnStartup_TimeoutsLongRunningLoop(t *testing.T) {
 func TestIntegration_RestoreOnStartup_LeavesPausedLoopAlone(t *testing.T) {
 	pool := testPool(t)
 	q := dbpkg.New(pool)
-	bus := events.New()
-	coord := looppkg.NewCoordinator(q, bus)
+	coord := looppkg.NewCoordinator(q, pool)
 	store := looppkg.NewStore(q)
 
 	wsID := uuid.NewString()
@@ -191,7 +187,7 @@ func TestIntegration_RestoreOnStartup_LeavesPausedLoopAlone(t *testing.T) {
 func TestIntegration_RestoreOnStartup_FailsRunningLoopWithoutStage(t *testing.T) {
 	pool := testPool(t)
 	q := dbpkg.New(pool)
-	coord := looppkg.NewCoordinator(q, events.New())
+	coord := looppkg.NewCoordinator(q, pool)
 	store := looppkg.NewStore(q)
 
 	wsID := uuid.NewString()
@@ -226,7 +222,7 @@ func TestIntegration_RestoreOnStartup_FailsRunningLoopWithoutStage(t *testing.T)
 func TestIntegration_RestoreOnStartup_FailsRunningLoopWithoutAgent(t *testing.T) {
 	pool := testPool(t)
 	q := dbpkg.New(pool)
-	coord := looppkg.NewCoordinator(q, events.New())
+	coord := looppkg.NewCoordinator(q, pool)
 	store := looppkg.NewStore(q)
 
 	wsID := uuid.NewString()

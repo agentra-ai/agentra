@@ -32,6 +32,7 @@ func (s *TraceService) StartTrace(ctx context.Context, runID, taskID, agentID, i
 	row := s.pool.QueryRow(ctx, `
 		INSERT INTO execution_traces (id, run_id, task_id, agent_id, issue_id, provider, model, status, start_time)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, 'running', $8)
+		ON CONFLICT (run_id) DO UPDATE SET run_id = EXCLUDED.run_id
 		RETURNING id, task_id, agent_id, issue_id, provider, model, steps, tools, tokens, cost, start_time, end_time, status, created_at, updated_at, run_id
 	`,
 		id,

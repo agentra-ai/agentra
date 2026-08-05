@@ -1,16 +1,11 @@
 package loop
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
-
-	"github.com/agentra-ai/agentra/server/internal/events"
-	dbpkg "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
 
 // newTaskID returns a fresh UUID string for use as a loop-relative identifier.
@@ -120,30 +115,4 @@ func parseTaskResult(raw []byte) *TaskResult {
 		return nil
 	}
 	return &r
-}
-
-// eventTaskID extracts the task_id string from an event payload, which the
-// bus serializes as map[string]any.
-func eventTaskID(e events.Event) (string, bool) {
-	m, ok := e.Payload.(map[string]any)
-	if !ok {
-		return "", false
-	}
-	id, ok := m["task_id"].(string)
-	return id, ok
-}
-
-// latestTaskResult returns the parsed TaskResult of the most recent task_run
-// for a task, or nil if no run exists or its output is unparseable. ListTaskRunsByTask
-// is ordered by created_at DESC, so index 0 is the latest run.
-func latestTaskResult(ctx context.Context, q *dbpkg.Queries, taskID pgtype.UUID) *TaskResult {
-	runs, err := q.ListTaskRunsByTask(ctx, taskID)
-	if err != nil || len(runs) == 0 {
-		return nil
-	}
-	latest := runs[0]
-	if !latest.Output.Valid {
-		return nil
-	}
-	return parseTaskResult([]byte(latest.Output.String))
 }

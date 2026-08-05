@@ -12,7 +12,7 @@ import (
 )
 
 const getMetricsByIssue = `-- name: GetMetricsByIssue :many
-SELECT id, workspace_id, task_id, issue_id, provider, model, runtime_mode, task_type, issue_priority, status, error_category, duration_ms, token_input, token_output, cost_usd, created_at FROM agent_task_metrics
+SELECT id, workspace_id, task_id, issue_id, provider, model, runtime_mode, task_type, issue_priority, status, error_category, duration_ms, token_input, token_output, cost_usd, created_at, run_id FROM agent_task_metrics
 WHERE issue_id = $1
 ORDER BY created_at DESC
 LIMIT 100
@@ -45,6 +45,7 @@ func (q *Queries) GetMetricsByIssue(ctx context.Context, issueID pgtype.UUID) ([
 			&i.TokenOutput,
 			&i.CostUsd,
 			&i.CreatedAt,
+			&i.RunID,
 		); err != nil {
 			return nil, err
 		}
@@ -170,25 +171,28 @@ func (q *Queries) GetMetricsSummary(ctx context.Context, arg GetMetricsSummaryPa
 
 const insertAgentTaskMetric = `-- name: InsertAgentTaskMetric :one
 INSERT INTO agent_task_metrics (
-    workspace_id, task_id, issue_id,
+    workspace_id, task_id, issue_id, run_id,
     provider, model, runtime_mode,
     task_type, issue_priority,
     status, error_category,
     duration_ms, token_input, token_output, cost_usd
 ) VALUES (
-    $1, $2, $3,
-    $4, $5, $6,
-    $7, $8,
-    $9, $10,
-    $11, $12, $13, $14
+    $1, $2, $3, $4,
+    $5, $6, $7,
+    $8, $9,
+    $10, $11,
+    $12, $13, $14, $15
 )
-RETURNING id, workspace_id, task_id, issue_id, provider, model, runtime_mode, task_type, issue_priority, status, error_category, duration_ms, token_input, token_output, cost_usd, created_at
+ON CONFLICT (run_id) WHERE run_id IS NOT NULL
+DO UPDATE SET run_id = EXCLUDED.run_id
+RETURNING id, workspace_id, task_id, issue_id, provider, model, runtime_mode, task_type, issue_priority, status, error_category, duration_ms, token_input, token_output, cost_usd, created_at, run_id
 `
 
 type InsertAgentTaskMetricParams struct {
 	WorkspaceID   pgtype.UUID    `json:"workspace_id"`
 	TaskID        pgtype.UUID    `json:"task_id"`
 	IssueID       pgtype.UUID    `json:"issue_id"`
+	RunID         pgtype.UUID    `json:"run_id"`
 	Provider      string         `json:"provider"`
 	Model         string         `json:"model"`
 	RuntimeMode   string         `json:"runtime_mode"`
@@ -207,6 +211,7 @@ func (q *Queries) InsertAgentTaskMetric(ctx context.Context, arg InsertAgentTask
 		arg.WorkspaceID,
 		arg.TaskID,
 		arg.IssueID,
+		arg.RunID,
 		arg.Provider,
 		arg.Model,
 		arg.RuntimeMode,
@@ -237,6 +242,7 @@ func (q *Queries) InsertAgentTaskMetric(ctx context.Context, arg InsertAgentTask
 		&i.TokenOutput,
 		&i.CostUsd,
 		&i.CreatedAt,
+		&i.RunID,
 	)
 	return i, err
 }

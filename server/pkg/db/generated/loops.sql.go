@@ -125,6 +125,35 @@ func (q *Queries) GetLoopBranchAndIteration(ctx context.Context, id pgtype.UUID)
 	return i, err
 }
 
+const getLoopForUpdate = `-- name: GetLoopForUpdate :one
+SELECT id, issue_id, workspace_id, status, current_stage, iteration, max_iterations, pr_url, pr_number, branch_name, agent_id, config, failure_reason, started_at, completed_at, created_at, updated_at FROM loops WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) GetLoopForUpdate(ctx context.Context, id pgtype.UUID) (Loop, error) {
+	row := q.db.QueryRow(ctx, getLoopForUpdate, id)
+	var i Loop
+	err := row.Scan(
+		&i.ID,
+		&i.IssueID,
+		&i.WorkspaceID,
+		&i.Status,
+		&i.CurrentStage,
+		&i.Iteration,
+		&i.MaxIterations,
+		&i.PrUrl,
+		&i.PrNumber,
+		&i.BranchName,
+		&i.AgentID,
+		&i.Config,
+		&i.FailureReason,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const hasInFlightTaskForLoopStage = `-- name: HasInFlightTaskForLoopStage :one
 SELECT count(*) > 0 AS has_in_flight FROM agent_task_queue
 WHERE loop_id = $1 AND task_type = $2

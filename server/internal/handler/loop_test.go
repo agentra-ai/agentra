@@ -138,7 +138,7 @@ func TestCreateLoop_StartsLoopWhenCoordinatorWired(t *testing.T) {
 	// singleton, and writing started_at on a loop created from one test
 	// would race with reads from the rest of the suite.
 	wiredHandler := *testHandler
-	coord := looppkg.NewCoordinator(testHandler.Queries, testHandler.Bus)
+	coord := looppkg.NewCoordinator(testHandler.Queries, testHandler.TxStarter)
 	wiredHandler.SetLoopCoordinator(coord)
 
 	// Look up the seeded "Handler Test Agent" — StartLoop enqueues a

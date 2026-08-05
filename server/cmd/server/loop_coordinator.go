@@ -4,31 +4,28 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/agentra-ai/agentra/server/internal/events"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	looppkg "github.com/agentra-ai/agentra/server/internal/loop"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
-	"github.com/agentra-ai/agentra/server/pkg/protocol"
 )
 
-// runLoopCoordinator subscribes the loop Coordinator to task lifecycle events
-// and restores any loops that were running when the server last stopped.
+// runLoopCoordinator starts the durable lifecycle projector and restores any
+// loops that were running when the server last stopped.
 // The actual state machine lives in server/internal/loop (unit-tested there);
 // this is a thin wiring layer that mirrors runRuntimeSweeper.
 //
 // Returns the Coordinator so callers (e.g. main) can hand it to the Handler
 // for the synchronous StartLoop path that the CreateLoop handler drives.
-// Without this wiring, freshly created loops would sit forever in 'pending'
-// status because the event-driven state machine has no preceding task to
-// fire on for the plan stage.
-func runLoopCoordinator(ctx context.Context, queries *db.Queries, bus *events.Bus) *looppkg.Coordinator {
-	coord := looppkg.NewCoordinator(queries, bus)
+// Pending terminal events are drained before RestoreOnStartup so recovery
+// cannot re-enqueue a stage whose Run already finished.
+func runLoopCoordinator(ctx context.Context, pool *pgxpool.Pool, queries *db.Queries) *looppkg.Coordinator {
+	coord := looppkg.NewCoordinator(queries, pool)
+	projector := looppkg.NewLifecycleProjector(pool, queries, coord)
+	projector.Drain(ctx)
 	coord.RestoreOnStartup(ctx)
+	go projector.Run(ctx)
 
-	bus.Subscribe(protocol.EventTaskCompleted, coord.HandleTaskCompleted)
-	bus.Subscribe(protocol.EventTaskFailed, coord.HandleTaskFailed)
-
-	slog.Info("loop coordinator: subscribed",
-		"completed", protocol.EventTaskCompleted,
-		"failed", protocol.EventTaskFailed)
+	slog.Info("loop coordinator: durable lifecycle projector started")
 	return coord
 }
