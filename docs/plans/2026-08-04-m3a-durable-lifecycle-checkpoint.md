@@ -125,9 +125,24 @@ realtime delivery 为主的问题已在 M3A-01d 收口。
   保留一个 Run；重复 ack 幂等；Cloud Runtime capacity 阻止超额 claim；发送耗尽进入
   terminal failure/dead-letter；local claim 无法取得 cloud Work Item。
 
-边界：Gateway 进程重启后尚不能按 Docker label 接管已创建容器，terminal frame 也没有
-Gateway 本地 durable spool。当前保持 `cloud-runtime=experimental`，不把 server 侧 delivery
-闭环表述成完整 crash-resume 或生产隔离证据。
+### M3A-01e — Gateway Restart Recovery 与 Terminal Delivery
+
+- 已完成：Gateway 创建容器时写入 gateway、workspace、task 与 Run 四级 identity label；
+  启动时只扫描自身 gateway/workspace 范围并接管 `created`、`running` 或 `exited` 容器；
+- 已完成：每次 Create 前按相同 identity 重新发现容器；即使 Docker 已接受 Create 但响应
+  丢失，下一次尝试也会接管原容器而不是创建第二个；同一 task 出现多个托管容器时启动
+  fail closed，不按 Docker 返回顺序猜测 active Run；
+- 已完成：completed/failed frame 先以 immutable per-Run 文件写入 Gateway durable outbox，
+  再发 WebSocket；server 仅在对应 Run 的终态事务已经提交后回 `gateway:delivery_ack`，Gateway
+  收到 ack 后才删除文件；进程或连接重启会重放相同 event identity 与 payload；
+- 已覆盖：outbox 跨 reopen 保留且重复终态不能覆盖首个结果；拒绝的 callback 不 ack；
+  ack 的 event 与 `run_id` 必须一致；旧 Run 的 ack 丢失后，即使新 Run 已启动，server 仍按
+  精确 Run ID 识别已提交终态并安全确认；Compose 用独立 `gatewaystate` 命名卷保存 outbox。
+
+边界：重启后的 Docker log follow 会从容器日志重新读取，Gateway 尚无跨进程持久化 log cursor；
+因此日志依赖 server 的 `(run_id, seq)` 幂等约束，但重启后的本地 seq 可能重新编号，
+不能宣称无缺口、无覆盖的 crash-resume 日志证据。`cloud-runtime` 继续保持 experimental，
+生产隔离、真实 provider smoke 与托管 CI 故障注入仍是外部验收项。
 
 ## 暂不进入本检查点
 
@@ -154,8 +169,8 @@ Gateway 本地 durable spool。当前保持 `cloud-runtime=experimental`，不�
 - M2A：本地完成，等待托管 CI 与真实 provider smoke；
 - M3A-01：主 callback 的 durable lifecycle spine 与 Loop 终态 consumer 本地通过；
   recovery/sweeper/bulk cancel/reject、task-derived 数据库投影和 Cloud dispatch
-  delivery/ack/retry 已收口；下一执行可靠性分片是 Gateway restart container adoption 与
-  terminal frame durable spool；
+  delivery/ack/retry、Gateway restart container adoption 与 terminal frame durable spool
+  已收口；下一证据分片是真实 provider smoke、托管 CI 故障注入，以及 durable log cursor；
 - 北极星 M0–M8：持续进行，不再使用单一 `blocked` 终态表达所有检查点。
 
 最终本地验证（2026-08-05）：完整 `make check` 通过，覆盖截至 052 的隔离迁移、

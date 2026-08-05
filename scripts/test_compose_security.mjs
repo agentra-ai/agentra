@@ -68,6 +68,11 @@ assert(base.services.minio && !base.services.minio.ports, "MinIO API/console mus
 
 assert(allProfiles.services["postgres-console"]?.profiles?.includes("debug"), "Adminer must require the debug profile");
 assert(allProfiles.services.gateway?.profiles?.includes("cloud-runtime"), "Gateway must require the cloud-runtime profile");
+const gatewayVolumes = allProfiles.services.gateway?.volumes ?? [];
+assert(
+  gatewayVolumes.some((volume) => volume.target === "/var/lib/agentra-gateway" && volume.type === "volume"),
+  "Gateway durable state must use a named volume",
+);
 
 for (const serviceName of ["server", "web"]) {
   const ports = base.services[serviceName]?.ports ?? [];

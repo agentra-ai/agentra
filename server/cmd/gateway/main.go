@@ -23,9 +23,14 @@ func main() {
 		AuthToken:   getEnv("AGENTRA_AUTH_TOKEN", ""),
 		DockerHost:  getEnv("DOCKER_HOST", "unix:///var/run/docker.sock"),
 		BaseImage:   getEnv("BASE_IMAGE", "agentra/agent-runtime:latest"),
+		StateDir:    getEnv("GATEWAY_STATE_DIR", "/var/lib/agentra-gateway"),
 	}
 
-	g := gateway.New(cfg, logger)
+	g, err := gateway.New(cfg, logger)
+	if err != nil {
+		logger.Error("gateway initialization failed", "error", err)
+		os.Exit(1)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

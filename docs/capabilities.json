@@ -166,11 +166,11 @@
       "name": "Cloud runtime",
       "status": "experimental",
       "surfaces": ["api", "web", "gateway"],
-      "summary": "A server-owned Cloud Dispatch worker atomically allocates a Run and durable per-Run delivery, retries Gateway frames, and acknowledges only after container start; the Gateway deduplicates repeated frames for a live process.",
-      "limitations": ["Gateway process restart cannot yet adopt an already-created container by Run identity; durable terminal-frame replay across a Gateway restart and production isolation remain incomplete."],
+      "summary": "A server-owned Cloud Dispatch worker atomically allocates a Run and durable per-Run delivery; the Gateway labels and adopts containers by Gateway/workspace/task/Run identity, persists terminal frames locally, and deletes them only after the server confirms the exact terminal Run transition.",
+      "limitations": ["Restarted log streaming replays from Docker without a durable per-Run log cursor, and production isolation, real-provider smoke, and hosted-CI crash/recovery evidence remain incomplete."],
       "evidence": {
-        "files": ["server/internal/service/cloud_dispatch.go", "server/pkg/db/queries/cloud_dispatch.sql", "server/internal/gateway/gateway.go", "server/cmd/gateway"],
-        "tests": ["server/internal/service/cloud_dispatch_test.go", "server/internal/gateway/gateway_dispatch_test.go", "server/cmd/server/integration_test.go"]
+        "files": ["server/internal/service/cloud_dispatch.go", "server/pkg/db/queries/cloud_dispatch.sql", "server/internal/gateway/gateway.go", "server/internal/gateway/terminal_spool.go", "server/cmd/gateway"],
+        "tests": ["server/internal/service/cloud_dispatch_test.go", "server/internal/gateway/gateway_dispatch_test.go", "server/internal/gateway/terminal_spool_test.go", "server/cmd/server/integration_test.go"]
       }
     },
     {

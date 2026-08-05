@@ -60,6 +60,7 @@ type GatewayTaskLogsMessage struct {
 
 type GatewayTaskCompletedMessage struct {
 	Type     string `json:"type"`
+	EventID  string `json:"event_id"`
 	TaskID   string `json:"task_id"`
 	RunID    string `json:"run_id"`
 	ExitCode int    `json:"exit_code"`
@@ -68,6 +69,7 @@ type GatewayTaskCompletedMessage struct {
 
 type GatewayTaskFailedMessage struct {
 	Type      string `json:"type"`
+	EventID   string `json:"event_id"`
 	TaskID    string `json:"task_id"`
 	RunID     string `json:"run_id"`
 	Error     string `json:"error"`
@@ -76,4 +78,9 @@ type GatewayTaskFailedMessage struct {
 
 type GatewayHeartbeatMessage struct {
 	Type string `json:"type"`
+}
+
+type GatewayDeliveryAckMessage struct {
+	Type    string `json:"type"`
+	EventID string `json:"event_id"`
 }

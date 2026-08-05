@@ -125,6 +125,23 @@ func (l *RunLifecycle) Status(ctx context.Context, ref RunRef) (db.AgentTaskQueu
 	return task, nil
 }
 
+// TerminalApplied reports whether this exact Run already reached a terminal
+// state. Gateway terminal deliveries use it to acknowledge a replay after the
+// original database transition committed but its network ack was lost.
+func (l *RunLifecycle) TerminalApplied(ctx context.Context, ref RunRef) (bool, error) {
+	if l == nil || l.queries == nil || !ref.WorkItemID.Valid || !ref.RunID.Valid {
+		return false, ErrStaleRun
+	}
+	run, err := l.queries.GetTaskRun(ctx, ref.RunID)
+	if err != nil {
+		return false, err
+	}
+	if run.TaskID != ref.WorkItemID {
+		return false, nil
+	}
+	return containsStatus([]string{"completed", "failed", "cancelled"}, run.Status), nil
+}
+
 func (l *RunLifecycle) Checkpoint(ctx context.Context, ref RunRef, sessionID, workDir string) (db.AgentTaskQueue, error) {
 	var task db.AgentTaskQueue
 	err := l.withLockedRun(ctx, ref, []string{"running"}, []string{"running"}, func(q *db.Queries, _ db.AgentTaskQueue, _ db.TaskRun) error {

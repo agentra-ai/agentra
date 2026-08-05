@@ -88,8 +88,10 @@ services:
       AGENTRA_AUTH_TOKEN: ${AGENTRA_AUTH_TOKEN:-}
       DOCKER_HOST: ${DOCKER_HOST:-unix:///var/run/docker.sock}
       BASE_IMAGE: ${BASE_IMAGE:-agentra/agent-runtime:latest}
+      GATEWAY_STATE_DIR: ${GATEWAY_STATE_DIR:-/var/lib/agentra-gateway}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - gatewaystate:/var/lib/agentra-gateway
     depends_on:
       server:
         condition: service_healthy
@@ -135,3 +137,4 @@ services:
 volumes:
   pgdata:
   miniodata:
+  gatewaystate:

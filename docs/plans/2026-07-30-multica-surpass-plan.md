@@ -229,6 +229,7 @@ Memory + Eval + Analytics feedback
 - 已完成 `M0-07` Gateway → Web 日志流：Gateway 只接受 Authorization Header 的 JWT/PAT，并要求身份是目标 workspace 的 owner/admin，再把连接绑定到该单一 workspace；协议统一为 snake_case 强类型帧，以每任务单调 `seq`、stdout/stderr 和 32 KiB content 为契约。
 - cloud task 的 dispatched/log/completed/failed 事件都会再次验证 task、cloud runtime 与 Gateway workspace 的一致性；跨租户 ID 不作为存在性 oracle。日志在服务端脱敏后写入带 `(task_id, seq)` 唯一约束的 `task_message`，重复帧成功幂等但不重复广播。
 - 容器日志使用 Docker follow 流同步回压，不建立无界队列；terminal event 只携带 256 KiB 诊断尾部。Web 初始加载与重连均读取最多 5,000 条持久化快照，live timeline、dedup set 和 terminal 都保持同一内存上限。
+- Cloud Gateway 已按 gateway/workspace/task/Run label 接管重启前容器，并用命名卷中的 immutable per-Run outbox 重放终态；server 只在精确 Run 的终态事务提交后确认。跨进程 durable log cursor、真实 provider smoke 与托管 CI 故障注入仍未完成，因此能力继续标记 experimental。
 - 数据库回归新增 trace lifecycle FK：删除 issue 会级联清理 execution trace，删除 agent 不再被历史 trace 阻塞；`make check` 默认使用进程级隔离的临时数据库并在退出时精确删除，失败运行不会污染下一次验证或开发数据库。
 - Gateway/Web realtime 仍保持 beta：Hub fanout 目前是单进程内存实现，多副本 sticky-free fanout 留在 `M7-02`。
 - 已接通 Memory 的 workspace 搜索、team/agent 新增与删除路径，并为 Settings 中的新增、搜索、删除交互补齐真实状态流。

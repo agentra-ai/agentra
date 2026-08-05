@@ -36,8 +36,8 @@ type Hub struct {
 
 	// Gateway-to-server task lifecycle callbacks.
 	OnTaskDispatched func(gatewayID, workspaceID, taskID, runID, containerID string)
-	OnTaskComplete   func(gatewayID, workspaceID, taskID, runID string, exitCode int, output string)
-	OnTaskFail       func(gatewayID, workspaceID, taskID, runID string, error string, retryable bool)
+	OnTaskComplete   func(gatewayID, workspaceID, taskID, runID string, exitCode int, output string) bool
+	OnTaskFail       func(gatewayID, workspaceID, taskID, runID string, error string, retryable bool) bool
 	OnTaskLogs       func(gatewayID, workspaceID, taskID, runID string, seq int, stream, content string)
 }
 
@@ -182,8 +182,16 @@ func (c *Client) handleMessage(message []byte) error {
 		if strings.TrimSpace(event.TaskID) == "" || strings.TrimSpace(event.RunID) == "" {
 			return fmt.Errorf("task completed: task_id and run_id are required")
 		}
+		if event.EventID == "" {
+			event.EventID = event.RunID // rolling-upgrade compatibility
+		}
+		if event.EventID != event.RunID {
+			return fmt.Errorf("task completed: event_id must match run_id")
+		}
 		if c.Hub.OnTaskComplete != nil {
-			c.Hub.OnTaskComplete(c.ID, c.WorkspaceID, event.TaskID, event.RunID, event.ExitCode, event.Output)
+			if c.Hub.OnTaskComplete(c.ID, c.WorkspaceID, event.TaskID, event.RunID, event.ExitCode, event.Output) {
+				return c.sendDeliveryAck(event.EventID)
+			}
 		}
 		return nil
 
@@ -208,8 +216,16 @@ func (c *Client) handleMessage(message []byte) error {
 		if strings.TrimSpace(event.TaskID) == "" || strings.TrimSpace(event.RunID) == "" {
 			return fmt.Errorf("task failed: task_id and run_id are required")
 		}
+		if event.EventID == "" {
+			event.EventID = event.RunID // rolling-upgrade compatibility
+		}
+		if event.EventID != event.RunID {
+			return fmt.Errorf("task failed: event_id must match run_id")
+		}
 		if c.Hub.OnTaskFail != nil {
-			c.Hub.OnTaskFail(c.ID, c.WorkspaceID, event.TaskID, event.RunID, event.Error, event.Retryable)
+			if c.Hub.OnTaskFail(c.ID, c.WorkspaceID, event.TaskID, event.RunID, event.Error, event.Retryable) {
+				return c.sendDeliveryAck(event.EventID)
+			}
 		}
 		return nil
 
@@ -240,6 +256,21 @@ func (c *Client) handleMessage(message []byte) error {
 
 	default:
 		return fmt.Errorf("unsupported event type %q", envelope.Type)
+	}
+}
+
+func (c *Client) sendDeliveryAck(eventID string) error {
+	message, err := json.Marshal(protocol.GatewayDeliveryAckMessage{
+		Type: protocol.EventGatewayDeliveryAck, EventID: eventID,
+	})
+	if err != nil {
+		return err
+	}
+	select {
+	case c.Send <- message:
+		return nil
+	default:
+		return ErrGatewaySendFailed
 	}
 }
 

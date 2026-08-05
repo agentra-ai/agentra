@@ -22,10 +22,11 @@ func TestClientHandleMessageDecodesIntegerExitCode(t *testing.T) {
 	var gotTaskID string
 	var gotRunID string
 	var gotExitCode int
-	client.Hub.OnTaskComplete = func(_, _, taskID, runID string, exitCode int, _ string) {
+	client.Hub.OnTaskComplete = func(_, _, taskID, runID string, exitCode int, _ string) bool {
 		gotTaskID = taskID
 		gotRunID = runID
 		gotExitCode = exitCode
+		return true
 	}
 
 	message, err := json.Marshal(protocol.GatewayTaskCompletedMessage{
@@ -42,6 +43,18 @@ func TestClientHandleMessageDecodesIntegerExitCode(t *testing.T) {
 	}
 	if gotTaskID != "task-1" || gotRunID != "run-1" || gotExitCode != 23 {
 		t.Fatalf("callback = (%q, %d), want (task-1, 23)", gotTaskID, gotExitCode)
+	}
+	select {
+	case raw := <-client.Send:
+		var ack protocol.GatewayDeliveryAckMessage
+		if err := json.Unmarshal(raw, &ack); err != nil {
+			t.Fatal(err)
+		}
+		if ack.Type != protocol.EventGatewayDeliveryAck || ack.EventID != "run-1" {
+			t.Fatalf("ack = %+v", ack)
+		}
+	default:
+		t.Fatal("durable terminal callback did not enqueue an ack")
 	}
 }
 
@@ -81,7 +94,10 @@ func TestClientHandleMessagePropagatesWorkspaceAndLogCursor(t *testing.T) {
 func TestClientHandleMessageRejectsLegacyCamelCase(t *testing.T) {
 	client := protocolTestClient()
 	called := false
-	client.Hub.OnTaskComplete = func(_, _, _, _ string, _ int, _ string) { called = true }
+	client.Hub.OnTaskComplete = func(_, _, _, _ string, _ int, _ string) bool {
+		called = true
+		return true
+	}
 
 	err := client.handleMessage([]byte(`{"type":"task:completed","taskId":"task-1","exitCode":7}`))
 	if err == nil || !strings.Contains(err.Error(), "task_id and run_id are required") {
@@ -89,6 +105,40 @@ func TestClientHandleMessageRejectsLegacyCamelCase(t *testing.T) {
 	}
 	if called {
 		t.Fatal("callback ran for a legacy camelCase message")
+	}
+}
+
+func TestClientHandleMessageDoesNotAckRejectedTerminalDelivery(t *testing.T) {
+	client := protocolTestClient()
+	client.Hub.OnTaskFail = func(_, _, _, _ string, _ string, _ bool) bool { return false }
+	message, err := json.Marshal(protocol.GatewayTaskFailedMessage{
+		Type: protocol.EventTaskFailed, EventID: "run-1", TaskID: "task-1", RunID: "run-1", Error: "failed",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client.handleMessage(message); err != nil {
+		t.Fatalf("handleMessage: %v", err)
+	}
+	select {
+	case ack := <-client.Send:
+		t.Fatalf("unexpected ack: %s", ack)
+	default:
+	}
+}
+
+func TestClientHandleMessageRejectsTerminalEventIDForAnotherRun(t *testing.T) {
+	client := protocolTestClient()
+	client.Hub.OnTaskComplete = func(_, _, _, _ string, _ int, _ string) bool { return true }
+	message, err := json.Marshal(protocol.GatewayTaskCompletedMessage{
+		Type: protocol.EventTaskCompleted, EventID: "run-2", TaskID: "task-1", RunID: "run-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = client.handleMessage(message)
+	if err == nil || !strings.Contains(err.Error(), "event_id must match run_id") {
+		t.Fatalf("error = %v", err)
 	}
 }
 

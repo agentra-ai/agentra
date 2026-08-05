@@ -27,6 +27,7 @@ type WSClient struct {
 	// Callbacks set by Gateway
 	OnTaskDispatch func(taskID, runID string, config map[string]any)
 	OnTaskCancel   func(taskID string)
+	OnDeliveryAck  func(eventID string)
 }
 
 func NewWSClient(serverURL, gatewayID, workspaceID, authToken string, logger *slog.Logger) *WSClient {
@@ -140,6 +141,18 @@ func (c *WSClient) handleMessage(message []byte) error {
 		return nil
 	case protocol.EventGatewayHeartbeat:
 		return c.send(protocol.GatewayHeartbeatMessage{Type: protocol.EventGatewayHeartbeat})
+	case protocol.EventGatewayDeliveryAck:
+		var event protocol.GatewayDeliveryAckMessage
+		if err := json.Unmarshal(message, &event); err != nil {
+			return fmt.Errorf("decode gateway delivery ack: %w", err)
+		}
+		if strings.TrimSpace(event.EventID) == "" {
+			return fmt.Errorf("gateway delivery ack: event_id is required")
+		}
+		if c.OnDeliveryAck != nil {
+			c.OnDeliveryAck(event.EventID)
+		}
+		return nil
 	default:
 		return fmt.Errorf("unsupported event type %q", envelope.Type)
 	}
@@ -168,6 +181,7 @@ func (c *WSClient) SendTaskLogs(taskID, runID string, seq int, stream, content s
 func (c *WSClient) SendTaskCompleted(taskID, runID string, exitCode int, output string) error {
 	return c.send(protocol.GatewayTaskCompletedMessage{
 		Type:     protocol.EventTaskCompleted,
+		EventID:  runID,
 		TaskID:   taskID,
 		RunID:    runID,
 		ExitCode: exitCode,
@@ -182,6 +196,7 @@ func (c *WSClient) SendTaskFailed(taskID, runID, errorMsg string) error {
 func (c *WSClient) SendTaskFailedWithRetry(taskID, runID, errorMsg string, retryable bool) error {
 	return c.send(protocol.GatewayTaskFailedMessage{
 		Type:      protocol.EventTaskFailed,
+		EventID:   runID,
 		TaskID:    taskID,
 		RunID:     runID,
 		Error:     errorMsg,

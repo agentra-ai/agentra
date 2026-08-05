@@ -11,10 +11,10 @@ const (
 	EventCommentCreated       = "comment:created"
 	EventCommentUpdated       = "comment:updated"
 	EventCommentDeleted       = "comment:deleted"
-	EventReactionAdded          = "reaction:added"
-	EventReactionRemoved        = "reaction:removed"
-	EventIssueReactionAdded     = "issue_reaction:added"
-	EventIssueReactionRemoved   = "issue_reaction:removed"
+	EventReactionAdded        = "reaction:added"
+	EventReactionRemoved      = "reaction:removed"
+	EventIssueReactionAdded   = "issue_reaction:added"
+	EventIssueReactionRemoved = "issue_reaction:removed"
 
 	// Agent events
 	EventAgentStatus   = "agent:status"
@@ -68,6 +68,7 @@ const (
 	EventGatewayHeartbeat    = "gateway:heartbeat"
 	EventGatewayConnected    = "gateway:connected"
 	EventGatewayDisconnected = "gateway:disconnected"
+	EventGatewayDeliveryAck  = "gateway:delivery_ack"
 
 	// Gateway task events (server <-> gateway)
 	EventTaskCancel     = "task:cancel"
@@ -75,6 +76,6 @@ const (
 	EventTaskLogs       = "task:logs"
 
 	// Agent workflow events
-	EventAgentStage      = "agent:stage"
-	EventStreamingLogs   = "streaming:logs"
+	EventAgentStage    = "agent:stage"
+	EventStreamingLogs = "streaming:logs"
 )

@@ -1894,7 +1894,12 @@ func TestGatewayLogsFlowThroughDurableTaskMessageLedger(t *testing.T) {
 		t.Fatalf("gateway content was not redacted: %q", content)
 	}
 
-	testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, runID, 0, "completed")
+	if ack := testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, runID, 0, "completed"); !ack {
+		t.Fatal("completed terminal frame was not acknowledged")
+	}
+	if ack := testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, runID, 0, "duplicate"); !ack {
+		t.Fatal("duplicate completed terminal frame was not acknowledged")
+	}
 	if err := testPool.QueryRow(context.Background(), `SELECT status FROM agent_task_queue WHERE id = $1`, taskID).Scan(&status); err != nil {
 		t.Fatal(err)
 	}
@@ -1926,7 +1931,9 @@ func TestGatewayRetryClosesRunBeforeRequeue(t *testing.T) {
 	run1 := activeRunIDForTask(t, taskID)
 
 	testHub.GatewayHub.OnTaskDispatched("gateway-1", testWorkspaceID, taskID, run1, "container-1")
-	testHub.GatewayHub.OnTaskFail("gateway-1", testWorkspaceID, taskID, run1, "transient gateway failure", true)
+	if ack := testHub.GatewayHub.OnTaskFail("gateway-1", testWorkspaceID, taskID, run1, "transient gateway failure", true); !ack {
+		t.Fatal("retryable terminal frame was not acknowledged")
+	}
 	drainLifecycleOutbox(t)
 
 	var taskStatus, run1Status, trace1Status string
@@ -1949,7 +1956,9 @@ func TestGatewayRetryClosesRunBeforeRequeue(t *testing.T) {
 	testHub.GatewayHub.OnTaskDispatched("gateway-1", testWorkspaceID, taskID, run2, "container-2")
 	// A terminal frame already in flight from container-1 cannot complete the
 	// newly running container-2 attempt.
-	testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, run1, 0, "stale completion")
+	if ack := testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, run1, 0, "stale completion"); !ack {
+		t.Fatal("old Run terminal replay was not acknowledged after a new Run started")
+	}
 	if err := testPool.QueryRow(context.Background(), `
 		SELECT status, active_run_id::text FROM agent_task_queue WHERE id = $1
 	`, taskID).Scan(&taskStatus, &activeRunID); err != nil {
@@ -1959,7 +1968,9 @@ func TestGatewayRetryClosesRunBeforeRequeue(t *testing.T) {
 		t.Fatalf("stale gateway terminal changed current run: status:%q active:%v want:%q", taskStatus, activeRunID, run2)
 	}
 
-	testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, run2, 0, "current completion")
+	if ack := testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, run2, 0, "current completion"); !ack {
+		t.Fatal("current completed terminal frame was not acknowledged")
+	}
 	if err := testPool.QueryRow(context.Background(), `
 		SELECT status, active_run_id::text FROM agent_task_queue WHERE id = $1
 	`, taskID).Scan(&taskStatus, &activeRunID); err != nil {

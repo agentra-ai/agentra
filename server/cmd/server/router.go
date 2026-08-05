@@ -497,6 +497,10 @@ func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
 		}
 		return task, true
 	}
+	terminalApplied := func(ctx context.Context, ref service.RunRef) bool {
+		applied, err := h.TaskService.Lifecycle.TerminalApplied(ctx, ref)
+		return err == nil && applied
+	}
 
 	hub.GatewayHub.OnTaskDispatched = func(gatewayID, workspaceID, taskID, runID, containerID string) {
 		ctx := context.Background()
@@ -517,40 +521,49 @@ func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
 		}
 	}
 
-	hub.GatewayHub.OnTaskComplete = func(gatewayID, workspaceID, taskID, runID string, exitCode int, output string) {
+	hub.GatewayHub.OnTaskComplete = func(gatewayID, workspaceID, taskID, runID string, exitCode int, output string) bool {
 		ctx := context.Background()
 		task, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskCompleted)
 		if !ok {
-			return
+			return false
 		}
 		ref := service.RunRef{WorkItemID: task.ID, RunID: parseUUID(runID)}
+		if terminalApplied(ctx, ref) {
+			return true
+		}
 		output = boundedGatewayText(output)
 		// Exit code 0 = success, non-zero = failure
 		if exitCode == 0 {
 			result, err := json.Marshal(protocol.TaskCompletedPayload{TaskID: taskID, RunID: runID, Output: output})
 			if err != nil {
 				slog.Error("gateway complete: marshal result failed", "task_id", taskID, "error", err)
-				return
+				return false
 			}
 			_, err = h.TaskService.CompleteTask(ctx, ref, result, "", "")
 			if err != nil {
 				slog.Error("gateway complete: failed", "task_id", taskID, "error", err)
+				return terminalApplied(ctx, ref)
 			}
 		} else {
 			_, err := h.TaskService.FailTask(ctx, ref, output)
 			if err != nil {
 				slog.Error("gateway fail: failed", "task_id", taskID, "error", err)
+				return terminalApplied(ctx, ref)
 			}
 		}
+		return true
 	}
 
-	hub.GatewayHub.OnTaskFail = func(gatewayID, workspaceID, taskID, runID string, errorMsg string, retryable bool) {
+	hub.GatewayHub.OnTaskFail = func(gatewayID, workspaceID, taskID, runID string, errorMsg string, retryable bool) bool {
 		ctx := context.Background()
 		task, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskFailed)
 		if !ok {
-			return
+			return false
 		}
 		ref := service.RunRef{WorkItemID: task.ID, RunID: parseUUID(runID)}
+		if terminalApplied(ctx, ref) {
+			return true
+		}
 		errorMsg = boundedGatewayText(errorMsg)
 
 		// If the failure is retryable, attempt to retry the task
@@ -561,7 +574,7 @@ func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
 			} else if retried {
 				slog.Info("gateway fail: task re-queued for retry", "task_id", taskID,
 					"retry_count", task.RetryCount, "max_retries", task.MaxRetries)
-				return
+				return true
 			} else {
 				slog.Warn("gateway fail: retry not possible (max retries or invalid state)", "task_id", taskID)
 				// Fall through to mark as failed
@@ -571,7 +584,9 @@ func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
 		_, err := h.TaskService.FailTask(ctx, ref, errorMsg)
 		if err != nil {
 			slog.Error("gateway fail: failed", "task_id", taskID, "error", err)
+			return terminalApplied(ctx, ref)
 		}
+		return true
 	}
 
 	hub.GatewayHub.OnTaskLogs = func(gatewayID, workspaceID, taskID, runID string, seq int, stream, content string) {

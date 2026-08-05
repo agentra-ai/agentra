@@ -77,11 +77,29 @@ func TestWSClientConnectUsesAuthorizationAndCanonicalProtocol(t *testing.T) {
 		if err := json.Unmarshal(got.message, &message); err != nil {
 			t.Fatal(err)
 		}
-		if message.TaskID != "task-1" || message.RunID != "run-1" || message.ExitCode != 19 {
+		if message.EventID != "run-1" || message.TaskID != "task-1" || message.RunID != "run-1" || message.ExitCode != 19 {
 			t.Fatalf("message = %+v", message)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for gateway message")
+	}
+}
+
+func TestWSClientHandlesDurableDeliveryAck(t *testing.T) {
+	client := NewWSClient("ws://127.0.0.1:1/ws", "gateway-1", "workspace-1", "token", discardLogger())
+	var got string
+	client.OnDeliveryAck = func(eventID string) { got = eventID }
+	message, err := json.Marshal(protocol.GatewayDeliveryAckMessage{
+		Type: protocol.EventGatewayDeliveryAck, EventID: "run-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client.handleMessage(message); err != nil {
+		t.Fatalf("handleMessage: %v", err)
+	}
+	if got != "run-1" {
+		t.Fatalf("delivery ack = %q", got)
 	}
 }
 
