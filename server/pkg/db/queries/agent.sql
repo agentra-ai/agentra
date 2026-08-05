@@ -157,6 +157,7 @@ WITH candidate AS (
     SELECT atq.id, atq.agent_id
     FROM agent_task_queue atq
     WHERE atq.agent_id = $1 AND atq.status = 'queued'
+      AND atq.runtime_type <> 'cloud'
       AND NOT EXISTS (
           SELECT 1 FROM agent_task_queue active
           WHERE active.issue_id = atq.issue_id
@@ -189,6 +190,7 @@ WITH candidate AS (
     SELECT target.id, target.agent_id
     FROM agent_task_queue AS target
     WHERE target.id = $1 AND target.status = 'queued'
+      AND target.runtime_type <> 'cloud'
       AND NOT EXISTS (
           SELECT 1 FROM agent_task_queue active
           WHERE active.issue_id = target.issue_id
@@ -348,7 +350,9 @@ WHERE issue_id = $1 AND agent_id = $2 AND status IN ('queued', 'dispatched');
 
 -- name: ListPendingTasksByRuntime :many
 SELECT * FROM agent_task_queue
-WHERE runtime_id = $1 AND status IN ('queued', 'dispatched')
+WHERE runtime_id = $1
+  AND runtime_type <> 'cloud'
+  AND status IN ('queued', 'dispatched')
 ORDER BY priority DESC, created_at ASC;
 
 -- name: ListActiveTasksByIssue :many

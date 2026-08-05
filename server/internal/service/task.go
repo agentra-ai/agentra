@@ -12,21 +12,17 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/events"
 	"github.com/agentra-ai/agentra/server/internal/loop/stages"
 	"github.com/agentra-ai/agentra/server/internal/mention"
-	"github.com/agentra-ai/agentra/server/internal/realtime"
 	"github.com/agentra-ai/agentra/server/internal/util"
 	runtimeagent "github.com/agentra-ai/agentra/server/pkg/agent"
-	"github.com/agentra-ai/agentra/server/pkg/crypto"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/agentra-ai/agentra/server/pkg/protocol"
 )
 
 type TaskService struct {
 	Queries      *db.Queries
-	Hub          *realtime.Hub
 	Bus          *events.Bus
 	TraceService *TraceService
 	Lifecycle    *RunLifecycle
@@ -44,10 +40,9 @@ type ClaimedTask struct {
 // cross-tenant oracle.
 var ErrGatewayTaskNotAuthorized = errors.New("cloud gateway task not authorized")
 
-func NewTaskService(q *db.Queries, txStarter runLifecycleTxStarter, hub *realtime.Hub, bus *events.Bus, traceSvc *TraceService) *TaskService {
+func NewTaskService(q *db.Queries, txStarter runLifecycleTxStarter, bus *events.Bus, traceSvc *TraceService) *TaskService {
 	return &TaskService{
 		Queries:      q,
-		Hub:          hub,
 		Bus:          bus,
 		TraceService: traceSvc,
 		Lifecycle:    NewRunLifecycle(txStarter, q),
@@ -340,6 +335,26 @@ func (s *TaskService) claimTaskCandidate(ctx context.Context, candidate db.Agent
 	s.updateAgentStatus(ctx, task.AgentID, "working")
 	s.broadcastTaskDispatch(ctx, task, claimed.RunID)
 	return &ClaimedTask{Task: task, RunID: claimed.RunID}, true, nil
+}
+
+// ClaimCloudTask atomically allocates a Run and its durable push delivery.
+// Cloud Work Items never pass through the local daemon's pull claim path.
+func (s *TaskService) ClaimCloudTask(ctx context.Context, taskID pgtype.UUID) (*ClaimedTask, error) {
+	claimed, err := s.Queries.ClaimCloudTaskRunByID(ctx, taskID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("claim cloud task: %w", err)
+	}
+	task, err := s.Queries.GetAgentTask(ctx, claimed.TaskID)
+	if err != nil {
+		return nil, fmt.Errorf("load claimed cloud task: %w", err)
+	}
+	slog.Info("cloud task claimed", "task_id", util.UUIDToString(task.ID), "run_id", util.UUIDToString(claimed.RunID), "agent_id", util.UUIDToString(task.AgentID))
+	s.updateAgentStatus(ctx, task.AgentID, "working")
+	s.broadcastTaskDispatch(ctx, task, claimed.RunID)
+	return &ClaimedTask{Task: task, RunID: claimed.RunID}, nil
 }
 
 func (s *TaskService) rejectQueuedTask(ctx context.Context, taskID pgtype.UUID, errMsg string) (*db.AgentTaskQueue, error) {
@@ -700,78 +715,6 @@ func (s *TaskService) broadcastTaskDispatch(ctx context.Context, task db.AgentTa
 		Payload:     payload,
 	})
 
-	// Cloud runtime dispatch: send task to cloud gateway if configured
-	if task.RuntimeType == "cloud" && task.CloudRuntimeID.Valid {
-		taskIDStr := util.UUIDToString(task.ID)
-
-		// Retrieve cloud runtime configuration for this workspace
-		cr, err := s.Queries.GetCloudRuntimeByWorkspace(ctx, util.ParseUUID(workspaceID))
-		if err != nil || !cr.IsActive {
-			slog.Warn("cloud dispatch: no active runtime", "workspace_id", workspaceID, "task_id", taskIDStr)
-			return
-		}
-
-		gatewayID := s.Hub.GatewayHub.GetGatewayForWorkspace(workspaceID)
-		if gatewayID == "" {
-			slog.Warn("cloud dispatch: no gateway connected", "workspace_id", workspaceID, "task_id", taskIDStr)
-			return
-		}
-
-		// Decrypt API key using workspace-specific passphrase
-		passphrase := workspaceID + string(auth.JWTSecret())
-		apiKey, err := crypto.DecryptAPIKey(string(cr.EncryptedApiKey), passphrase)
-		if err != nil {
-			slog.Error("cloud dispatch: failed to decrypt API key", "error", err, "workspace_id", workspaceID, "task_id", taskIDStr)
-			return
-		}
-
-		// Collect issue, agent, and skill details for dispatch
-		var issueTitle, agentName, agentInstructions string
-		var skills []AgentSkillData
-
-		if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil {
-			issueTitle = issue.Title
-		}
-
-		if agent, err := s.Queries.GetAgent(ctx, task.AgentID); err == nil {
-			agentName = agent.Name
-			agentInstructions = agent.Instructions
-			skills = s.LoadAgentSkills(ctx, task.AgentID)
-		}
-
-		// Build dispatch configuration for gateway
-		config := map[string]any{
-			"task_id":      taskIDStr,
-			"agent_id":     util.UUIDToString(task.AgentID),
-			"issue_id":     util.UUIDToString(task.IssueID),
-			"issue_title":  issueTitle,
-			"agent_name":   agentName,
-			"instructions": agentInstructions,
-			"skills":       skills,
-			"api_key":      apiKey,
-			"gateway_url":  cr.GatewayUrl.String,
-			"provider":     cr.Provider,
-		}
-
-		// Send dispatch message to gateway
-		msg, err := json.Marshal(protocol.GatewayTaskDispatchMessage{
-			Type:   protocol.EventTaskDispatch,
-			TaskID: taskIDStr,
-			RunID:  util.UUIDToString(runID),
-			Config: config,
-		})
-		if err != nil {
-			slog.Error("cloud dispatch: failed to marshal message", "error", err, "task_id", taskIDStr)
-			return
-		}
-
-		if err := s.Hub.GatewayHub.SendToGateway(gatewayID, msg); err != nil {
-			slog.Error("cloud dispatch: failed to send to gateway", "error", err, "gateway_id", gatewayID, "task_id", taskIDStr)
-			return
-		}
-
-		slog.Info("cloud task dispatched", "task_id", taskIDStr, "gateway_id", gatewayID, "workspace_id", workspaceID)
-	}
 }
 
 func (s *TaskService) broadcastTaskEvent(ctx context.Context, eventType string, task db.AgentTaskQueue, runIDs ...pgtype.UUID) {

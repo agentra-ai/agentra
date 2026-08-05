@@ -88,6 +88,9 @@ func main() {
 	go lifecycleWorker.Run(sweepCtx)
 	taskDerivedProjector := service.NewTaskDerivedLifecycleProjector(pool, queries, bus)
 	go taskDerivedProjector.Run(sweepCtx)
+	cloudTasks := service.NewTaskService(queries, pool, bus, nil)
+	cloudDispatch := service.NewCloudDispatchWorker(cloudTasks, hub.GatewayHub, auth.JWTSecret())
+	go cloudDispatch.Run(sweepCtx)
 
 	stripeClient := stripelib.NewClient(
 		os.Getenv("STRIPE_SECRET_KEY"),

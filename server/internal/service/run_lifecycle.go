@@ -69,6 +69,12 @@ func (l *RunLifecycle) Start(ctx context.Context, ref RunRef) (db.AgentTaskQueue
 		if err != nil {
 			return fmt.Errorf("start work item: %w", err)
 		}
+		if _, err := q.AcknowledgeCloudDispatchDelivery(ctx, db.AcknowledgeCloudDispatchDeliveryParams{
+			WorkItemID: ref.WorkItemID,
+			RunID:      ref.RunID,
+		}); err != nil {
+			return fmt.Errorf("acknowledge cloud dispatch: %w", err)
+		}
 		task = updated
 		return l.appendEvent(ctx, q, LifecycleEventRunStarted, task, ref.RunID)
 	})
@@ -183,8 +189,32 @@ func (l *RunLifecycle) Complete(ctx context.Context, ref RunRef, completion RunC
 }
 
 func (l *RunLifecycle) Fail(ctx context.Context, ref RunRef, errMsg string) (db.AgentTaskQueue, error) {
+	return l.fail(ctx, ref, errMsg, []string{"dispatched", "running"}, false)
+}
+
+// FailDispatch closes a Run only while it is still awaiting Gateway ack. It
+// prevents delivery exhaustion from terminating a Run that won the race and
+// already started, and dead-letters the delivery in the same transaction.
+func (l *RunLifecycle) FailDispatch(ctx context.Context, ref RunRef, errMsg string) (db.AgentTaskQueue, error) {
+	return l.fail(ctx, ref, errMsg, []string{"dispatched"}, true)
+}
+
+func (l *RunLifecycle) fail(ctx context.Context, ref RunRef, errMsg string, allowedStatuses []string, deadLetterDispatch bool) (db.AgentTaskQueue, error) {
 	var task db.AgentTaskQueue
-	err := l.withLockedRun(ctx, ref, []string{"dispatched", "running"}, []string{"dispatched", "running"}, func(q *db.Queries, _ db.AgentTaskQueue, run db.TaskRun) error {
+	err := l.withLockedRun(ctx, ref, allowedStatuses, allowedStatuses, func(q *db.Queries, _ db.AgentTaskQueue, run db.TaskRun) error {
+		if deadLetterDispatch {
+			updated, err := q.DeadLetterCloudDispatchDelivery(ctx, db.DeadLetterCloudDispatchDeliveryParams{
+				WorkItemID: ref.WorkItemID,
+				RunID:      ref.RunID,
+				LastError:  pgtype.Text{String: errMsg, Valid: errMsg != ""},
+			})
+			if err != nil {
+				return fmt.Errorf("dead-letter cloud dispatch: %w", err)
+			}
+			if updated != 1 {
+				return ErrStaleRun
+			}
+		}
 		duration := int64(0)
 		if run.StartedAt.Valid {
 			duration = time.Since(run.StartedAt.Time).Milliseconds()

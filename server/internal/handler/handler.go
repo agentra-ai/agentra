@@ -84,7 +84,7 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 	}
 
 	traceSvc := service.NewTraceServiceFromPool(txStarter)
-	taskSvc := service.NewTaskService(queries, txStarter, hub, bus, traceSvc)
+	taskSvc := service.NewTaskService(queries, txStarter, bus, traceSvc)
 	accessPolicy, err := service.NewAccessPolicyFromEnv()
 	if err != nil {
 		slog.Error("invalid access policy configuration; signup and workspace creation disabled", "error", err)

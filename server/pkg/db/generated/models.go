@@ -151,6 +151,21 @@ type Attachment struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
+type CloudDispatchDelivery struct {
+	RunID          pgtype.UUID        `json:"run_id"`
+	WorkItemID     pgtype.UUID        `json:"work_item_id"`
+	CloudRuntimeID pgtype.UUID        `json:"cloud_runtime_id"`
+	Attempts       int32              `json:"attempts"`
+	AvailableAt    pgtype.Timestamptz `json:"available_at"`
+	LockedAt       pgtype.Timestamptz `json:"locked_at"`
+	LockToken      pgtype.UUID        `json:"lock_token"`
+	LastSentAt     pgtype.Timestamptz `json:"last_sent_at"`
+	AcknowledgedAt pgtype.Timestamptz `json:"acknowledged_at"`
+	DeadLetteredAt pgtype.Timestamptz `json:"dead_lettered_at"`
+	LastError      pgtype.Text        `json:"last_error"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
 type CloudRuntime struct {
 	ID                 pgtype.UUID        `json:"id"`
 	WorkspaceID        pgtype.UUID        `json:"workspace_id"`

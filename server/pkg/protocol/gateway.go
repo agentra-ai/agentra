@@ -31,7 +31,7 @@ type GatewayEnvelope struct {
 type GatewayTaskDispatchMessage struct {
 	Type   string         `json:"type"`
 	TaskID string         `json:"task_id"`
-	RunID  string         `json:"run_id"`
+	RunID  string         `json:"run_id"` // stable dispatch idempotency key
 	Config map[string]any `json:"config"`
 }
 

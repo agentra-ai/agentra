@@ -35,6 +35,7 @@ type Gateway struct {
 }
 
 type RunningTask struct {
+	mu           sync.RWMutex
 	TaskID       string
 	RunID        string
 	ContainerID  string
@@ -42,6 +43,26 @@ type RunningTask struct {
 	APIKey       string
 	Instructions string
 	Provider     string
+}
+
+func (t *RunningTask) setContainerID(containerID string) {
+	t.mu.Lock()
+	t.ContainerID = containerID
+	t.mu.Unlock()
+}
+
+func (t *RunningTask) containerID() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.ContainerID
+}
+
+func (g *Gateway) reserveTask(candidate *RunningTask) (*RunningTask, bool) {
+	actual, loaded := g.tasks.LoadOrStore(candidate.TaskID, candidate)
+	if !loaded {
+		return candidate, true
+	}
+	return actual.(*RunningTask), false
 }
 
 func New(cfg Config, logger *slog.Logger) *Gateway {
@@ -123,7 +144,21 @@ func (g *Gateway) handleTaskDispatch(taskID, runID string, config map[string]any
 		Provider:     provider,
 		CancelFunc:   cancelFunc,
 	}
-	g.tasks.Store(taskID, runningTask)
+	existing, reserved := g.reserveTask(runningTask)
+	if !reserved {
+		cancelFunc()
+		if existing.RunID != runID {
+			g.logger.Warn("task dispatch ignored while another Run is active",
+				"task_id", taskID, "active_run_id", existing.RunID, "run_id", runID)
+			return
+		}
+		if containerID := existing.containerID(); containerID != "" {
+			if err := g.wsClient.SendTaskDispatched(taskID, runID, containerID); err != nil {
+				g.logger.Error("task dispatch: failed to repeat acknowledgement", "task_id", taskID, "error", err)
+			}
+		}
+		return
+	}
 
 	// Prepare container config
 	containerCfg := &TaskConfig{
@@ -142,10 +177,10 @@ func (g *Gateway) handleTaskDispatch(taskID, runID string, config map[string]any
 	if err != nil {
 		g.logger.Error("task dispatch: container creation failed after retries", "task_id", taskID, "error", err)
 		g.wsClient.SendTaskFailedWithRetry(taskID, runID, fmt.Sprintf("failed to create container after %d attempts: %v", g.cfg.MaxRetries, err), false)
-		g.tasks.Delete(taskID)
+		g.tasks.CompareAndDelete(taskID, runningTask)
 		return
 	}
-	runningTask.ContainerID = containerID
+	runningTask.setContainerID(containerID)
 
 	g.logger.Info("container created", "task_id", taskID, "container_id", containerID)
 
@@ -157,7 +192,7 @@ func (g *Gateway) handleTaskDispatch(taskID, runID string, config map[string]any
 			g.logger.Error("task dispatch: failed to destroy container after start failure", "task_id", taskID, "error", destroyErr)
 		}
 		g.wsClient.SendTaskFailedWithRetry(taskID, runID, fmt.Sprintf("failed to start container after %d attempts: %v", g.cfg.MaxRetries, err), false)
-		g.tasks.Delete(taskID)
+		g.tasks.CompareAndDelete(taskID, runningTask)
 		return
 	}
 
@@ -230,7 +265,7 @@ func (g *Gateway) handleTaskDispatch(taskID, runID string, config map[string]any
 			g.logger.Error("task cleanup failed", "task_id", taskID, "error", err)
 		}
 
-		g.tasks.Delete(taskID)
+		g.tasks.CompareAndDelete(taskID, runningTask)
 	}()
 }
 
@@ -290,12 +325,12 @@ func (g *Gateway) handleTaskCancel(taskID string) {
 		if rt.CancelFunc != nil {
 			rt.CancelFunc()
 		}
-		if rt.ContainerID != "" && g.containerMgr != nil {
-			if err := g.containerMgr.DestroyContainer(context.Background(), rt.ContainerID); err != nil {
+		if containerID := rt.containerID(); containerID != "" && g.containerMgr != nil {
+			if err := g.containerMgr.DestroyContainer(context.Background(), containerID); err != nil {
 				g.logger.Error("task cancel: failed to destroy container", "task_id", taskID, "error", err)
 			}
 		}
-		g.tasks.Delete(taskID)
+		g.tasks.CompareAndDelete(taskID, rt)
 	}
 }
 
@@ -308,7 +343,7 @@ func (g *Gateway) handleGatewayEvent(event map[string]any) {
 func runningTaskToMap(rt *RunningTask) map[string]any {
 	return map[string]any{
 		"task_id":      rt.TaskID,
-		"container_id": rt.ContainerID,
+		"container_id": rt.containerID(),
 	}
 }
 

@@ -92,7 +92,7 @@ Engineering Loop 消费属于 M3A-01b/01c，不能混写成 M3A-01a 未完成。
 authoritative terminal/retry/cancel/reject Transition 及其本地数据库投影已全部收口到
 durable lifecycle Seam。核心事实、Engineering Loop、task-derived 三个 consumer 各自拥有
 receipt、retry 与 dead-letter，避免一个慢投影阻塞其他 consumer。Claim/dispatch 仍以即时
-realtime delivery 为主，Cloud Gateway 的幂等 ack 与重投递证据尚未完成，成为下一最优分片。
+realtime delivery 为主的问题已在 M3A-01d 收口。
 
 ### M3A-01c — Idempotent Engineering Loop Consumer
 
@@ -106,8 +106,28 @@ realtime delivery 为主，Cloud Gateway 的幂等 ack 与重投递证据尚未�
   in-flight task 就重排”的终态恢复路径。
 
 进度和 stage live signal 仍有意保持 ephemeral；它们不是决定 Loop 状态的事实。
-Claim/dispatch delivery、Cloud Gateway 幂等 ack 和完整 Work Graph stage-template adapter
-不属于本终态 consumer 分片。
+完整 Work Graph stage-template adapter 不属于本终态 consumer 分片。
+
+### M3A-01d — Durable Cloud Dispatch Delivery
+
+- 已完成：local daemon pull claim 明确排除 `runtime_type=cloud`，Cloud Work Item 不再依赖
+  本地 daemon 顺带领取，消除同一 Work Item 同时由本地进程和 Gateway 执行的路径；
+- 已完成：独立 Cloud Dispatch worker 仅在 workspace 有已连接 Gateway 时原子创建 Run、
+  将 Work Item 置为 dispatched，并在同一数据库语句创建 per-Run delivery；Agent 与
+  Cloud Runtime 两级并发上限均在 claim SQL 内校验；
+- 已完成：delivery 使用 lease/fencing、退避和 20 次上限；WebSocket 写入后等待 Gateway
+  确认容器已启动，超时以相同 `run_id` 重发；耗尽时 Run、Work Item、lifecycle fact 和
+  dead-letter 在一个事务关闭；取消、重试等旁路留下的未确认 delivery 会显式归档；
+- 已完成：Gateway 将 `run_id` 作为 dispatch idempotency key；同一进程收到重复帧时不会
+  创建第二个容器，容器已经启动则只重发 `task:dispatched` ack；server 把 ack、Run start、
+  Work Item running 和 `run.started` fact 放在同一事务；
+- 已覆盖：Gateway 缺席时 Work Item 保持 queued；连接后独立 claim；ack 丢失后的重发只
+  保留一个 Run；重复 ack 幂等；Cloud Runtime capacity 阻止超额 claim；发送耗尽进入
+  terminal failure/dead-letter；local claim 无法取得 cloud Work Item。
+
+边界：Gateway 进程重启后尚不能按 Docker label 接管已创建容器，terminal frame 也没有
+Gateway 本地 durable spool。当前保持 `cloud-runtime=experimental`，不把 server 侧 delivery
+闭环表述成完整 crash-resume 或生产隔离证据。
 
 ## 暂不进入本检查点
 
@@ -133,10 +153,11 @@ Claim/dispatch delivery、Cloud Gateway 幂等 ack 和完整 Work Graph stage-te
 
 - M2A：本地完成，等待托管 CI 与真实 provider smoke；
 - M3A-01：主 callback 的 durable lifecycle spine 与 Loop 终态 consumer 本地通过；
-  recovery/sweeper/bulk cancel/reject 旁路及 task-derived 数据库投影已收口，下一步是
-  Claim/dispatch delivery 与 Cloud Gateway 幂等 ack/retry；
+  recovery/sweeper/bulk cancel/reject、task-derived 数据库投影和 Cloud dispatch
+  delivery/ack/retry 已收口；下一执行可靠性分片是 Gateway restart container adoption 与
+  terminal frame durable spool；
 - 北极星 M0–M8：持续进行，不再使用单一 `blocked` 终态表达所有检查点。
 
-最终本地验证（2026-08-05）：完整 `make check` 通过，覆盖截至 051 的隔离迁移、
+最终本地验证（2026-08-05）：完整 `make check` 通过，覆盖截至 052 的隔离迁移、
 Go/TypeScript 单元与集成测试及 E2E；临时数据库自动销毁，未对开发库应用迁移。
 运行中的 `https://web.agentra.orb.local/` 随后返回 HTTP 200。

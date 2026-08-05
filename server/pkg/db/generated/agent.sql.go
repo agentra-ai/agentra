@@ -253,6 +253,7 @@ WITH candidate AS (
     SELECT atq.id, atq.agent_id
     FROM agent_task_queue atq
     WHERE atq.agent_id = $1 AND atq.status = 'queued'
+      AND atq.runtime_type <> 'cloud'
       AND NOT EXISTS (
           SELECT 1 FROM agent_task_queue active
           WHERE active.issue_id = atq.issue_id
@@ -299,6 +300,7 @@ WITH candidate AS (
     SELECT target.id, target.agent_id
     FROM agent_task_queue AS target
     WHERE target.id = $1 AND target.status = 'queued'
+      AND target.runtime_type <> 'cloud'
       AND NOT EXISTS (
           SELECT 1 FROM agent_task_queue active
           WHERE active.issue_id = target.issue_id
@@ -1080,7 +1082,9 @@ func (q *Queries) ListAllAgents(ctx context.Context, workspaceID pgtype.UUID) ([
 
 const listPendingTasksByRuntime = `-- name: ListPendingTasksByRuntime :many
 SELECT id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id, active_run_id FROM agent_task_queue
-WHERE runtime_id = $1 AND status IN ('queued', 'dispatched')
+WHERE runtime_id = $1
+  AND runtime_type <> 'cloud'
+  AND status IN ('queued', 'dispatched')
 ORDER BY priority DESC, created_at ASC
 `
 
