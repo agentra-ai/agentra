@@ -1,7 +1,7 @@
 # M3A Durable Run-Aware Lifecycle Spine
 
 > 日期：2026-08-05
-> 状态：M3A-01a 与 01b authoritative Transition 本地通过；M3A-01c 终态 consumer 分片通过
+> 状态：M3A-01a/01b 本地通过；M3A-01c 终态 consumer 分片通过
 > 范围：`M3-01` 的执行事实统一，不提前实现 Work Graph scheduler
 
 ## 问题定义
@@ -79,15 +79,20 @@ Engineering Loop 消费属于 M3A-01b/01c，不能混写成 M3A-01a 未完成。
   `invalid_configuration` 原子终止对应 stage；
 - 已完成：outbox worker 按 Work Item 保序 claim，使用 lease 与 fencing token 防止旧 worker
   ack 新 lease，失败采用指数退避，并在达到上限后进入 dead letter；
-- 已完成：Trace、comment、metric、activity 和 inbox 以 event ID 或 Run ID 幂等投影；
-  realtime 明确采用 at-least-once 语义，并把 durable event ID 传给下游；
+- 已完成：Trace、comment 和 metric 由 core consumer 以 event ID 或 Run ID 幂等投影；
+  独立 `task-derived` consumer 等 core ack 后，在自己的事务中生成终态 activity、失败
+  inbox、完成评论的 subscriber/mention inbox、评论者 subscription 和 receipt；失败进入
+  独立退避/dead-letter，不再被同步 Bus listener 吞掉；
+- 已完成：带 durable event ID 的终态 listener 已退出数据库写入，旧 listener 仅兼容
+  无持久 ID 的历史事件；所有 realtime signal 均在对应数据库事务 commit 后发布，明确是
+  可重复、非权威提示，客户端可从 durable row 重新读取；
 - 已覆盖：投影提交后、outbox ack 前模拟崩溃并重放，同一 comment 和 metric 只写一次，
   realtime 可以重复；worker 随后仍能确认原事件。
 
-authoritative terminal/retry/cancel/reject Transition 已全部收口到 durable lifecycle Seam。
-activity/inbox listener 已具备 event ID 幂等键，但 listener 自身的数据库错误尚未反馈给
-outbox ack；将其升级为独立 durable consumer 是下一分片。Claim/dispatch 仍以即时 realtime
-delivery 为主，Cloud Gateway 的幂等 ack 与重投递证据也尚未完成。
+authoritative terminal/retry/cancel/reject Transition 及其本地数据库投影已全部收口到
+durable lifecycle Seam。核心事实、Engineering Loop、task-derived 三个 consumer 各自拥有
+receipt、retry 与 dead-letter，避免一个慢投影阻塞其他 consumer。Claim/dispatch 仍以即时
+realtime delivery 为主，Cloud Gateway 的幂等 ack 与重投递证据尚未完成，成为下一最优分片。
 
 ### M3A-01c — Idempotent Engineering Loop Consumer
 
@@ -128,8 +133,8 @@ Claim/dispatch delivery、Cloud Gateway 幂等 ack 和完整 Work Graph stage-te
 
 - M2A：本地完成，等待托管 CI 与真实 provider smoke；
 - M3A-01：主 callback 的 durable lifecycle spine 与 Loop 终态 consumer 本地通过；
-  recovery/sweeper/bulk cancel/reject 旁路已收口，下一步是独立 projection consumer 与
-  Cloud dispatch 幂等交付；
+  recovery/sweeper/bulk cancel/reject 旁路及 task-derived 数据库投影已收口，下一步是
+  Claim/dispatch delivery 与 Cloud Gateway 幂等 ack/retry；
 - 北极星 M0–M8：持续进行，不再使用单一 `blocked` 终态表达所有检查点。
 
 最终本地验证（2026-08-05）：完整 `make check` 通过，覆盖截至 051 的隔离迁移、

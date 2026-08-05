@@ -26,6 +26,10 @@ ON CONFLICT (lifecycle_event_id) WHERE lifecycle_event_id IS NOT NULL
 DO UPDATE SET lifecycle_event_id = EXCLUDED.lifecycle_event_id
 RETURNING *;
 
+-- name: GetCommentForLifecycleEvent :one
+SELECT * FROM comment
+WHERE lifecycle_event_id = $1;
+
 -- name: UpdateComment :one
 UPDATE comment SET
     content = $2,

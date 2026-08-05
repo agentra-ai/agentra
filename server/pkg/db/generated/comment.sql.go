@@ -137,6 +137,30 @@ func (q *Queries) GetComment(ctx context.Context, id pgtype.UUID) (Comment, erro
 	return i, err
 }
 
+const getCommentForLifecycleEvent = `-- name: GetCommentForLifecycleEvent :one
+SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id, lifecycle_event_id FROM comment
+WHERE lifecycle_event_id = $1
+`
+
+func (q *Queries) GetCommentForLifecycleEvent(ctx context.Context, lifecycleEventID pgtype.UUID) (Comment, error) {
+	row := q.db.QueryRow(ctx, getCommentForLifecycleEvent, lifecycleEventID)
+	var i Comment
+	err := row.Scan(
+		&i.ID,
+		&i.IssueID,
+		&i.AuthorType,
+		&i.AuthorID,
+		&i.Content,
+		&i.Type,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ParentID,
+		&i.WorkspaceID,
+		&i.LifecycleEventID,
+	)
+	return i, err
+}
+
 const getCommentInWorkspace = `-- name: GetCommentInWorkspace :one
 SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id, lifecycle_event_id FROM comment
 WHERE id = $1 AND workspace_id = $2

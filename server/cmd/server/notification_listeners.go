@@ -108,22 +108,12 @@ func notifySubscribers(
 			continue
 		}
 
-		var item db.InboxItem
-		if e.ID != "" {
-			item, err = queries.CreateInboxItemForLifecycleEvent(ctx, db.CreateInboxItemForLifecycleEventParams{
-				WorkspaceID: parseUUID(workspaceID), RecipientType: "member", RecipientID: sub.UserID,
-				Type: notifType, Severity: severity, IssueID: parseUUID(issueID), Title: title,
-				Body: util.StrToText(body), ActorType: util.StrToText(e.ActorType),
-				ActorID: parseUUID(e.ActorID), Details: details, LifecycleEventID: parseUUID(e.ID),
-			})
-		} else {
-			item, err = queries.CreateInboxItem(ctx, db.CreateInboxItemParams{
-				WorkspaceID: parseUUID(workspaceID), RecipientType: "member", RecipientID: sub.UserID,
-				Type: notifType, Severity: severity, IssueID: parseUUID(issueID), Title: title,
-				Body: util.StrToText(body), ActorType: util.StrToText(e.ActorType),
-				ActorID: parseUUID(e.ActorID), Details: details,
-			})
-		}
+		item, err := queries.CreateInboxItem(ctx, db.CreateInboxItemParams{
+			WorkspaceID: parseUUID(workspaceID), RecipientType: "member", RecipientID: sub.UserID,
+			Type: notifType, Severity: severity, IssueID: parseUUID(issueID), Title: title,
+			Body: util.StrToText(body), ActorType: util.StrToText(e.ActorType),
+			ActorID: parseUUID(e.ActorID), Details: details,
+		})
 		if err != nil {
 			slog.Error("subscriber notification creation failed",
 				"subscriber_id", subID, "type", notifType, "error", err)
@@ -454,6 +444,9 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 
 	// comment:created — notify all subscribers except the commenter
 	bus.Subscribe(protocol.EventCommentCreated, func(e events.Event) {
+		if e.ID != "" {
+			return // durable comment notifications are owned by TaskDerivedLifecycleProjector
+		}
 		payload, ok := e.Payload.(map[string]any)
 		if !ok {
 			return
@@ -579,6 +572,9 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 
 	// task:failed — notify all subscribers except the agent
 	bus.Subscribe(protocol.EventTaskFailed, func(e events.Event) {
+		if e.ID != "" {
+			return // durable task failure notifications are owned by TaskDerivedLifecycleProjector
+		}
 		payload, ok := e.Payload.(map[string]any)
 		if !ok {
 			return

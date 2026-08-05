@@ -149,6 +149,48 @@ func (q *Queries) ClaimLifecycleOutboxEvent(ctx context.Context) (LifecycleOutbo
 	return i, err
 }
 
+const claimTaskDerivedLifecycleEvent = `-- name: ClaimTaskDerivedLifecycleEvent :one
+SELECT event.id, event.work_item_id, event.run_id, event.event_type, event.event_version, event.payload, event.created_at, event.available_at, event.locked_at, event.lock_token, event.processed_at, event.dead_lettered_at, event.attempts, event.last_error
+FROM lifecycle_outbox event
+LEFT JOIN lifecycle_event_delivery delivery
+  ON delivery.event_id = event.id AND delivery.consumer = 'task-derived'
+WHERE event.event_type IN ('run.completed', 'run.failed', 'work_item.rejected')
+  AND event.processed_at IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM lifecycle_event_receipt receipt
+      WHERE receipt.event_id = event.id
+        AND receipt.consumer = 'task-derived'
+  )
+  AND (delivery.event_id IS NULL OR (
+      delivery.available_at <= now() AND delivery.dead_lettered_at IS NULL
+  ))
+ORDER BY event.created_at, event.id
+FOR UPDATE OF event SKIP LOCKED
+LIMIT 1
+`
+
+func (q *Queries) ClaimTaskDerivedLifecycleEvent(ctx context.Context) (LifecycleOutbox, error) {
+	row := q.db.QueryRow(ctx, claimTaskDerivedLifecycleEvent)
+	var i LifecycleOutbox
+	err := row.Scan(
+		&i.ID,
+		&i.WorkItemID,
+		&i.RunID,
+		&i.EventType,
+		&i.EventVersion,
+		&i.Payload,
+		&i.CreatedAt,
+		&i.AvailableAt,
+		&i.LockedAt,
+		&i.LockToken,
+		&i.ProcessedAt,
+		&i.DeadLetteredAt,
+		&i.Attempts,
+		&i.LastError,
+	)
+	return i, err
+}
+
 const countPendingLifecycleOutboxEvents = `-- name: CountPendingLifecycleOutboxEvents :one
 SELECT count(*) FROM lifecycle_outbox
 WHERE processed_at IS NULL AND dead_lettered_at IS NULL
@@ -265,6 +307,42 @@ ON CONFLICT DO NOTHING
 
 func (q *Queries) RecordEngineeringLoopLifecycleReceipt(ctx context.Context, eventID pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, recordEngineeringLoopLifecycleReceipt, eventID)
+	return err
+}
+
+const recordTaskDerivedLifecycleFailure = `-- name: RecordTaskDerivedLifecycleFailure :exec
+INSERT INTO lifecycle_event_delivery (event_id, consumer, attempts, available_at, last_error)
+VALUES ($1, 'task-derived', 1, now() + interval '2 seconds', $2)
+ON CONFLICT (event_id, consumer) DO UPDATE
+SET attempts = lifecycle_event_delivery.attempts + 1,
+    available_at = now() + make_interval(
+        secs => LEAST(300, (1 << LEAST(lifecycle_event_delivery.attempts + 1, 8)))
+    ),
+    last_error = EXCLUDED.last_error,
+    dead_lettered_at = CASE
+        WHEN lifecycle_event_delivery.attempts + 1 >= 20 THEN now()
+        ELSE NULL
+    END
+`
+
+type RecordTaskDerivedLifecycleFailureParams struct {
+	EventID   pgtype.UUID `json:"event_id"`
+	LastError pgtype.Text `json:"last_error"`
+}
+
+func (q *Queries) RecordTaskDerivedLifecycleFailure(ctx context.Context, arg RecordTaskDerivedLifecycleFailureParams) error {
+	_, err := q.db.Exec(ctx, recordTaskDerivedLifecycleFailure, arg.EventID, arg.LastError)
+	return err
+}
+
+const recordTaskDerivedLifecycleReceipt = `-- name: RecordTaskDerivedLifecycleReceipt :exec
+INSERT INTO lifecycle_event_receipt (event_id, consumer)
+VALUES ($1, 'task-derived')
+ON CONFLICT DO NOTHING
+`
+
+func (q *Queries) RecordTaskDerivedLifecycleReceipt(ctx context.Context, eventID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, recordTaskDerivedLifecycleReceipt, eventID)
 	return err
 }
 

@@ -86,6 +86,8 @@ func main() {
 	loopCoord := runLoopCoordinator(sweepCtx, pool, queries)
 	lifecycleWorker := service.NewLifecycleOutboxWorker(queries, bus, service.NewTraceServiceFromPool(pool))
 	go lifecycleWorker.Run(sweepCtx)
+	taskDerivedProjector := service.NewTaskDerivedLifecycleProjector(pool, queries, bus)
+	go taskDerivedProjector.Run(sweepCtx)
 
 	stripeClient := stripelib.NewClient(
 		os.Getenv("STRIPE_SECRET_KEY"),

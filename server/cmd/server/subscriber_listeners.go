@@ -81,6 +81,9 @@ func registerSubscriberListeners(bus *events.Bus, queries *db.Queries) {
 
 	// comment:created — subscribe the commenter
 	bus.Subscribe(protocol.EventCommentCreated, func(e events.Event) {
+		if e.ID != "" {
+			return // durable comment subscriptions are owned by TaskDerivedLifecycleProjector
+		}
 		payload, ok := e.Payload.(map[string]any)
 		if !ok {
 			return

@@ -224,6 +224,9 @@ func registerActivityListeners(bus *events.Bus, queries *db.Queries) {
 
 // handleTaskActivity records an activity for task:completed or task:failed events.
 func handleTaskActivity(ctx context.Context, bus *events.Bus, queries *db.Queries, e events.Event, action string) {
+	if e.ID != "" {
+		return // durable task activity is owned by TaskDerivedLifecycleProjector
+	}
 	payload, ok := e.Payload.(map[string]any)
 	if !ok {
 		return
@@ -242,21 +245,11 @@ func handleTaskActivity(ctx context.Context, bus *events.Bus, queries *db.Querie
 		return
 	}
 
-	var activity db.ActivityLog
-	if e.ID != "" {
-		activity, err = queries.CreateActivityForLifecycleEvent(ctx, db.CreateActivityForLifecycleEventParams{
-			WorkspaceID: issue.WorkspaceID,
-			IssueID:     parseUUID(issueID), ActorType: util.StrToText("agent"),
-			ActorID: parseUUID(agentID), Action: action, Details: []byte("{}"),
-			LifecycleEventID: parseUUID(e.ID),
-		})
-	} else {
-		activity, err = queries.CreateActivity(ctx, db.CreateActivityParams{
-			WorkspaceID: issue.WorkspaceID,
-			IssueID:     parseUUID(issueID), ActorType: util.StrToText("agent"),
-			ActorID: parseUUID(agentID), Action: action, Details: []byte("{}"),
-		})
-	}
+	activity, err := queries.CreateActivity(ctx, db.CreateActivityParams{
+		WorkspaceID: issue.WorkspaceID,
+		IssueID:     parseUUID(issueID), ActorType: util.StrToText("agent"),
+		ActorID: parseUUID(agentID), Action: action, Details: []byte("{}"),
+	})
 	if err != nil {
 		slog.Error("activity: failed to record task activity",
 			"issue_id", issueID, "action", action, "error", err)

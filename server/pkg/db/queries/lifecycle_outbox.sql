@@ -105,3 +105,41 @@ WHERE task.loop_id = $1
       WHERE receipt.event_id = event.id
         AND receipt.consumer = 'engineering-loop'
   );
+
+-- name: ClaimTaskDerivedLifecycleEvent :one
+SELECT event.*
+FROM lifecycle_outbox event
+LEFT JOIN lifecycle_event_delivery delivery
+  ON delivery.event_id = event.id AND delivery.consumer = 'task-derived'
+WHERE event.event_type IN ('run.completed', 'run.failed', 'work_item.rejected')
+  AND event.processed_at IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM lifecycle_event_receipt receipt
+      WHERE receipt.event_id = event.id
+        AND receipt.consumer = 'task-derived'
+  )
+  AND (delivery.event_id IS NULL OR (
+      delivery.available_at <= now() AND delivery.dead_lettered_at IS NULL
+  ))
+ORDER BY event.created_at, event.id
+FOR UPDATE OF event SKIP LOCKED
+LIMIT 1;
+
+-- name: RecordTaskDerivedLifecycleReceipt :exec
+INSERT INTO lifecycle_event_receipt (event_id, consumer)
+VALUES ($1, 'task-derived')
+ON CONFLICT DO NOTHING;
+
+-- name: RecordTaskDerivedLifecycleFailure :exec
+INSERT INTO lifecycle_event_delivery (event_id, consumer, attempts, available_at, last_error)
+VALUES ($1, 'task-derived', 1, now() + interval '2 seconds', $2)
+ON CONFLICT (event_id, consumer) DO UPDATE
+SET attempts = lifecycle_event_delivery.attempts + 1,
+    available_at = now() + make_interval(
+        secs => LEAST(300, (1 << LEAST(lifecycle_event_delivery.attempts + 1, 8)))
+    ),
+    last_error = EXCLUDED.last_error,
+    dead_lettered_at = CASE
+        WHEN lifecycle_event_delivery.attempts + 1 >= 20 THEN now()
+        ELSE NULL
+    END;

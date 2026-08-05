@@ -37,6 +37,7 @@ var (
 	testUserID          string
 	testWorkspaceID     string
 	testLifecycleWorker *service.LifecycleOutboxWorker
+	testTaskDerived     *service.TaskDerivedLifecycleProjector
 )
 
 // jwtSecret is resolved at runtime via auth.JWTSecret() so it respects
@@ -89,6 +90,7 @@ func TestMain(m *testing.M) {
 	bus := events.New()
 	registerListeners(bus, hub)
 	testLifecycleWorker = service.NewLifecycleOutboxWorker(db.New(pool), bus, service.NewTraceServiceFromPool(pool))
+	testTaskDerived = service.NewTaskDerivedLifecycleProjector(pool, db.New(pool), bus)
 	stripeClient := stripelib.NewClient("", "", "", "")
 	router := NewRouter(pool, hub, bus, stripeClient)
 	testServer = httptest.NewServer(router)
@@ -134,6 +136,15 @@ func drainLifecycleOutbox(t *testing.T) {
 		processed, err := testLifecycleWorker.ProcessNext(context.Background())
 		if err != nil {
 			t.Fatalf("drain lifecycle outbox: %v", err)
+		}
+		if !processed {
+			break
+		}
+	}
+	for {
+		processed, err := testTaskDerived.ProcessNext(context.Background())
+		if err != nil {
+			t.Fatalf("drain task-derived lifecycle projection: %v", err)
 		}
 		if !processed {
 			return
