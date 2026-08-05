@@ -156,6 +156,51 @@ func TestRestoreSkipsStageWithPendingTerminalLifecycleEvent(t *testing.T) {
 	}
 }
 
+func TestLifecycleProjectorFailsRejectedStageWithoutRun(t *testing.T) {
+	pool := testPool(t)
+	q := db.New(pool)
+	coord := looppkg.NewCoordinator(q, pool)
+	projector := looppkg.NewLifecycleProjector(pool, q, coord)
+
+	wsID, issueID, agentID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	seedWorkspaceAndIssue(t, pool, wsID, issueID)
+	seedAgent(t, pool, wsID, agentID)
+	t.Cleanup(func() { cleanupLoopData(t, pool, wsID, issueID, agentID) })
+	store := looppkg.NewStore(q)
+	loopRow, err := store.CreateLoop(context.Background(), looppkg.CreateLoopInput{
+		IssueID: issueID, WorkspaceID: wsID, AgentID: &agentID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	running, plan := looppkg.StatusRunning, looppkg.StagePlan
+	if _, err := store.UpdateStatus(context.Background(), loopRow.ID, looppkg.UpdateStatusInput{
+		Status: &running, CurrentStage: &plan,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	eventID := seedRejectedLifecycleEvent(t, pool, loopRow.ID, agentID)
+
+	processed, err := projector.ProcessNext(context.Background())
+	if err != nil || !processed {
+		t.Fatalf("project rejected stage = processed:%v err:%v", processed, err)
+	}
+	updated, err := store.GetLoop(context.Background(), loopRow.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status != looppkg.StatusFailed || updated.FailureReason == nil || *updated.FailureReason != string(looppkg.FailureInvalidConfig) {
+		t.Fatalf("rejected Loop = status:%q failure:%v", updated.Status, updated.FailureReason)
+	}
+	var receipts int
+	if err := pool.QueryRow(context.Background(), `
+		SELECT count(*) FROM lifecycle_event_receipt
+		WHERE event_id = $1 AND consumer = 'engineering-loop'
+	`, eventID).Scan(&receipts); err != nil || receipts != 1 {
+		t.Fatalf("rejected receipt = %d err:%v", receipts, err)
+	}
+}
+
 func seedTerminalLifecycleEvent(t *testing.T, pool *pgxpool.Pool, loopID, agentID, taskType, eventType, output, runError string) string {
 	t.Helper()
 	ctx := context.Background()
@@ -195,6 +240,34 @@ func seedTerminalLifecycleEvent(t *testing.T, pool *pgxpool.Pool, loopID, agentI
 		INSERT INTO lifecycle_outbox (id, work_item_id, run_id, event_type, event_version, payload)
 		VALUES ($1, $2, $3, $4, 1, '{}'::jsonb)
 	`, eventID, taskID, runID, eventType); err != nil {
+		t.Fatal(err)
+	}
+	return eventID
+}
+
+func seedRejectedLifecycleEvent(t *testing.T, pool *pgxpool.Pool, loopID, agentID string) string {
+	t.Helper()
+	ctx := context.Background()
+	taskID, eventID := uuid.NewString(), uuid.NewString()
+	var runtimeID string
+	if err := pool.QueryRow(ctx, `SELECT runtime_id FROM agent WHERE id = $1`, agentID).Scan(&runtimeID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO agent_task_queue (
+			id, agent_id, runtime_id, issue_id, status, error, completed_at,
+			priority, task_type, loop_id, created_at
+		) VALUES (
+			$1, $2, $3, (SELECT issue_id FROM loops WHERE id = $4),
+			'failed', 'provider requires max_turns', now(), 1, 'loop_plan', $4, now()
+		)
+	`, taskID, agentID, runtimeID, loopID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO lifecycle_outbox (id, work_item_id, event_type, event_version, payload)
+		VALUES ($1, $2, 'work_item.rejected', 1, '{"status":"failed"}'::jsonb)
+	`, eventID, taskID); err != nil {
 		t.Fatal(err)
 	}
 	return eventID

@@ -1,7 +1,7 @@
 # M3A Durable Run-Aware Lifecycle Spine
 
 > 日期：2026-08-05
-> 状态：M3A-01a/01b 本地验收通过；M3A-01c 终态 consumer 分片通过
+> 状态：M3A-01a 与 01b authoritative Transition 本地通过；M3A-01c 终态 consumer 分片通过
 > 范围：`M3-01` 的执行事实统一，不提前实现 Work Graph scheduler
 
 ## 问题定义
@@ -70,6 +70,13 @@ Engineering Loop 消费属于 M3A-01b/01c，不能混写成 M3A-01a 未完成。
 
 - 已完成：Start、Checkpoint、Complete、Fail、Cancel、Retry 通过同一个事务型
   `RunLifecycle` Interface 写入，并在同一事务追加 versioned lifecycle event；
+- 已完成：runtime recovery、offline/stale sweeper、issue/agent bulk cancel 使用单条
+  data-modifying CTE 原子锁定批次、关闭 active Run、更新 Work Item 并逐项追加 outbox；
+  recovery event 精确绑定被中断的 Run，已由 offline transition 记录的 exhausted Work Item
+  不伪造第二次 Run failure；
+- 已完成：pre-claim provider capability rejection 写入无 Run 的 `work_item.rejected` fact，
+  core projector 可靠生成失败 comment/realtime，Engineering Loop 以
+  `invalid_configuration` 原子终止对应 stage；
 - 已完成：outbox worker 按 Work Item 保序 claim，使用 lease 与 fencing token 防止旧 worker
   ack 新 lease，失败采用指数退避，并在达到上限后进入 dead letter；
 - 已完成：Trace、comment、metric、activity 和 inbox 以 event ID 或 Run ID 幂等投影；
@@ -77,11 +84,10 @@ Engineering Loop 消费属于 M3A-01b/01c，不能混写成 M3A-01a 未完成。
 - 已覆盖：投影提交后、outbox ack 前模拟崩溃并重放，同一 comment 和 metric 只写一次，
   realtime 可以重复；worker 随后仍能确认原事件。
 
-`runtime recovery`、stale task sweeper 和 issue bulk cancel 仍使用原子 SQL 或直接投影，
-尚未追加 durable lifecycle event。它们是 M3A-01b 的下一收口分片，不能因主 callback
-路径通过而误报为全部 Transition 已统一。activity/inbox listener 已具备 event ID 幂等键，
-但 listener 自身的数据库错误尚未反馈给 outbox ack；将其升级为独立 durable consumer
-是下一分片的一部分。
+authoritative terminal/retry/cancel/reject Transition 已全部收口到 durable lifecycle Seam。
+activity/inbox listener 已具备 event ID 幂等键，但 listener 自身的数据库错误尚未反馈给
+outbox ack；将其升级为独立 durable consumer 是下一分片。Claim/dispatch 仍以即时 realtime
+delivery 为主，Cloud Gateway 的幂等 ack 与重投递证据也尚未完成。
 
 ### M3A-01c — Idempotent Engineering Loop Consumer
 
@@ -90,7 +96,7 @@ Engineering Loop 消费属于 M3A-01b/01c，不能混写成 M3A-01a 未完成。
   Loop transition 在一个数据库事务提交；`StartLoop` 的首个 Work Item 与 started 状态
   也改为原子提交；
 - 已覆盖：两个 worker 并发 claim 只推进一次，重复 durable fact 只生成 receipt，启动恢复
-  发现待消费终态事件时不会重排当前 stage；
+  发现待消费终态事件时不会重排当前 stage；无 Run 的 pre-claim rejection 也只失败一次；
 - 已删除：Loop 对终态 Bus/goroutine 的订阅、按“最新 Run”猜结果的查询，以及“缺
   in-flight task 就重排”的终态恢复路径。
 
@@ -122,7 +128,8 @@ Claim/dispatch delivery、Cloud Gateway 幂等 ack 和完整 Work Graph stage-te
 
 - M2A：本地完成，等待托管 CI 与真实 provider smoke；
 - M3A-01：主 callback 的 durable lifecycle spine 与 Loop 终态 consumer 本地通过；
-  recovery/sweeper/bulk cancel 旁路仍需收口，随后验证 Cloud dispatch 幂等交付；
+  recovery/sweeper/bulk cancel/reject 旁路已收口，下一步是独立 projection consumer 与
+  Cloud dispatch 幂等交付；
 - 北极星 M0–M8：持续进行，不再使用单一 `blocked` 终态表达所有检查点。
 
 最终本地验证（2026-08-05）：完整 `make check` 通过，覆盖截至 051 的隔离迁移、

@@ -303,6 +303,84 @@ func (l *RunLifecycle) Cancel(ctx context.Context, workItemID pgtype.UUID) (db.A
 	return task, runID, nil
 }
 
+// CancelForIssue atomically cancels every active Work Item for an Issue and
+// appends one durable lifecycle fact per affected item. The query is one
+// database statement, so callers never observe a partially emitted batch.
+func (l *RunLifecycle) CancelForIssue(ctx context.Context, issueID pgtype.UUID) (int, error) {
+	if l == nil || l.queries == nil || !issueID.Valid {
+		return 0, ErrLifecycleUnavailable
+	}
+	events, err := l.queries.CancelAgentTasksByIssueLifecycle(ctx, issueID)
+	if err != nil {
+		return 0, fmt.Errorf("cancel issue work items: %w", err)
+	}
+	return len(events), nil
+}
+
+// CancelForAgent is the archive-time counterpart to CancelForIssue.
+func (l *RunLifecycle) CancelForAgent(ctx context.Context, agentID pgtype.UUID) (int, error) {
+	if l == nil || l.queries == nil || !agentID.Valid {
+		return 0, ErrLifecycleUnavailable
+	}
+	events, err := l.queries.CancelAgentTasksByAgentLifecycle(ctx, agentID)
+	if err != nil {
+		return 0, fmt.Errorf("cancel agent work items: %w", err)
+	}
+	return len(events), nil
+}
+
+// FailStaleTasks closes timed-out active Runs, fails their Work Items, and
+// emits the matching facts atomically for the background sweeper.
+func (l *RunLifecycle) FailStaleTasks(ctx context.Context, dispatchTimeout, runningTimeout float64) (int, error) {
+	if l == nil || l.queries == nil {
+		return 0, ErrLifecycleUnavailable
+	}
+	events, err := l.queries.FailStaleTasksLifecycle(ctx, db.FailStaleTasksLifecycleParams{
+		DispatchTimeoutSecs: dispatchTimeout,
+		RunningTimeoutSecs:  runningTimeout,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("fail stale work items: %w", err)
+	}
+	return len(events), nil
+}
+
+// FailTasksForOfflineRuntimes closes every active Run owned by a runtime that
+// the heartbeat sweeper has marked offline.
+func (l *RunLifecycle) FailTasksForOfflineRuntimes(ctx context.Context) (int, error) {
+	if l == nil || l.queries == nil {
+		return 0, ErrLifecycleUnavailable
+	}
+	events, err := l.queries.FailTasksForOfflineRuntimesLifecycle(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("fail offline runtime work items: %w", err)
+	}
+	return len(events), nil
+}
+
+// RecoverTasksForRuntime requeues retryable Work Items after a daemon restart
+// and emits facts bound to the exact Run that was interrupted. A Work Item
+// already failed by the offline sweep does not manufacture a second Run
+// failure when its retry budget is exhausted.
+func (l *RunLifecycle) RecoverTasksForRuntime(ctx context.Context, runtimeID pgtype.UUID) (requeued, failed int, err error) {
+	if l == nil || l.queries == nil || !runtimeID.Valid {
+		return 0, 0, ErrLifecycleUnavailable
+	}
+	rows, err := l.queries.RecoverTasksForRuntimeLifecycle(ctx, runtimeID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("recover runtime work items: %w", err)
+	}
+	for _, row := range rows {
+		switch row.Status {
+		case "queued":
+			requeued++
+		case "failed":
+			failed++
+		}
+	}
+	return requeued, failed, nil
+}
+
 func (l *RunLifecycle) withLockedRun(
 	ctx context.Context,
 	ref RunRef,

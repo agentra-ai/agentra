@@ -1527,14 +1527,15 @@ func TestTaskSessionCheckpointSurvivesRuntimeRecovery(t *testing.T) {
 	`, taskID); err != nil {
 		t.Fatal(err)
 	}
-	exhausted, err := queries.RecoverTasksForRuntime(context.Background(), util.ParseUUID(runtimeID))
+	lifecycle := service.NewRunLifecycle(testPool, queries)
+	requeued, failed, err := lifecycle.RecoverTasksForRuntime(context.Background(), util.ParseUUID(runtimeID))
 	if err != nil {
 		t.Fatalf("recover exhausted runtime task: %v", err)
 	}
-	if len(exhausted) != 1 {
-		t.Fatalf("exhausted recovery = %#v", exhausted)
+	if requeued != 0 || failed != 1 {
+		t.Fatalf("exhausted recovery = requeued:%d failed:%d", requeued, failed)
 	}
-	exhaustedTask, err := queries.GetAgentTask(context.Background(), exhausted[0].TaskID)
+	exhaustedTask, err := queries.GetAgentTask(context.Background(), util.ParseUUID(taskID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1649,6 +1650,24 @@ func TestRuntimeClaimRejectsIncompatibleTaskBeforeDispatch(t *testing.T) {
 	}
 	if incompatibleStatus != "failed" || incompatibleDispatchedAt != nil || !strings.Contains(incompatibleError, "max_turns") {
 		t.Fatalf("incompatible task = status %q, error %q, dispatched_at %v", incompatibleStatus, incompatibleError, incompatibleDispatchedAt)
+	}
+	drainLifecycleOutbox(t)
+	var rejectionEvents, rejectionComments int
+	if err := testPool.QueryRow(ctx, `
+		SELECT count(*) FROM lifecycle_outbox
+		WHERE work_item_id = $1 AND event_type = 'work_item.rejected' AND processed_at IS NOT NULL
+	`, incompatibleTaskID).Scan(&rejectionEvents); err != nil {
+		t.Fatal(err)
+	}
+	if err := testPool.QueryRow(ctx, `
+		SELECT count(*) FROM comment c
+		JOIN lifecycle_outbox event ON event.id = c.lifecycle_event_id
+		WHERE event.work_item_id = $1 AND event.event_type = 'work_item.rejected'
+	`, incompatibleTaskID).Scan(&rejectionComments); err != nil {
+		t.Fatal(err)
+	}
+	if rejectionEvents != 1 || rejectionComments != 1 {
+		t.Fatalf("rejection projection = events:%d comments:%d, want 1/1", rejectionEvents, rejectionComments)
 	}
 }
 

@@ -19,6 +19,7 @@ const (
 	LifecycleEventRunFailed     = "run.failed"
 	LifecycleEventRunRetry      = "run.retry_scheduled"
 	LifecycleEventRunCancelled  = "run.cancelled"
+	LifecycleEventWorkRejected  = "work_item.rejected"
 )
 
 type lifecycleEventPayload struct {

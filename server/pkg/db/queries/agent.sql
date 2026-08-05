@@ -77,7 +77,7 @@ VALUES (
 )
 RETURNING *;
 
--- name: CancelAgentTasksByIssue :exec
+-- name: CancelAgentTasksByIssueLifecycle :many
 WITH targets AS (
     SELECT id, active_run_id
     FROM agent_task_queue atq
@@ -90,13 +90,25 @@ WITH targets AS (
     WHERE tr.id = targets.active_run_id
       AND tr.status IN ('dispatched', 'running')
     RETURNING tr.id
+), updated_tasks AS (
+    UPDATE agent_task_queue atq
+    SET status = 'cancelled', completed_at = NOW(), active_run_id = NULL
+    FROM targets
+    WHERE atq.id = targets.id
+    RETURNING atq.id, atq.status
+), emitted_events AS (
+    INSERT INTO lifecycle_outbox (
+        work_item_id, run_id, event_type, event_version, payload
+    )
+    SELECT updated_tasks.id, targets.active_run_id,
+           'run.cancelled', 1, jsonb_build_object('status', updated_tasks.status)
+    FROM updated_tasks
+    JOIN targets ON targets.id = updated_tasks.id
+    RETURNING work_item_id
 )
-UPDATE agent_task_queue atq
-SET status = 'cancelled', completed_at = NOW(), active_run_id = NULL
-FROM targets
-WHERE atq.id = targets.id;
+SELECT work_item_id FROM emitted_events;
 
--- name: CancelAgentTasksByAgent :exec
+-- name: CancelAgentTasksByAgentLifecycle :many
 WITH targets AS (
     SELECT id, active_run_id
     FROM agent_task_queue atq
@@ -109,11 +121,23 @@ WITH targets AS (
     WHERE tr.id = targets.active_run_id
       AND tr.status IN ('dispatched', 'running')
     RETURNING tr.id
+), updated_tasks AS (
+    UPDATE agent_task_queue atq
+    SET status = 'cancelled', completed_at = NOW(), active_run_id = NULL
+    FROM targets
+    WHERE atq.id = targets.id
+    RETURNING atq.id, atq.status
+), emitted_events AS (
+    INSERT INTO lifecycle_outbox (
+        work_item_id, run_id, event_type, event_version, payload
+    )
+    SELECT updated_tasks.id, targets.active_run_id,
+           'run.cancelled', 1, jsonb_build_object('status', updated_tasks.status)
+    FROM updated_tasks
+    JOIN targets ON targets.id = updated_tasks.id
+    RETURNING work_item_id
 )
-UPDATE agent_task_queue atq
-SET status = 'cancelled', completed_at = NOW(), active_run_id = NULL
-FROM targets
-WHERE atq.id = targets.id;
+SELECT work_item_id FROM emitted_events;
 
 -- name: GetAgentTask :one
 SELECT * FROM agent_task_queue
@@ -187,14 +211,25 @@ SELECT claimed_task.id AS task_id, claimed_run.id AS run_id
 FROM claimed_task
 JOIN claimed_run ON claimed_run.task_id = claimed_task.id;
 
--- name: RejectQueuedAgentTask :one
+-- name: RejectQueuedAgentTaskLifecycle :one
 -- Capability mismatches are terminal configuration errors, not retryable
 -- execution failures. Reject them before dispatch so daemons never launch an
 -- incompatible provider process and the queue cannot retain them forever.
-UPDATE agent_task_queue
-SET status = 'failed', completed_at = now(), error = $2
-WHERE id = $1 AND status = 'queued'
-RETURNING *;
+WITH updated_task AS (
+    UPDATE agent_task_queue AS task
+    SET status = 'failed', completed_at = now(), error = $2
+    WHERE task.id = $1 AND task.status = 'queued'
+    RETURNING task.id, task.status
+), emitted_event AS (
+    INSERT INTO lifecycle_outbox (
+        work_item_id, run_id, event_type, event_version, payload
+    )
+    SELECT updated_task.id, NULL, 'work_item.rejected', 1,
+           jsonb_build_object('status', updated_task.status)
+    FROM updated_task
+    RETURNING work_item_id
+)
+SELECT work_item_id FROM emitted_event;
 
 -- name: SetAgentTaskRunning :one
 UPDATE agent_task_queue
@@ -247,7 +282,7 @@ SET status = 'queued',
 WHERE id = $1 AND status IN ('failed', 'dispatched', 'running') AND retry_count < max_retries
 RETURNING *;
 
--- name: FailStaleTasks :many
+-- name: FailStaleTasksLifecycle :many
 -- Fails tasks stuck in dispatched/running beyond the given thresholds.
 -- Handles cases where the daemon is alive but the task is orphaned
 -- (e.g. agent process hung, daemon failed to report completion).
@@ -264,12 +299,23 @@ WITH targets AS (
     WHERE tr.id = targets.active_run_id
       AND tr.status IN ('dispatched', 'running')
     RETURNING tr.id
+), updated_tasks AS (
+    UPDATE agent_task_queue atq
+    SET status = 'failed', completed_at = now(), error = 'task timed out', active_run_id = NULL
+    FROM targets
+    WHERE atq.id = targets.id
+    RETURNING atq.id, atq.status
+), emitted_events AS (
+    INSERT INTO lifecycle_outbox (
+        work_item_id, run_id, event_type, event_version, payload
+    )
+    SELECT updated_tasks.id, targets.active_run_id,
+           'run.failed', 1, jsonb_build_object('status', updated_tasks.status)
+    FROM updated_tasks
+    JOIN targets ON targets.id = updated_tasks.id
+    RETURNING work_item_id
 )
-UPDATE agent_task_queue atq
-SET status = 'failed', completed_at = now(), error = 'task timed out', active_run_id = NULL
-FROM targets
-WHERE atq.id = targets.id
-RETURNING atq.id, atq.agent_id, atq.issue_id;
+SELECT work_item_id FROM emitted_events;
 
 -- name: CancelAgentTask :one
 UPDATE agent_task_queue

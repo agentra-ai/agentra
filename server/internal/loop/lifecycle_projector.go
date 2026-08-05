@@ -17,6 +17,7 @@ const (
 	engineeringLoopPollInterval = 250 * time.Millisecond
 	runCompletedEvent           = "run.completed"
 	runFailedEvent              = "run.failed"
+	workItemRejectedEvent       = "work_item.rejected"
 )
 
 type lifecycleTxStarter interface {
@@ -112,9 +113,6 @@ func (p *LifecycleProjector) apply(ctx context.Context, q *db.Queries, event db.
 	if event.EventVersion != 1 {
 		return fmt.Errorf("unsupported lifecycle event version %d", event.EventVersion)
 	}
-	if !event.RunID.Valid {
-		return fmt.Errorf("terminal lifecycle event has no run id")
-	}
 	task, err := q.GetAgentTask(ctx, event.WorkItemID)
 	if err != nil {
 		return fmt.Errorf("load loop work item: %w", err)
@@ -135,6 +133,16 @@ func (p *LifecycleProjector) apply(ctx context.Context, q *db.Queries, event db.
 		// this event's receipt is the idempotent no-op.
 		return nil
 	}
+	txCoordinator := &Coordinator{queries: q, store: NewStore(q)}
+	if event.EventType == workItemRejectedEvent {
+		if err := txCoordinator.applyDecision(ctx, l, Decision{action: actionFail, reason: FailureInvalidConfig}); err != nil {
+			return fmt.Errorf("apply rejected stage decision: %w", err)
+		}
+		return nil
+	}
+	if !event.RunID.Valid {
+		return fmt.Errorf("terminal lifecycle event has no run id")
+	}
 	run, err := q.GetTaskRun(ctx, event.RunID)
 	if err != nil {
 		return fmt.Errorf("load exact terminal run: %w", err)
@@ -143,7 +151,6 @@ func (p *LifecycleProjector) apply(ctx context.Context, q *db.Queries, event db.
 		return fmt.Errorf("terminal run does not belong to work item")
 	}
 
-	txCoordinator := &Coordinator{queries: q, store: NewStore(q)}
 	switch event.EventType {
 	case runCompletedEvent:
 		var result *TaskResult

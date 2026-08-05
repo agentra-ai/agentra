@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const failTasksForOfflineRuntimes = `-- name: FailTasksForOfflineRuntimes :many
+const failTasksForOfflineRuntimesLifecycle = `-- name: FailTasksForOfflineRuntimesLifecycle :many
 WITH targets AS (
     SELECT atq.id, atq.active_run_id
     FROM agent_task_queue atq
@@ -27,35 +27,40 @@ WITH targets AS (
     WHERE tr.id = targets.active_run_id
       AND tr.status IN ('dispatched', 'running')
     RETURNING tr.id
+), updated_tasks AS (
+    UPDATE agent_task_queue atq
+    SET status = 'failed', completed_at = now(), error = 'runtime went offline', active_run_id = NULL
+    FROM targets
+    WHERE atq.id = targets.id
+    RETURNING atq.id, atq.status
+), emitted_events AS (
+    INSERT INTO lifecycle_outbox (
+        work_item_id, run_id, event_type, event_version, payload
+    )
+    SELECT updated_tasks.id, targets.active_run_id,
+           'run.failed', 1, jsonb_build_object('status', updated_tasks.status)
+    FROM updated_tasks
+    JOIN targets ON targets.id = updated_tasks.id
+    RETURNING work_item_id
 )
-UPDATE agent_task_queue atq
-SET status = 'failed', completed_at = now(), error = 'runtime went offline', active_run_id = NULL
-FROM targets
-WHERE atq.id = targets.id
-RETURNING atq.id, atq.agent_id, atq.issue_id
+SELECT work_item_id FROM emitted_events
 `
-
-type FailTasksForOfflineRuntimesRow struct {
-	ID      pgtype.UUID `json:"id"`
-	AgentID pgtype.UUID `json:"agent_id"`
-	IssueID pgtype.UUID `json:"issue_id"`
-}
 
 // Marks dispatched/running tasks as failed when their runtime is offline.
 // This cleans up orphaned tasks after a daemon crash or network partition.
-func (q *Queries) FailTasksForOfflineRuntimes(ctx context.Context) ([]FailTasksForOfflineRuntimesRow, error) {
-	rows, err := q.db.Query(ctx, failTasksForOfflineRuntimes)
+func (q *Queries) FailTasksForOfflineRuntimesLifecycle(ctx context.Context) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, failTasksForOfflineRuntimesLifecycle)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []FailTasksForOfflineRuntimesRow{}
+	items := []pgtype.UUID{}
 	for rows.Next() {
-		var i FailTasksForOfflineRuntimesRow
-		if err := rows.Scan(&i.ID, &i.AgentID, &i.IssueID); err != nil {
+		var work_item_id pgtype.UUID
+		if err := rows.Scan(&work_item_id); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, work_item_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -221,9 +226,17 @@ func (q *Queries) MarkStaleRuntimesOffline(ctx context.Context, staleSeconds flo
 	return items, nil
 }
 
-const recoverTasksForRuntime = `-- name: RecoverTasksForRuntime :many
+const recoverTasksForRuntimeLifecycle = `-- name: RecoverTasksForRuntimeLifecycle :many
 WITH targets AS (
-    SELECT id, active_run_id
+    SELECT id,
+           status AS prior_status,
+           COALESCE(active_run_id, (
+               SELECT tr.id
+               FROM task_runs tr
+               WHERE tr.task_id = atq.id
+               ORDER BY tr.created_at DESC, tr.id DESC
+               LIMIT 1
+           )) AS run_id
     FROM agent_task_queue atq
     WHERE atq.runtime_id = $1
       AND atq.runtime_type = 'local'
@@ -238,54 +251,76 @@ WITH targets AS (
         completed_at = NOW(),
         error = 'runtime restarted; task queued for resume'
     FROM targets
-    WHERE tr.id = targets.active_run_id
+    WHERE tr.id = targets.run_id
       AND tr.status IN ('dispatched', 'running')
     RETURNING tr.id
+), updated_tasks AS (
+    UPDATE agent_task_queue atq
+    SET status = CASE
+            WHEN retry_count < max_retries THEN 'queued'
+            ELSE 'failed'
+        END,
+        completed_at = CASE
+            WHEN retry_count < max_retries THEN NULL
+            ELSE now()
+        END,
+        error = CASE
+            WHEN retry_count < max_retries THEN NULL
+            ELSE 'runtime restarted and retry budget was exhausted'
+        END,
+        retry_count = CASE
+            WHEN retry_count < max_retries THEN retry_count + 1
+            ELSE retry_count
+        END,
+        dispatched_at = NULL,
+        started_at = NULL,
+        active_run_id = NULL
+    FROM targets
+    WHERE atq.id = targets.id
+    RETURNING atq.id AS task_id, atq.status
+), emitted_events AS (
+    INSERT INTO lifecycle_outbox (
+        work_item_id, run_id, event_type, event_version, payload
+    )
+    SELECT updated_tasks.task_id, targets.run_id,
+           CASE updated_tasks.status
+               WHEN 'queued' THEN 'run.retry_scheduled'
+               ELSE 'run.failed'
+           END,
+           1,
+           jsonb_build_object('status', updated_tasks.status)
+    FROM updated_tasks
+    JOIN targets ON targets.id = updated_tasks.task_id
+    WHERE updated_tasks.status = 'queued'
+       OR targets.prior_status IN ('dispatched', 'running')
+    RETURNING work_item_id
 )
-UPDATE agent_task_queue atq
-SET status = CASE
-        WHEN retry_count < max_retries THEN 'queued'
-        ELSE 'failed'
-    END,
-    completed_at = CASE
-        WHEN retry_count < max_retries THEN NULL
-        ELSE now()
-    END,
-    error = CASE
-        WHEN retry_count < max_retries THEN NULL
-        ELSE 'runtime restarted and retry budget was exhausted'
-    END,
-    retry_count = CASE
-        WHEN retry_count < max_retries THEN retry_count + 1
-        ELSE retry_count
-    END,
-    dispatched_at = NULL,
-    started_at = NULL,
-    active_run_id = NULL
-FROM targets
-WHERE atq.id = targets.id
-RETURNING atq.id AS task_id, targets.active_run_id AS run_id
+SELECT updated_tasks.task_id, targets.run_id, updated_tasks.status
+FROM updated_tasks
+JOIN targets ON targets.id = updated_tasks.task_id
+LEFT JOIN emitted_events ON emitted_events.work_item_id = updated_tasks.task_id
 `
 
-type RecoverTasksForRuntimeRow struct {
+type RecoverTasksForRuntimeLifecycleRow struct {
 	TaskID pgtype.UUID `json:"task_id"`
 	RunID  pgtype.UUID `json:"run_id"`
+	Status string      `json:"status"`
 }
 
 // A daemon registration represents a fresh process for this stable runtime
 // identity. Requeue orphaned work within its retry budget so the new process
 // can resume from the in-flight session checkpoint; fail closed once the
 // budget is exhausted.
-func (q *Queries) RecoverTasksForRuntime(ctx context.Context, runtimeID pgtype.UUID) ([]RecoverTasksForRuntimeRow, error) {
-	rows, err := q.db.Query(ctx, recoverTasksForRuntime, runtimeID)
+func (q *Queries) RecoverTasksForRuntimeLifecycle(ctx context.Context, runtimeID pgtype.UUID) ([]RecoverTasksForRuntimeLifecycleRow, error) {
+	rows, err := q.db.Query(ctx, recoverTasksForRuntimeLifecycle, runtimeID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []RecoverTasksForRuntimeRow{}
+	items := []RecoverTasksForRuntimeLifecycleRow{}
 	for rows.Next() {
-		var i RecoverTasksForRuntimeRow
-		if err := rows.Scan(&i.TaskID, &i.RunID); err != nil {
+		var i RecoverTasksForRuntimeLifecycleRow
+		if err := rows.Scan(&i.TaskID, &i.RunID, &i.Status); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

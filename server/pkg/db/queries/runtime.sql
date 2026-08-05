@@ -56,7 +56,7 @@ WHERE status = 'online'
   AND last_seen_at < now() - make_interval(secs => @stale_seconds::double precision)
 RETURNING id, workspace_id;
 
--- name: FailTasksForOfflineRuntimes :many
+-- name: FailTasksForOfflineRuntimesLifecycle :many
 -- Marks dispatched/running tasks as failed when their runtime is offline.
 -- This cleans up orphaned tasks after a daemon crash or network partition.
 WITH targets AS (
@@ -74,20 +74,39 @@ WITH targets AS (
     WHERE tr.id = targets.active_run_id
       AND tr.status IN ('dispatched', 'running')
     RETURNING tr.id
+), updated_tasks AS (
+    UPDATE agent_task_queue atq
+    SET status = 'failed', completed_at = now(), error = 'runtime went offline', active_run_id = NULL
+    FROM targets
+    WHERE atq.id = targets.id
+    RETURNING atq.id, atq.status
+), emitted_events AS (
+    INSERT INTO lifecycle_outbox (
+        work_item_id, run_id, event_type, event_version, payload
+    )
+    SELECT updated_tasks.id, targets.active_run_id,
+           'run.failed', 1, jsonb_build_object('status', updated_tasks.status)
+    FROM updated_tasks
+    JOIN targets ON targets.id = updated_tasks.id
+    RETURNING work_item_id
 )
-UPDATE agent_task_queue atq
-SET status = 'failed', completed_at = now(), error = 'runtime went offline', active_run_id = NULL
-FROM targets
-WHERE atq.id = targets.id
-RETURNING atq.id, atq.agent_id, atq.issue_id;
+SELECT work_item_id FROM emitted_events;
 
--- name: RecoverTasksForRuntime :many
+-- name: RecoverTasksForRuntimeLifecycle :many
 -- A daemon registration represents a fresh process for this stable runtime
 -- identity. Requeue orphaned work within its retry budget so the new process
 -- can resume from the in-flight session checkpoint; fail closed once the
 -- budget is exhausted.
 WITH targets AS (
-    SELECT id, active_run_id
+    SELECT id,
+           status AS prior_status,
+           COALESCE(active_run_id, (
+               SELECT tr.id
+               FROM task_runs tr
+               WHERE tr.task_id = atq.id
+               ORDER BY tr.created_at DESC, tr.id DESC
+               LIMIT 1
+           )) AS run_id
     FROM agent_task_queue atq
     WHERE atq.runtime_id = $1
       AND atq.runtime_type = 'local'
@@ -102,30 +121,51 @@ WITH targets AS (
         completed_at = NOW(),
         error = 'runtime restarted; task queued for resume'
     FROM targets
-    WHERE tr.id = targets.active_run_id
+    WHERE tr.id = targets.run_id
       AND tr.status IN ('dispatched', 'running')
     RETURNING tr.id
+), updated_tasks AS (
+    UPDATE agent_task_queue atq
+    SET status = CASE
+            WHEN retry_count < max_retries THEN 'queued'
+            ELSE 'failed'
+        END,
+        completed_at = CASE
+            WHEN retry_count < max_retries THEN NULL
+            ELSE now()
+        END,
+        error = CASE
+            WHEN retry_count < max_retries THEN NULL
+            ELSE 'runtime restarted and retry budget was exhausted'
+        END,
+        retry_count = CASE
+            WHEN retry_count < max_retries THEN retry_count + 1
+            ELSE retry_count
+        END,
+        dispatched_at = NULL,
+        started_at = NULL,
+        active_run_id = NULL
+    FROM targets
+    WHERE atq.id = targets.id
+    RETURNING atq.id AS task_id, atq.status
+), emitted_events AS (
+    INSERT INTO lifecycle_outbox (
+        work_item_id, run_id, event_type, event_version, payload
+    )
+    SELECT updated_tasks.task_id, targets.run_id,
+           CASE updated_tasks.status
+               WHEN 'queued' THEN 'run.retry_scheduled'
+               ELSE 'run.failed'
+           END,
+           1,
+           jsonb_build_object('status', updated_tasks.status)
+    FROM updated_tasks
+    JOIN targets ON targets.id = updated_tasks.task_id
+    WHERE updated_tasks.status = 'queued'
+       OR targets.prior_status IN ('dispatched', 'running')
+    RETURNING work_item_id
 )
-UPDATE agent_task_queue atq
-SET status = CASE
-        WHEN retry_count < max_retries THEN 'queued'
-        ELSE 'failed'
-    END,
-    completed_at = CASE
-        WHEN retry_count < max_retries THEN NULL
-        ELSE now()
-    END,
-    error = CASE
-        WHEN retry_count < max_retries THEN NULL
-        ELSE 'runtime restarted and retry budget was exhausted'
-    END,
-    retry_count = CASE
-        WHEN retry_count < max_retries THEN retry_count + 1
-        ELSE retry_count
-    END,
-    dispatched_at = NULL,
-    started_at = NULL,
-    active_run_id = NULL
-FROM targets
-WHERE atq.id = targets.id
-RETURNING atq.id AS task_id, targets.active_run_id AS run_id;
+SELECT updated_tasks.task_id, targets.run_id, updated_tasks.status
+FROM updated_tasks
+JOIN targets ON targets.id = updated_tasks.task_id
+LEFT JOIN emitted_events ON emitted_events.work_item_id = updated_tasks.task_id;

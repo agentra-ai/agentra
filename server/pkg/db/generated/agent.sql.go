@@ -91,7 +91,7 @@ func (q *Queries) CancelAgentTask(ctx context.Context, id pgtype.UUID) (AgentTas
 	return i, err
 }
 
-const cancelAgentTasksByAgent = `-- name: CancelAgentTasksByAgent :exec
+const cancelAgentTasksByAgentLifecycle = `-- name: CancelAgentTasksByAgentLifecycle :many
 WITH targets AS (
     SELECT id, active_run_id
     FROM agent_task_queue atq
@@ -104,19 +104,46 @@ WITH targets AS (
     WHERE tr.id = targets.active_run_id
       AND tr.status IN ('dispatched', 'running')
     RETURNING tr.id
+), updated_tasks AS (
+    UPDATE agent_task_queue atq
+    SET status = 'cancelled', completed_at = NOW(), active_run_id = NULL
+    FROM targets
+    WHERE atq.id = targets.id
+    RETURNING atq.id, atq.status
+), emitted_events AS (
+    INSERT INTO lifecycle_outbox (
+        work_item_id, run_id, event_type, event_version, payload
+    )
+    SELECT updated_tasks.id, targets.active_run_id,
+           'run.cancelled', 1, jsonb_build_object('status', updated_tasks.status)
+    FROM updated_tasks
+    JOIN targets ON targets.id = updated_tasks.id
+    RETURNING work_item_id
 )
-UPDATE agent_task_queue atq
-SET status = 'cancelled', completed_at = NOW(), active_run_id = NULL
-FROM targets
-WHERE atq.id = targets.id
+SELECT work_item_id FROM emitted_events
 `
 
-func (q *Queries) CancelAgentTasksByAgent(ctx context.Context, agentID pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, cancelAgentTasksByAgent, agentID)
-	return err
+func (q *Queries) CancelAgentTasksByAgentLifecycle(ctx context.Context, agentID pgtype.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, cancelAgentTasksByAgentLifecycle, agentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var work_item_id pgtype.UUID
+		if err := rows.Scan(&work_item_id); err != nil {
+			return nil, err
+		}
+		items = append(items, work_item_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const cancelAgentTasksByIssue = `-- name: CancelAgentTasksByIssue :exec
+const cancelAgentTasksByIssueLifecycle = `-- name: CancelAgentTasksByIssueLifecycle :many
 WITH targets AS (
     SELECT id, active_run_id
     FROM agent_task_queue atq
@@ -129,16 +156,43 @@ WITH targets AS (
     WHERE tr.id = targets.active_run_id
       AND tr.status IN ('dispatched', 'running')
     RETURNING tr.id
+), updated_tasks AS (
+    UPDATE agent_task_queue atq
+    SET status = 'cancelled', completed_at = NOW(), active_run_id = NULL
+    FROM targets
+    WHERE atq.id = targets.id
+    RETURNING atq.id, atq.status
+), emitted_events AS (
+    INSERT INTO lifecycle_outbox (
+        work_item_id, run_id, event_type, event_version, payload
+    )
+    SELECT updated_tasks.id, targets.active_run_id,
+           'run.cancelled', 1, jsonb_build_object('status', updated_tasks.status)
+    FROM updated_tasks
+    JOIN targets ON targets.id = updated_tasks.id
+    RETURNING work_item_id
 )
-UPDATE agent_task_queue atq
-SET status = 'cancelled', completed_at = NOW(), active_run_id = NULL
-FROM targets
-WHERE atq.id = targets.id
+SELECT work_item_id FROM emitted_events
 `
 
-func (q *Queries) CancelAgentTasksByIssue(ctx context.Context, issueID pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, cancelAgentTasksByIssue, issueID)
-	return err
+func (q *Queries) CancelAgentTasksByIssueLifecycle(ctx context.Context, issueID pgtype.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, cancelAgentTasksByIssueLifecycle, issueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var work_item_id pgtype.UUID
+		if err := rows.Scan(&work_item_id); err != nil {
+			return nil, err
+		}
+		items = append(items, work_item_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const checkpointAgentTaskSessionForRun = `-- name: CheckpointAgentTaskSessionForRun :one
@@ -539,7 +593,7 @@ func (q *Queries) FailAgentTaskForRun(ctx context.Context, arg FailAgentTaskForR
 	return i, err
 }
 
-const failStaleTasks = `-- name: FailStaleTasks :many
+const failStaleTasksLifecycle = `-- name: FailStaleTasksLifecycle :many
 WITH targets AS (
     SELECT id, active_run_id
     FROM agent_task_queue
@@ -553,41 +607,46 @@ WITH targets AS (
     WHERE tr.id = targets.active_run_id
       AND tr.status IN ('dispatched', 'running')
     RETURNING tr.id
+), updated_tasks AS (
+    UPDATE agent_task_queue atq
+    SET status = 'failed', completed_at = now(), error = 'task timed out', active_run_id = NULL
+    FROM targets
+    WHERE atq.id = targets.id
+    RETURNING atq.id, atq.status
+), emitted_events AS (
+    INSERT INTO lifecycle_outbox (
+        work_item_id, run_id, event_type, event_version, payload
+    )
+    SELECT updated_tasks.id, targets.active_run_id,
+           'run.failed', 1, jsonb_build_object('status', updated_tasks.status)
+    FROM updated_tasks
+    JOIN targets ON targets.id = updated_tasks.id
+    RETURNING work_item_id
 )
-UPDATE agent_task_queue atq
-SET status = 'failed', completed_at = now(), error = 'task timed out', active_run_id = NULL
-FROM targets
-WHERE atq.id = targets.id
-RETURNING atq.id, atq.agent_id, atq.issue_id
+SELECT work_item_id FROM emitted_events
 `
 
-type FailStaleTasksParams struct {
+type FailStaleTasksLifecycleParams struct {
 	DispatchTimeoutSecs float64 `json:"dispatch_timeout_secs"`
 	RunningTimeoutSecs  float64 `json:"running_timeout_secs"`
-}
-
-type FailStaleTasksRow struct {
-	ID      pgtype.UUID `json:"id"`
-	AgentID pgtype.UUID `json:"agent_id"`
-	IssueID pgtype.UUID `json:"issue_id"`
 }
 
 // Fails tasks stuck in dispatched/running beyond the given thresholds.
 // Handles cases where the daemon is alive but the task is orphaned
 // (e.g. agent process hung, daemon failed to report completion).
-func (q *Queries) FailStaleTasks(ctx context.Context, arg FailStaleTasksParams) ([]FailStaleTasksRow, error) {
-	rows, err := q.db.Query(ctx, failStaleTasks, arg.DispatchTimeoutSecs, arg.RunningTimeoutSecs)
+func (q *Queries) FailStaleTasksLifecycle(ctx context.Context, arg FailStaleTasksLifecycleParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, failStaleTasksLifecycle, arg.DispatchTimeoutSecs, arg.RunningTimeoutSecs)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []FailStaleTasksRow{}
+	items := []pgtype.UUID{}
 	for rows.Next() {
-		var i FailStaleTasksRow
-		if err := rows.Scan(&i.ID, &i.AgentID, &i.IssueID); err != nil {
+		var work_item_id pgtype.UUID
+		if err := rows.Scan(&work_item_id); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, work_item_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1119,14 +1178,25 @@ func (q *Queries) ListTasksByIssue(ctx context.Context, issueID pgtype.UUID) ([]
 	return items, nil
 }
 
-const rejectQueuedAgentTask = `-- name: RejectQueuedAgentTask :one
-UPDATE agent_task_queue
-SET status = 'failed', completed_at = now(), error = $2
-WHERE id = $1 AND status = 'queued'
-RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, runtime_type, cloud_runtime_id, retry_count, max_retries, task_type, loop_id, active_run_id
+const rejectQueuedAgentTaskLifecycle = `-- name: RejectQueuedAgentTaskLifecycle :one
+WITH updated_task AS (
+    UPDATE agent_task_queue AS task
+    SET status = 'failed', completed_at = now(), error = $2
+    WHERE task.id = $1 AND task.status = 'queued'
+    RETURNING task.id, task.status
+), emitted_event AS (
+    INSERT INTO lifecycle_outbox (
+        work_item_id, run_id, event_type, event_version, payload
+    )
+    SELECT updated_task.id, NULL, 'work_item.rejected', 1,
+           jsonb_build_object('status', updated_task.status)
+    FROM updated_task
+    RETURNING work_item_id
+)
+SELECT work_item_id FROM emitted_event
 `
 
-type RejectQueuedAgentTaskParams struct {
+type RejectQueuedAgentTaskLifecycleParams struct {
 	ID    pgtype.UUID `json:"id"`
 	Error pgtype.Text `json:"error"`
 }
@@ -1134,35 +1204,11 @@ type RejectQueuedAgentTaskParams struct {
 // Capability mismatches are terminal configuration errors, not retryable
 // execution failures. Reject them before dispatch so daemons never launch an
 // incompatible provider process and the queue cannot retain them forever.
-func (q *Queries) RejectQueuedAgentTask(ctx context.Context, arg RejectQueuedAgentTaskParams) (AgentTaskQueue, error) {
-	row := q.db.QueryRow(ctx, rejectQueuedAgentTask, arg.ID, arg.Error)
-	var i AgentTaskQueue
-	err := row.Scan(
-		&i.ID,
-		&i.AgentID,
-		&i.IssueID,
-		&i.Status,
-		&i.Priority,
-		&i.DispatchedAt,
-		&i.StartedAt,
-		&i.CompletedAt,
-		&i.Result,
-		&i.Error,
-		&i.CreatedAt,
-		&i.Context,
-		&i.RuntimeID,
-		&i.SessionID,
-		&i.WorkDir,
-		&i.TriggerCommentID,
-		&i.RuntimeType,
-		&i.CloudRuntimeID,
-		&i.RetryCount,
-		&i.MaxRetries,
-		&i.TaskType,
-		&i.LoopID,
-		&i.ActiveRunID,
-	)
-	return i, err
+func (q *Queries) RejectQueuedAgentTaskLifecycle(ctx context.Context, arg RejectQueuedAgentTaskLifecycleParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, rejectQueuedAgentTaskLifecycle, arg.ID, arg.Error)
+	var work_item_id pgtype.UUID
+	err := row.Scan(&work_item_id)
+	return work_item_id, err
 }
 
 const restoreAgent = `-- name: RestoreAgent :one

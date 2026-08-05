@@ -81,7 +81,8 @@ func main() {
 	// building the router afterwards guarantees the DB restore completes
 	// before any HTTP request can hit CreateLoop.
 	sweepCtx, sweepCancel := context.WithCancel(context.Background())
-	go runRuntimeSweeper(sweepCtx, queries, bus)
+	runLifecycle := service.NewRunLifecycle(pool, queries)
+	go runRuntimeSweeper(sweepCtx, queries, bus, runLifecycle)
 	loopCoord := runLoopCoordinator(sweepCtx, pool, queries)
 	lifecycleWorker := service.NewLifecycleOutboxWorker(queries, bus, service.NewTraceServiceFromPool(pool))
 	go lifecycleWorker.Run(sweepCtx)

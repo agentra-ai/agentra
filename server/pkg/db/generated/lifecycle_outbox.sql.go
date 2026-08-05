@@ -60,7 +60,7 @@ FROM lifecycle_outbox event
 JOIN agent_task_queue task ON task.id = event.work_item_id
 LEFT JOIN lifecycle_event_delivery delivery
   ON delivery.event_id = event.id AND delivery.consumer = 'engineering-loop'
-WHERE event.event_type IN ('run.completed', 'run.failed')
+WHERE event.event_type IN ('run.completed', 'run.failed', 'work_item.rejected')
   AND task.loop_id IS NOT NULL
   AND NOT EXISTS (
       SELECT 1 FROM lifecycle_event_receipt receipt
@@ -193,7 +193,7 @@ FROM lifecycle_outbox event
 JOIN agent_task_queue task ON task.id = event.work_item_id
 WHERE task.loop_id = $1
   AND task.task_type = $2
-  AND event.event_type IN ('run.completed', 'run.failed')
+  AND event.event_type IN ('run.completed', 'run.failed', 'work_item.rejected')
   AND NOT EXISTS (
       SELECT 1 FROM lifecycle_event_receipt receipt
       WHERE receipt.event_id = event.id

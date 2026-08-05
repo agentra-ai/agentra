@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/agentra-ai/agentra/server/internal/events"
+	"github.com/agentra-ai/agentra/server/internal/service"
 	"github.com/agentra-ai/agentra/server/internal/util"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/agentra-ai/agentra/server/pkg/protocol"
@@ -31,7 +31,7 @@ const (
 // last_seen_at exceeds the stale threshold, and fails orphaned tasks.
 // This handles cases where the daemon crashes, is killed without calling
 // the deregister endpoint, or leaves tasks in a non-terminal state.
-func runRuntimeSweeper(ctx context.Context, queries *db.Queries, bus *events.Bus) {
+func runRuntimeSweeper(ctx context.Context, queries *db.Queries, bus *events.Bus, lifecycle *service.RunLifecycle) {
 	ticker := time.NewTicker(sweepInterval)
 	defer ticker.Stop()
 
@@ -40,19 +40,28 @@ func runRuntimeSweeper(ctx context.Context, queries *db.Queries, bus *events.Bus
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			sweepStaleRuntimes(ctx, queries, bus)
-			sweepStaleTasks(ctx, queries, bus)
+			sweepStaleRuntimes(ctx, queries, bus, lifecycle)
+			sweepStaleTasks(ctx, lifecycle)
 		}
 	}
 }
 
 // sweepStaleRuntimes marks runtimes offline if they haven't heartbeated,
 // then fails any tasks belonging to those offline runtimes.
-func sweepStaleRuntimes(ctx context.Context, queries *db.Queries, bus *events.Bus) {
+func sweepStaleRuntimes(ctx context.Context, queries *db.Queries, bus *events.Bus, lifecycle *service.RunLifecycle) {
 	staleRows, err := queries.MarkStaleRuntimesOffline(ctx, staleThresholdSeconds)
 	if err != nil {
 		slog.Warn("runtime sweeper: failed to mark stale runtimes offline", "error", err)
-		return
+	}
+
+	// Always repair tasks for every offline runtime. If the server crashed after
+	// marking a runtime offline but before this call, the next sweep has no new
+	// staleRows but still closes the orphaned Run and emits its durable fact.
+	failedTasks, err := lifecycle.FailTasksForOfflineRuntimes(ctx)
+	if err != nil {
+		slog.Warn("runtime sweeper: failed to clean up stale tasks", "error", err)
+	} else if failedTasks > 0 {
+		slog.Info("runtime sweeper: failed orphaned tasks", "count", failedTasks)
 	}
 	if len(staleRows) == 0 {
 		return
@@ -66,15 +75,6 @@ func sweepStaleRuntimes(ctx context.Context, queries *db.Queries, bus *events.Bu
 	}
 
 	slog.Info("runtime sweeper: marked stale runtimes offline", "count", len(staleRows), "workspaces", len(workspaces))
-
-	// Fail orphaned tasks (dispatched/running) whose runtimes just went offline.
-	failedTasks, err := queries.FailTasksForOfflineRuntimes(ctx)
-	if err != nil {
-		slog.Warn("runtime sweeper: failed to clean up stale tasks", "error", err)
-	} else if len(failedTasks) > 0 {
-		slog.Info("runtime sweeper: failed orphaned tasks", "count", len(failedTasks))
-		broadcastFailedTasks(ctx, queries, bus, failedTasks)
-	}
 
 	// Notify frontend clients so they re-fetch runtime list.
 	for wsID := range workspaces {
@@ -94,97 +94,15 @@ func sweepStaleRuntimes(ctx context.Context, queries *db.Queries, bus *events.Bu
 // - The agent process hangs and the daemon is still heartbeating
 // - The daemon failed to report task completion/failure
 // - A server restart left tasks in a non-terminal state
-func sweepStaleTasks(ctx context.Context, queries *db.Queries, bus *events.Bus) {
-	failedTasks, err := queries.FailStaleTasks(ctx, db.FailStaleTasksParams{
-		DispatchTimeoutSecs: dispatchTimeoutSeconds,
-		RunningTimeoutSecs:  runningTimeoutSeconds,
-	})
+func sweepStaleTasks(ctx context.Context, lifecycle *service.RunLifecycle) {
+	failedTasks, err := lifecycle.FailStaleTasks(ctx, dispatchTimeoutSeconds, runningTimeoutSeconds)
 	if err != nil {
 		slog.Warn("task sweeper: failed to clean up stale tasks", "error", err)
 		return
 	}
-	if len(failedTasks) == 0 {
+	if failedTasks == 0 {
 		return
 	}
 
-	slog.Info("task sweeper: failed stale tasks", "count", len(failedTasks))
-	broadcastFailedTasks(ctx, queries, bus, failedTasks)
-}
-
-// failedTask is a common interface for both sweeper result types.
-type failedTask struct {
-	ID      pgtype.UUID
-	AgentID pgtype.UUID
-	IssueID pgtype.UUID
-}
-
-// broadcastFailedTasks publishes task:failed events with the correct WorkspaceID
-// and reconciles agent status for all affected agents.
-func broadcastFailedTasks(ctx context.Context, queries *db.Queries, bus *events.Bus, tasks any) {
-	var items []failedTask
-	switch ts := tasks.(type) {
-	case []db.FailStaleTasksRow:
-		for _, t := range ts {
-			items = append(items, failedTask{ID: t.ID, AgentID: t.AgentID, IssueID: t.IssueID})
-		}
-	case []db.FailTasksForOfflineRuntimesRow:
-		for _, t := range ts {
-			items = append(items, failedTask{ID: t.ID, AgentID: t.AgentID, IssueID: t.IssueID})
-		}
-	}
-
-	affectedAgents := make(map[string]pgtype.UUID)
-
-	for _, ft := range items {
-		// Look up workspace ID from the issue so the event reaches the right WS room.
-		workspaceID := ""
-		if issue, err := queries.GetIssue(ctx, ft.IssueID); err == nil {
-			workspaceID = util.UUIDToString(issue.WorkspaceID)
-		}
-
-		bus.Publish(events.Event{
-			Type:        protocol.EventTaskFailed,
-			WorkspaceID: workspaceID,
-			ActorType:   "system",
-			Payload: map[string]any{
-				"task_id":  util.UUIDToString(ft.ID),
-				"agent_id": util.UUIDToString(ft.AgentID),
-				"issue_id": util.UUIDToString(ft.IssueID),
-				"status":   "failed",
-			},
-		})
-
-		agentKey := util.UUIDToString(ft.AgentID)
-		affectedAgents[agentKey] = ft.AgentID
-	}
-
-	// Reconcile status for each affected agent.
-	for _, agentID := range affectedAgents {
-		reconcileAgentStatus(ctx, queries, bus, agentID)
-	}
-}
-
-// reconcileAgentStatus checks running task count and updates agent status.
-func reconcileAgentStatus(ctx context.Context, queries *db.Queries, bus *events.Bus, agentID pgtype.UUID) {
-	running, err := queries.CountRunningTasks(ctx, agentID)
-	if err != nil {
-		return
-	}
-	newStatus := "idle"
-	if running > 0 {
-		newStatus = "working"
-	}
-	agent, err := queries.UpdateAgentStatus(ctx, db.UpdateAgentStatusParams{
-		ID:     agentID,
-		Status: newStatus,
-	})
-	if err != nil {
-		return
-	}
-	bus.Publish(events.Event{
-		Type:        protocol.EventAgentStatus,
-		WorkspaceID: util.UUIDToString(agent.WorkspaceID),
-		ActorType:   "system",
-		Payload:     map[string]any{"agent_id": util.UUIDToString(agent.ID), "status": agent.Status},
-	})
+	slog.Info("task sweeper: failed stale tasks", "count", failedTasks)
 }

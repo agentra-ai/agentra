@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"testing"
 
 	"github.com/agentra-ai/agentra/server/internal/events"
+	"github.com/agentra-ai/agentra/server/internal/service"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 )
 
@@ -60,6 +60,20 @@ func setupSweeperTestFixture(t *testing.T, taskStatus string) (string, string, s
 	if err != nil {
 		t.Fatalf("failed to create test task: %v", err)
 	}
+	var runID string
+	err = testPool.QueryRow(ctx, `
+		INSERT INTO task_runs (task_id, agent_id, status, started_at)
+		VALUES ($1, $2, $3, now() - interval '3 hours')
+		RETURNING id
+	`, taskID, agentID, taskStatus).Scan(&runID)
+	if err != nil {
+		t.Fatalf("failed to create active test Run: %v", err)
+	}
+	if _, err := testPool.Exec(ctx, `
+		UPDATE agent_task_queue SET active_run_id = $2 WHERE id = $1
+	`, taskID, runID); err != nil {
+		t.Fatalf("failed to bind active test Run: %v", err)
+	}
 
 	// Set agent status to "working"
 	_, err = testPool.Exec(ctx, `UPDATE agent SET status = 'working' WHERE id = $1`, agentID)
@@ -68,6 +82,30 @@ func setupSweeperTestFixture(t *testing.T, taskStatus string) (string, string, s
 	}
 
 	return issueID, agentID, taskID
+}
+
+// projectSweeperEvent drives the exact durable event produced for taskID. The
+// timestamp override keeps the assertion deterministic even while other Go
+// packages share the isolated integration database.
+func projectSweeperEvent(t *testing.T, queries *db.Queries, bus *events.Bus, taskID string) {
+	t.Helper()
+	ctx := context.Background()
+	tag, err := testPool.Exec(ctx, `
+		UPDATE lifecycle_outbox
+		SET created_at = '1900-01-01T00:00:00Z'
+		WHERE work_item_id = $1 AND event_type = 'run.failed' AND processed_at IS NULL
+	`, taskID)
+	if err != nil {
+		t.Fatalf("prioritize sweeper lifecycle event: %v", err)
+	}
+	if tag.RowsAffected() != 1 {
+		t.Fatalf("sweeper lifecycle events for task %s = %d, want 1", taskID, tag.RowsAffected())
+	}
+	worker := service.NewLifecycleOutboxWorker(queries, bus, nil)
+	processed, err := worker.ProcessNext(ctx)
+	if err != nil || !processed {
+		t.Fatalf("project sweeper lifecycle event: processed=%v err=%v", processed, err)
+	}
 }
 
 func cleanupSweeperFixture(t *testing.T, issueID, agentID string) {
@@ -103,31 +141,16 @@ func TestSweepStaleTasksBroadcastsWithWorkspaceID(t *testing.T) {
 	})
 
 	// Use very short timeouts to trigger the sweep on our test task
-	failedTasks, err := queries.FailStaleTasks(context.Background(), db.FailStaleTasksParams{
-		DispatchTimeoutSecs: 300.0,
-		RunningTimeoutSecs:  1.0, // 1 second — our task is 3 hours old
-	})
+	lifecycle := service.NewRunLifecycle(testPool, queries)
+	failedTasks, err := lifecycle.FailStaleTasks(context.Background(), 300.0, 1.0)
 	if err != nil {
 		t.Fatalf("FailStaleTasks query failed: %v", err)
 	}
-	if len(failedTasks) == 0 {
+	if failedTasks == 0 {
 		t.Fatal("expected at least 1 stale task to be failed")
 	}
 
-	// Verify our task was included
-	found := false
-	for _, ft := range failedTasks {
-		if ft.ID.Bytes == parseUUIDBytes(taskID) {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected task %s to be in failed tasks list", taskID)
-	}
-
-	// Call broadcastFailedTasks — this is what we're testing
-	broadcastFailedTasks(context.Background(), queries, bus, failedTasks)
+	projectSweeperEvent(t, queries, bus, taskID)
 
 	// Verify the event was published with WorkspaceID (the core of the bug fix)
 	mu.Lock()
@@ -168,7 +191,7 @@ func TestSweepStaleTasksReconcileAgentStatus(t *testing.T) {
 		t.Skip("no database connection")
 	}
 
-	issueID, agentID, _ := setupSweeperTestFixture(t, "running")
+	issueID, agentID, taskID := setupSweeperTestFixture(t, "running")
 	t.Cleanup(func() { cleanupSweeperFixture(t, issueID, agentID) })
 
 	queries := db.New(testPool)
@@ -184,18 +207,16 @@ func TestSweepStaleTasksReconcileAgentStatus(t *testing.T) {
 	})
 
 	// Fail stale tasks with short timeout
-	failedTasks, err := queries.FailStaleTasks(context.Background(), db.FailStaleTasksParams{
-		DispatchTimeoutSecs: 300.0,
-		RunningTimeoutSecs:  1.0,
-	})
+	lifecycle := service.NewRunLifecycle(testPool, queries)
+	failedTasks, err := lifecycle.FailStaleTasks(context.Background(), 300.0, 1.0)
 	if err != nil {
 		t.Fatalf("FailStaleTasks failed: %v", err)
 	}
-	if len(failedTasks) == 0 {
+	if failedTasks == 0 {
 		t.Fatal("expected at least 1 stale task")
 	}
 
-	broadcastFailedTasks(context.Background(), queries, bus, failedTasks)
+	projectSweeperEvent(t, queries, bus, taskID)
 
 	// Verify agent status is now "idle" in DB
 	var agentStatus string
@@ -245,18 +266,16 @@ func TestSweepDispatchedStaleTask(t *testing.T) {
 	})
 
 	// Fail stale tasks — dispatch timeout of 1 second (our task is 10 minutes old)
-	failedTasks, err := queries.FailStaleTasks(context.Background(), db.FailStaleTasksParams{
-		DispatchTimeoutSecs: 1.0,
-		RunningTimeoutSecs:  9000.0,
-	})
+	lifecycle := service.NewRunLifecycle(testPool, queries)
+	failedTasks, err := lifecycle.FailStaleTasks(context.Background(), 1.0, 9000.0)
 	if err != nil {
 		t.Fatalf("FailStaleTasks failed: %v", err)
 	}
-	if len(failedTasks) == 0 {
+	if failedTasks == 0 {
 		t.Fatal("expected at least 1 stale dispatched task")
 	}
 
-	broadcastFailedTasks(context.Background(), queries, bus, failedTasks)
+	projectSweeperEvent(t, queries, bus, taskID)
 
 	// Verify DB: task should be failed
 	var status string
@@ -300,26 +319,48 @@ func TestSweepDispatchedStaleTask(t *testing.T) {
 	}
 }
 
-// parseUUIDBytes converts a UUID string to the 16-byte array used by pgtype.UUID.
-func parseUUIDBytes(s string) [16]byte {
-	s = strings.ReplaceAll(s, "-", "")
-	var b [16]byte
-	for i := 0; i < 16; i++ {
-		hi := unhex(s[i*2])
-		lo := unhex(s[i*2+1])
-		b[i] = hi<<4 | lo
+// TestSweepOfflineRuntimeRepairsTasksWithoutNewStaleRow covers the crash
+// window between marking a runtime offline and failing its active Work Items.
+// A later sweep must repair from the persisted offline status even though the
+// runtime is no longer returned by MarkStaleRuntimesOffline.
+func TestSweepOfflineRuntimeRepairsTasksWithoutNewStaleRow(t *testing.T) {
+	if testPool == nil {
+		t.Skip("no database connection")
 	}
-	return b
-}
+	issueID, agentID, taskID := setupSweeperTestFixture(t, "running")
+	t.Cleanup(func() { cleanupSweeperFixture(t, issueID, agentID) })
+	ctx := context.Background()
+	var runtimeID string
+	if err := testPool.QueryRow(ctx, `
+		SELECT runtime_id FROM agent_task_queue WHERE id = $1
+	`, taskID).Scan(&runtimeID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testPool.Exec(ctx, `UPDATE agent_runtime SET status = 'offline' WHERE id = $1`, runtimeID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), `
+			UPDATE agent_runtime SET status = 'online', last_seen_at = now() WHERE id = $1
+		`, runtimeID)
+	})
 
-func unhex(c byte) byte {
-	switch {
-	case c >= '0' && c <= '9':
-		return c - '0'
-	case c >= 'a' && c <= 'f':
-		return c - 'a' + 10
-	case c >= 'A' && c <= 'F':
-		return c - 'A' + 10
+	queries := db.New(testPool)
+	lifecycle := service.NewRunLifecycle(testPool, queries)
+	sweepStaleRuntimes(ctx, queries, events.New(), lifecycle)
+
+	var status string
+	var eventCount int
+	if err := testPool.QueryRow(ctx, `SELECT status FROM agent_task_queue WHERE id = $1`, taskID).Scan(&status); err != nil {
+		t.Fatal(err)
 	}
-	return 0
+	if err := testPool.QueryRow(ctx, `
+		SELECT count(*) FROM lifecycle_outbox
+		WHERE work_item_id = $1 AND event_type = 'run.failed'
+	`, taskID).Scan(&eventCount); err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" || eventCount != 1 {
+		t.Fatalf("offline repair = status:%q events:%d, want failed/1", status, eventCount)
+	}
 }

@@ -119,6 +119,9 @@ func (w *LifecycleOutboxWorker) project(ctx context.Context, event db.LifecycleO
 	if err != nil {
 		return fmt.Errorf("load issue: %w", err)
 	}
+	if event.EventType != LifecycleEventRunCancelled && event.EventType != LifecycleEventWorkRejected && !event.RunID.Valid {
+		return fmt.Errorf("lifecycle event %q requires a run id", event.EventType)
+	}
 
 	var run db.TaskRun
 	if event.RunID.Valid {
@@ -166,6 +169,14 @@ func (w *LifecycleOutboxWorker) project(ctx context.Context, event db.LifecycleO
 			}
 		}
 		return w.publishTaskEvent(event, issue.WorkspaceID, task, protocol.EventTaskCancelled, "cancelled")
+	case LifecycleEventWorkRejected:
+		w.reconcileAgentStatus(ctx, task.AgentID)
+		if task.Error.Valid && task.Error.String != "" {
+			if err := w.createLifecycleComment(ctx, event.ID, issue, task, redact.Text(task.Error.String), "system"); err != nil {
+				return err
+			}
+		}
+		return w.publishTaskEvent(event, issue.WorkspaceID, task, protocol.EventTaskFailed, "failed")
 	default:
 		return fmt.Errorf("unsupported lifecycle event type %q", event.EventType)
 	}
