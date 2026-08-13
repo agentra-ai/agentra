@@ -2,12 +2,10 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/agentra-ai/agentra/server/internal/middleware"
 	"github.com/agentra-ai/agentra/server/internal/util"
@@ -24,7 +22,6 @@ func NewMemberHandler(q *db.Queries) *MemberHandler {
 
 func (h *MemberHandler) RegisterRoutes(r chi.Router) {
 	r.Use(middleware.RequireWorkspaceMemberFromURL(h.Queries, "id"))
-	r.Get("/seats", h.GetSeats)
 	r.Get("/members", h.ListMembers)
 	r.With(middleware.RequireWorkspaceRoleFromURL(h.Queries, "id", "owner", "admin")).Post("/members/invite", h.InviteMember)
 	r.With(middleware.RequireWorkspaceRoleFromURL(h.Queries, "id", "owner", "admin")).Delete("/members/{memberId}", h.RemoveMember)
@@ -56,39 +53,6 @@ func seatMemberToResponse(m db.ListMembersWithUserRow) map[string]any {
 		resp["joined_at"] = m.CreatedAt.Time.Format(time.RFC3339)
 	}
 	return resp
-}
-
-func (h *MemberHandler) GetSeats(w http.ResponseWriter, r *http.Request) {
-	wsID := util.ParseUUID(chi.URLParam(r, "id"))
-	if !wsID.Valid {
-		writeError(w, http.StatusBadRequest, "invalid workspace id")
-		return
-	}
-	plan, err := h.Queries.GetWorkspacePlan(r.Context(), wsID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	used, err := h.Queries.CountActiveMembers(r.Context(), wsID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	members, err := h.Queries.ListMembersWithUser(r.Context(), wsID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	resp := map[string]any{
-		"used":    used,
-		"max":     plan.MaxSeats,
-		"plan":    plan.Plan,
-		"members": make([]map[string]any, 0, len(members)),
-	}
-	for _, m := range members {
-		resp["members"] = append(resp["members"].([]map[string]any), seatMemberToResponse(m))
-	}
-	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *MemberHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
@@ -126,22 +90,6 @@ func (h *MemberHandler) InviteMember(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Role == "" {
 		req.Role = "member"
-	}
-
-	plan, err := h.Queries.GetWorkspacePlan(r.Context(), wsID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	used, err := h.Queries.CountActiveMembers(r.Context(), wsID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if int32(used) >= plan.MaxSeats {
-		writeError(w, http.StatusConflict,
-			fmt.Sprintf("seat limit reached (%d/%d); upgrade plan to add more seats", used, plan.MaxSeats))
-		return
 	}
 
 	user, err := h.Queries.GetUserByEmail(r.Context(), req.Email)
@@ -246,5 +194,3 @@ func (h *MemberHandler) UpdateMemberRole(w http.ResponseWriter, r *http.Request)
 		"role": updated.Role,
 	})
 }
-
-var _ = pgtype.UUID{}

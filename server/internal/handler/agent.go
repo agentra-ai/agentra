@@ -126,7 +126,6 @@ type AgentTaskResponse struct {
 	PriorSessionID   string         `json:"prior_session_id,omitempty"`   // session ID from a previous task on same issue
 	PriorWorkDir     string         `json:"prior_work_dir,omitempty"`     // work_dir from a previous task on same issue
 	TriggerCommentID *string        `json:"trigger_comment_id,omitempty"` // comment that triggered this task
-	RuntimeType      string         `json:"runtime_type"`                 // "local" or "cloud"
 	TaskType         string         `json:"task_type,omitempty"`          // "standard" (default) or loop_plan/develop/review/fix
 	LoopID           string         `json:"loop_id,omitempty"`            // set when TaskType starts with "loop_"; identifies the loop row in `loops`
 	RunID            string         `json:"run_id,omitempty"`             // active execution attempt, allocated when the task is dispatched
@@ -162,7 +161,6 @@ func taskToResponse(t db.AgentTaskQueue) AgentTaskResponse {
 		Error:            textToPtr(t.Error),
 		CreatedAt:        timestampToString(t.CreatedAt),
 		TriggerCommentID: uuidToPtr(t.TriggerCommentID),
-		RuntimeType:      t.RuntimeType,
 		TaskType:         t.TaskType,
 		LoopID:           uuidToString(t.LoopID),
 		RunID:            uuidToString(t.ActiveRunID),

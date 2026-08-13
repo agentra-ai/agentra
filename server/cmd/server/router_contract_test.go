@@ -12,7 +12,7 @@ import (
 )
 
 func TestRouterExposesFrontendContracts(t *testing.T) {
-	router := newRouter(nil, realtime.NewHub(), events.New(), nil, nil)
+	router := newRouter(nil, realtime.NewHub(), events.New(), nil)
 	routes := routeInventory(t, router)
 
 	want := []string{
@@ -41,7 +41,7 @@ func TestRouterExposesFrontendContracts(t *testing.T) {
 }
 
 func TestRouterHasNoAccidentallyNestedAPIPaths(t *testing.T) {
-	router := newRouter(nil, realtime.NewHub(), events.New(), nil, nil)
+	router := newRouter(nil, realtime.NewHub(), events.New(), nil)
 	routes := routeInventory(t, router)
 
 	for contract := range routes {

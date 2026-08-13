@@ -11,8 +11,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	stripelib "github.com/agentra-ai/agentra/server/pkg/stripe"
-
 	"github.com/agentra-ai/agentra/server/internal/auth"
 	"github.com/agentra-ai/agentra/server/internal/buildinfo"
 	"github.com/agentra-ai/agentra/server/internal/corsconfig"
@@ -88,18 +86,8 @@ func main() {
 	go lifecycleWorker.Run(sweepCtx)
 	taskDerivedProjector := service.NewTaskDerivedLifecycleProjector(pool, queries, bus)
 	go taskDerivedProjector.Run(sweepCtx)
-	cloudTasks := service.NewTaskService(queries, pool, bus, nil)
-	cloudDispatch := service.NewCloudDispatchWorker(cloudTasks, hub.GatewayHub, auth.JWTSecret())
-	go cloudDispatch.Run(sweepCtx)
 
-	stripeClient := stripelib.NewClient(
-		os.Getenv("STRIPE_SECRET_KEY"),
-		os.Getenv("STRIPE_WEBHOOK_SECRET"),
-		os.Getenv(stripelib.PriceBaseSeat),
-		os.Getenv(stripelib.PriceAgentRuntime),
-	)
-
-	r := newRouter(pool, hub, bus, loopCoord, stripeClient)
+	r := newRouter(pool, hub, bus, loopCoord)
 
 	srv := &http.Server{
 		Addr:    ":" + port,

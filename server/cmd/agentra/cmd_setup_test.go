@@ -18,7 +18,6 @@ func newSetupTestCommand() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Flags().String("server-url", "", "")
 	cmd.Flags().String("profile", "", "")
-	cmd.Flags().String("deployment", setupDeploymentSelfHost, "")
 	cmd.Flags().String("app-url", "", "")
 	cmd.Flags().Bool("token", false, "")
 	cmd.Flags().Bool("no-daemon", false, "")
@@ -126,7 +125,7 @@ func TestSetupCommandRegistered(t *testing.T) {
 	if command != setupCmd {
 		t.Fatalf("found %q, want setup", command.Name())
 	}
-	for _, name := range []string{"deployment", "app-url", "token", "no-daemon", "reauth", "timeout"} {
+	for _, name := range []string{"app-url", "token", "no-daemon", "reauth", "timeout"} {
 		if command.Flags().Lookup(name) == nil {
 			t.Fatalf("setup flag %q is not registered", name)
 		}
@@ -141,9 +140,6 @@ func TestResolveSetupOptionsSelfHostDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveSetupOptions: %v", err)
 	}
-	if opts.Deployment != setupDeploymentSelfHost {
-		t.Fatalf("deployment = %q", opts.Deployment)
-	}
 	if opts.ServerURL != setupSelfHostServerURL {
 		t.Fatalf("server URL = %q, want %q", opts.ServerURL, setupSelfHostServerURL)
 	}
@@ -152,23 +148,9 @@ func TestResolveSetupOptionsSelfHostDefaults(t *testing.T) {
 	}
 }
 
-func TestResolveSetupOptionsCloudRequiresExplicitEndpoints(t *testing.T) {
-	clearSetupEnvironment(t)
-	cmd := newSetupTestCommand()
-	if err := cmd.Flags().Set("deployment", setupDeploymentCloud); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err := resolveSetupOptions(cmd)
-	if err == nil || !strings.Contains(err.Error(), "requires --server-url and --app-url") {
-		t.Fatalf("error = %v, want missing endpoint error", err)
-	}
-}
-
 func TestResolveSetupOptionsRejectsInsecureRemoteEndpoint(t *testing.T) {
 	clearSetupEnvironment(t)
 	cmd := newSetupTestCommand()
-	_ = cmd.Flags().Set("deployment", setupDeploymentCloud)
 	_ = cmd.Flags().Set("server-url", "http://api.example.com")
 	_ = cmd.Flags().Set("app-url", "https://app.example.com")
 

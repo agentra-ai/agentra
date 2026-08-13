@@ -20,7 +20,7 @@ func TestRunLifecycleCancelForIssueEmitsOneFactPerWorkItem(t *testing.T) {
 
 	running, err := q.CreateAgentTask(ctx, db.CreateAgentTaskParams{
 		AgentID: agent.ID, RuntimeID: agent.RuntimeID, IssueID: issue.ID,
-		Priority: 1, RuntimeType: "local", TaskType: "standard",
+		Priority: 1, TaskType: "standard",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -41,7 +41,7 @@ func TestRunLifecycleCancelForIssueEmitsOneFactPerWorkItem(t *testing.T) {
 	}
 	queued, err := q.CreateAgentTask(ctx, db.CreateAgentTaskParams{
 		AgentID: agent.ID, RuntimeID: agent.RuntimeID, IssueID: issue.ID,
-		Priority: 1, RuntimeType: "local", TaskType: "standard",
+		Priority: 1, TaskType: "standard",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +95,7 @@ func TestRunLifecycleRecoverRuntimeBindsRetryToInterruptedRun(t *testing.T) {
 	issue := createLifecycleBatchIssue(t, ctx, q, agent)
 	task, err := q.CreateAgentTask(ctx, db.CreateAgentTaskParams{
 		AgentID: agent.ID, RuntimeID: agent.RuntimeID, IssueID: issue.ID,
-		Priority: 1, RuntimeType: "local", TaskType: "standard",
+		Priority: 1, TaskType: "standard",
 	})
 	if err != nil {
 		t.Fatal(err)

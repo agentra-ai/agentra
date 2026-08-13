@@ -69,12 +69,6 @@ func (l *RunLifecycle) Start(ctx context.Context, ref RunRef) (db.AgentTaskQueue
 		if err != nil {
 			return fmt.Errorf("start work item: %w", err)
 		}
-		if _, err := q.AcknowledgeCloudDispatchDelivery(ctx, db.AcknowledgeCloudDispatchDeliveryParams{
-			WorkItemID: ref.WorkItemID,
-			RunID:      ref.RunID,
-		}); err != nil {
-			return fmt.Errorf("acknowledge cloud dispatch: %w", err)
-		}
 		task = updated
 		return l.appendEvent(ctx, q, LifecycleEventRunStarted, task, ref.RunID)
 	})
@@ -123,23 +117,6 @@ func (l *RunLifecycle) Status(ctx context.Context, ref RunRef) (db.AgentTaskQueu
 		return db.AgentTaskQueue{}, ErrStaleRun
 	}
 	return task, nil
-}
-
-// TerminalApplied reports whether this exact Run already reached a terminal
-// state. Gateway terminal deliveries use it to acknowledge a replay after the
-// original database transition committed but its network ack was lost.
-func (l *RunLifecycle) TerminalApplied(ctx context.Context, ref RunRef) (bool, error) {
-	if l == nil || l.queries == nil || !ref.WorkItemID.Valid || !ref.RunID.Valid {
-		return false, ErrStaleRun
-	}
-	run, err := l.queries.GetTaskRun(ctx, ref.RunID)
-	if err != nil {
-		return false, err
-	}
-	if run.TaskID != ref.WorkItemID {
-		return false, nil
-	}
-	return containsStatus([]string{"completed", "failed", "cancelled"}, run.Status), nil
 }
 
 func (l *RunLifecycle) Checkpoint(ctx context.Context, ref RunRef, sessionID, workDir string) (db.AgentTaskQueue, error) {
@@ -206,32 +183,12 @@ func (l *RunLifecycle) Complete(ctx context.Context, ref RunRef, completion RunC
 }
 
 func (l *RunLifecycle) Fail(ctx context.Context, ref RunRef, errMsg string) (db.AgentTaskQueue, error) {
-	return l.fail(ctx, ref, errMsg, []string{"dispatched", "running"}, false)
+	return l.fail(ctx, ref, errMsg, []string{"dispatched", "running"})
 }
 
-// FailDispatch closes a Run only while it is still awaiting Gateway ack. It
-// prevents delivery exhaustion from terminating a Run that won the race and
-// already started, and dead-letters the delivery in the same transaction.
-func (l *RunLifecycle) FailDispatch(ctx context.Context, ref RunRef, errMsg string) (db.AgentTaskQueue, error) {
-	return l.fail(ctx, ref, errMsg, []string{"dispatched"}, true)
-}
-
-func (l *RunLifecycle) fail(ctx context.Context, ref RunRef, errMsg string, allowedStatuses []string, deadLetterDispatch bool) (db.AgentTaskQueue, error) {
+func (l *RunLifecycle) fail(ctx context.Context, ref RunRef, errMsg string, allowedStatuses []string) (db.AgentTaskQueue, error) {
 	var task db.AgentTaskQueue
 	err := l.withLockedRun(ctx, ref, allowedStatuses, allowedStatuses, func(q *db.Queries, _ db.AgentTaskQueue, run db.TaskRun) error {
-		if deadLetterDispatch {
-			updated, err := q.DeadLetterCloudDispatchDelivery(ctx, db.DeadLetterCloudDispatchDeliveryParams{
-				WorkItemID: ref.WorkItemID,
-				RunID:      ref.RunID,
-				LastError:  pgtype.Text{String: errMsg, Valid: errMsg != ""},
-			})
-			if err != nil {
-				return fmt.Errorf("dead-letter cloud dispatch: %w", err)
-			}
-			if updated != 1 {
-				return ErrStaleRun
-			}
-		}
 		duration := int64(0)
 		if run.StartedAt.Valid {
 			duration = time.Since(run.StartedAt.Time).Milliseconds()

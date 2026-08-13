@@ -2,6 +2,13 @@ package protocol
 
 import "encoding/json"
 
+// TaskMessageBatchSize and TaskMessageFieldBytes define the shared daemon and
+// server ingestion contract for durable task output.
+const (
+	TaskMessageBatchSize  = 100
+	TaskMessageFieldBytes = 64 * 1024
+)
+
 // Message is the envelope for all WebSocket messages.
 type Message struct {
 	Type    string          `json:"type"`

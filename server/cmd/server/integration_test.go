@@ -26,7 +26,6 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/util"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
 	"github.com/agentra-ai/agentra/server/pkg/protocol"
-	stripelib "github.com/agentra-ai/agentra/server/pkg/stripe"
 )
 
 var (
@@ -91,8 +90,7 @@ func TestMain(m *testing.M) {
 	registerListeners(bus, hub)
 	testLifecycleWorker = service.NewLifecycleOutboxWorker(db.New(pool), bus, service.NewTraceServiceFromPool(pool))
 	testTaskDerived = service.NewTaskDerivedLifecycleProjector(pool, db.New(pool), bus)
-	stripeClient := stripelib.NewClient("", "", "", "")
-	router := NewRouter(pool, hub, bus, stripeClient)
+	router := NewRouter(pool, hub, bus)
 	testServer = httptest.NewServer(router)
 	// Allow the test server's own loopback origin for WebSocket upgrades.
 	// NewRouter wires corsconfig.AllowedOrigins() which reads FRONTEND_ORIGIN
@@ -258,7 +256,7 @@ func generateTestJWT(userID, email, name string) (string, error) {
 	return token.SignedString(auth.JWTSecret())
 }
 
-func createTaskMessageFixture(t *testing.T, status, runtimeType, cloudRuntimeID string) (issueID, taskID string) {
+func createTaskMessageFixture(t *testing.T, status string) (issueID, taskID string) {
 	t.Helper()
 	var agentID, runtimeID string
 	if err := testPool.QueryRow(context.Background(), `
@@ -285,16 +283,16 @@ func createTaskMessageFixture(t *testing.T, status, runtimeType, cloudRuntimeID 
 	})
 	if err := testPool.QueryRow(context.Background(), `
 		INSERT INTO agent_task_queue (
-			agent_id, issue_id, status, runtime_id, runtime_type, cloud_runtime_id,
+			agent_id, issue_id, status, runtime_id,
 			dispatched_at, started_at
 		)
 		VALUES (
-			$1, $2, $3, $4, $5, NULLIF($6, '')::uuid,
+			$1, $2, $3, $4,
 			CASE WHEN $3 IN ('dispatched', 'running') THEN now() ELSE NULL END,
 			CASE WHEN $3 = 'running' THEN now() ELSE NULL END
 		)
 		RETURNING id
-	`, agentID, issueID, status, runtimeID, runtimeType, cloudRuntimeID).Scan(&taskID); err != nil {
+	`, agentID, issueID, status, runtimeID).Scan(&taskID); err != nil {
 		t.Fatalf("create task fixture: %v", err)
 	}
 	if status == "dispatched" || status == "running" {
@@ -1117,7 +1115,7 @@ func TestInvalidRequestBodies(t *testing.T) {
 
 func TestTaskMessagesAreRedactedIdempotentAndCursorBounded(t *testing.T) {
 	requireIntegrationDB(t)
-	_, taskID := createTaskMessageFixture(t, "dispatched", "local", "")
+	_, taskID := createTaskMessageFixture(t, "dispatched")
 	runID := startTaskFixture(t, taskID)
 	path := "/api/daemon/tasks/" + taskID + "/messages"
 
@@ -1178,7 +1176,7 @@ func TestTaskMessagesAreRedactedIdempotentAndCursorBounded(t *testing.T) {
 
 func TestTaskRunIdentityIsolatesRetryMessages(t *testing.T) {
 	requireIntegrationDB(t)
-	issueID, taskID := createTaskMessageFixture(t, "dispatched", "local", "")
+	issueID, taskID := createTaskMessageFixture(t, "dispatched")
 	path := "/api/daemon/tasks/" + taskID + "/messages"
 
 	run1 := startTaskFixture(t, taskID)
@@ -1354,7 +1352,7 @@ func TestTaskRunIdentityIsolatesRetryMessages(t *testing.T) {
 
 func TestTaskMessageInsertCannotCrossTerminalTransition(t *testing.T) {
 	requireIntegrationDB(t)
-	_, taskID := createTaskMessageFixture(t, "dispatched", "local", "")
+	_, taskID := createTaskMessageFixture(t, "dispatched")
 	runID := startTaskFixture(t, taskID)
 	ctx := context.Background()
 
@@ -1420,7 +1418,7 @@ func TestTaskMessageInsertCannotCrossTerminalTransition(t *testing.T) {
 
 func TestTaskSessionCheckpointSurvivesRuntimeRecovery(t *testing.T) {
 	requireIntegrationDB(t)
-	_, taskID := createTaskMessageFixture(t, "running", "local", "")
+	_, taskID := createTaskMessageFixture(t, "running")
 	runID := activeRunIDForTask(t, taskID)
 
 	resp := authRequest(t, http.MethodPost, "/api/daemon/tasks/"+taskID+"/session", map[string]string{
@@ -1605,15 +1603,15 @@ func TestRuntimeClaimRejectsIncompatibleTaskBeforeDispatch(t *testing.T) {
 
 	var incompatibleTaskID, compatibleTaskID string
 	if err := testPool.QueryRow(ctx, `
-		INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, runtime_type, task_type)
-		VALUES ($1, $2, $3, 'queued', 10, 'local', 'loop_plan')
+		INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, task_type)
+		VALUES ($1, $2, $3, 'queued', 10, 'loop_plan')
 		RETURNING id
 	`, agentID, runtimeID, loopIssueID).Scan(&incompatibleTaskID); err != nil {
 		t.Fatalf("create incompatible task: %v", err)
 	}
 	if err := testPool.QueryRow(ctx, `
-		INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, runtime_type, task_type)
-		VALUES ($1, $2, $3, 'queued', 0, 'local', 'standard')
+		INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, task_type)
+		VALUES ($1, $2, $3, 'queued', 0, 'standard')
 		RETURNING id
 	`, agentID, runtimeID, standardIssueID).Scan(&compatibleTaskID); err != nil {
 		t.Fatalf("create compatible task: %v", err)
@@ -1684,7 +1682,7 @@ func TestRuntimeClaimRejectsIncompatibleTaskBeforeDispatch(t *testing.T) {
 
 func TestTaskCompletionPersistsUsageArtifactsAndMetrics(t *testing.T) {
 	requireIntegrationDB(t)
-	_, taskID := createTaskMessageFixture(t, "dispatched", "local", "")
+	_, taskID := createTaskMessageFixture(t, "dispatched")
 
 	runID := startTaskFixture(t, taskID)
 
@@ -1763,7 +1761,7 @@ func TestTaskCompletionPersistsUsageArtifactsAndMetrics(t *testing.T) {
 
 func TestTaskCompletionRejectsInvalidUsageAndArtifacts(t *testing.T) {
 	requireIntegrationDB(t)
-	_, taskID := createTaskMessageFixture(t, "running", "local", "")
+	_, taskID := createTaskMessageFixture(t, "running")
 	runID := activeRunIDForTask(t, taskID)
 	path := "/api/daemon/tasks/" + taskID + "/complete"
 
@@ -1846,138 +1844,6 @@ func TestTaskMessagesRejectCrossWorkspaceReads(t *testing.T) {
 	if resp.StatusCode != http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("cross-workspace checkpoint status = %d, want 404: %s", resp.StatusCode, body)
-	}
-}
-
-func TestGatewayLogsFlowThroughDurableTaskMessageLedger(t *testing.T) {
-	requireIntegrationDB(t)
-	if testHub == nil {
-		t.Fatal("test gateway hub is not configured")
-	}
-
-	var cloudRuntimeID string
-	if err := testPool.QueryRow(context.Background(), `
-		INSERT INTO cloud_runtimes (
-			workspace_id, provider, encrypted_api_key, api_key_hash, max_concurrent_tasks
-		)
-		VALUES ($1, 'anthropic', $2, $3, 1)
-		RETURNING id
-	`, testWorkspaceID, []byte("encrypted-test-key"), "gateway-test-"+fmt.Sprintf("%d", time.Now().UnixNano())).Scan(&cloudRuntimeID); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_, _ = testPool.Exec(context.Background(), `DELETE FROM cloud_runtimes WHERE id = $1`, cloudRuntimeID)
-	})
-	_, taskID := createTaskMessageFixture(t, "dispatched", "cloud", cloudRuntimeID)
-	runID := activeRunIDForTask(t, taskID)
-
-	testHub.GatewayHub.OnTaskDispatched("gateway-1", testWorkspaceID, taskID, runID, "container-1")
-	testHub.GatewayHub.OnTaskLogs("gateway-evil", "00000000-0000-0000-0000-000000000000", taskID, runID, 1, "stdout", "cross-tenant")
-	testHub.GatewayHub.OnTaskLogs("gateway-1", testWorkspaceID, taskID, runID, 1, "stdout", "AUTH_TOKEN=very-secret")
-	testHub.GatewayHub.OnTaskLogs("gateway-1", testWorkspaceID, taskID, runID, 1, "stdout", "duplicate")
-
-	var status, content string
-	var count int
-	if err := testPool.QueryRow(context.Background(), `
-		SELECT atq.status, count(tm.id), min(tm.content)
-		FROM agent_task_queue atq
-		LEFT JOIN task_message tm ON tm.task_id = atq.id
-		WHERE atq.id = $1
-		GROUP BY atq.status
-	`, taskID).Scan(&status, &count, &content); err != nil {
-		t.Fatal(err)
-	}
-	if status != "running" || count != 1 {
-		t.Fatalf("gateway task = status %q, messages %d", status, count)
-	}
-	if strings.Contains(content, "very-secret") || !strings.Contains(content, "REDACTED") {
-		t.Fatalf("gateway content was not redacted: %q", content)
-	}
-
-	if ack := testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, runID, 0, "completed"); !ack {
-		t.Fatal("completed terminal frame was not acknowledged")
-	}
-	if ack := testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, runID, 0, "duplicate"); !ack {
-		t.Fatal("duplicate completed terminal frame was not acknowledged")
-	}
-	if err := testPool.QueryRow(context.Background(), `SELECT status FROM agent_task_queue WHERE id = $1`, taskID).Scan(&status); err != nil {
-		t.Fatal(err)
-	}
-	if status != "completed" {
-		t.Fatalf("gateway task status = %q, want completed", status)
-	}
-}
-
-func TestGatewayRetryClosesRunBeforeRequeue(t *testing.T) {
-	requireIntegrationDB(t)
-	if testHub == nil {
-		t.Fatal("test gateway hub is not configured")
-	}
-
-	var cloudRuntimeID string
-	if err := testPool.QueryRow(context.Background(), `
-		INSERT INTO cloud_runtimes (
-			workspace_id, provider, encrypted_api_key, api_key_hash, max_concurrent_tasks
-		)
-		VALUES ($1, 'anthropic', $2, $3, 1)
-		RETURNING id
-	`, testWorkspaceID, []byte("encrypted-retry-key"), "gateway-retry-"+fmt.Sprintf("%d", time.Now().UnixNano())).Scan(&cloudRuntimeID); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_, _ = testPool.Exec(context.Background(), `DELETE FROM cloud_runtimes WHERE id = $1`, cloudRuntimeID)
-	})
-	_, taskID := createTaskMessageFixture(t, "dispatched", "cloud", cloudRuntimeID)
-	run1 := activeRunIDForTask(t, taskID)
-
-	testHub.GatewayHub.OnTaskDispatched("gateway-1", testWorkspaceID, taskID, run1, "container-1")
-	if ack := testHub.GatewayHub.OnTaskFail("gateway-1", testWorkspaceID, taskID, run1, "transient gateway failure", true); !ack {
-		t.Fatal("retryable terminal frame was not acknowledged")
-	}
-	drainLifecycleOutbox(t)
-
-	var taskStatus, run1Status, trace1Status string
-	var activeRunID *string
-	var retryCount int
-	if err := testPool.QueryRow(context.Background(), `
-		SELECT atq.status, atq.active_run_id::text, atq.retry_count, tr.status, et.status
-		FROM agent_task_queue atq
-		JOIN task_runs tr ON tr.id = $2
-		JOIN execution_traces et ON et.run_id = tr.id
-		WHERE atq.id = $1
-	`, taskID, run1).Scan(&taskStatus, &activeRunID, &retryCount, &run1Status, &trace1Status); err != nil {
-		t.Fatal(err)
-	}
-	if taskStatus != "queued" || activeRunID != nil || retryCount != 1 || run1Status != "failed" || trace1Status != "failed" {
-		t.Fatalf("retried lifecycle = task:%q active:%v retry:%d run:%q trace:%q", taskStatus, activeRunID, retryCount, run1Status, trace1Status)
-	}
-
-	run2 := dispatchNewRunForTask(t, taskID)
-	testHub.GatewayHub.OnTaskDispatched("gateway-1", testWorkspaceID, taskID, run2, "container-2")
-	// A terminal frame already in flight from container-1 cannot complete the
-	// newly running container-2 attempt.
-	if ack := testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, run1, 0, "stale completion"); !ack {
-		t.Fatal("old Run terminal replay was not acknowledged after a new Run started")
-	}
-	if err := testPool.QueryRow(context.Background(), `
-		SELECT status, active_run_id::text FROM agent_task_queue WHERE id = $1
-	`, taskID).Scan(&taskStatus, &activeRunID); err != nil {
-		t.Fatal(err)
-	}
-	if taskStatus != "running" || activeRunID == nil || *activeRunID != run2 {
-		t.Fatalf("stale gateway terminal changed current run: status:%q active:%v want:%q", taskStatus, activeRunID, run2)
-	}
-
-	if ack := testHub.GatewayHub.OnTaskComplete("gateway-1", testWorkspaceID, taskID, run2, 0, "current completion"); !ack {
-		t.Fatal("current completed terminal frame was not acknowledged")
-	}
-	if err := testPool.QueryRow(context.Background(), `
-		SELECT status, active_run_id::text FROM agent_task_queue WHERE id = $1
-	`, taskID).Scan(&taskStatus, &activeRunID); err != nil {
-		t.Fatal(err)
-	}
-	if taskStatus != "completed" || activeRunID != nil {
-		t.Fatalf("current gateway terminal = status:%q active:%v", taskStatus, activeRunID)
 	}
 }
 

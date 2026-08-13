@@ -41,7 +41,6 @@ type Agent struct {
 	Instructions       string             `json:"instructions"`
 	ArchivedAt         pgtype.Timestamptz `json:"archived_at"`
 	ArchivedBy         pgtype.UUID        `json:"archived_by"`
-	PreferredRuntime   string             `json:"preferred_runtime"`
 	Provider           string             `json:"provider"`
 	ModelOverride      pgtype.Text        `json:"model_override"`
 	ProviderConfig     []byte             `json:"provider_config"`
@@ -128,8 +127,6 @@ type AgentTaskQueue struct {
 	SessionID        pgtype.Text        `json:"session_id"`
 	WorkDir          pgtype.Text        `json:"work_dir"`
 	TriggerCommentID pgtype.UUID        `json:"trigger_comment_id"`
-	RuntimeType      string             `json:"runtime_type"`
-	CloudRuntimeID   pgtype.UUID        `json:"cloud_runtime_id"`
 	RetryCount       int32              `json:"retry_count"`
 	MaxRetries       int32              `json:"max_retries"`
 	TaskType         string             `json:"task_type"`
@@ -149,48 +146,6 @@ type Attachment struct {
 	ContentType  string             `json:"content_type"`
 	SizeBytes    int64              `json:"size_bytes"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-}
-
-type CloudDispatchDelivery struct {
-	RunID          pgtype.UUID        `json:"run_id"`
-	WorkItemID     pgtype.UUID        `json:"work_item_id"`
-	CloudRuntimeID pgtype.UUID        `json:"cloud_runtime_id"`
-	Attempts       int32              `json:"attempts"`
-	AvailableAt    pgtype.Timestamptz `json:"available_at"`
-	LockedAt       pgtype.Timestamptz `json:"locked_at"`
-	LockToken      pgtype.UUID        `json:"lock_token"`
-	LastSentAt     pgtype.Timestamptz `json:"last_sent_at"`
-	AcknowledgedAt pgtype.Timestamptz `json:"acknowledged_at"`
-	DeadLetteredAt pgtype.Timestamptz `json:"dead_lettered_at"`
-	LastError      pgtype.Text        `json:"last_error"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-}
-
-type CloudRuntime struct {
-	ID                 pgtype.UUID        `json:"id"`
-	WorkspaceID        pgtype.UUID        `json:"workspace_id"`
-	GatewayUrl         pgtype.Text        `json:"gateway_url"`
-	Provider           string             `json:"provider"`
-	EncryptedApiKey    []byte             `json:"encrypted_api_key"`
-	ApiKeyHash         string             `json:"api_key_hash"`
-	IsActive           bool               `json:"is_active"`
-	MaxConcurrentTasks int32              `json:"max_concurrent_tasks"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-}
-
-type CloudRuntimeTask struct {
-	ID             pgtype.UUID        `json:"id"`
-	CloudRuntimeID pgtype.UUID        `json:"cloud_runtime_id"`
-	TaskID         pgtype.UUID        `json:"task_id"`
-	ContainerID    pgtype.Text        `json:"container_id"`
-	StartedAt      pgtype.Timestamptz `json:"started_at"`
-	CompletedAt    pgtype.Timestamptz `json:"completed_at"`
-	ExitCode       pgtype.Int4        `json:"exit_code"`
-	TokenUsage     []byte             `json:"token_usage"`
-	CostEstimate   pgtype.Numeric     `json:"cost_estimate"`
-	Status         string             `json:"status"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type Comment struct {
@@ -315,19 +270,6 @@ type InboxItem struct {
 	ActorID          pgtype.UUID        `json:"actor_id"`
 	Details          []byte             `json:"details"`
 	LifecycleEventID pgtype.UUID        `json:"lifecycle_event_id"`
-}
-
-type Invoice struct {
-	ID               pgtype.UUID        `json:"id"`
-	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
-	StripeInvoiceID  pgtype.Text        `json:"stripe_invoice_id"`
-	AmountCents      int32              `json:"amount_cents"`
-	Currency         string             `json:"currency"`
-	Status           string             `json:"status"`
-	PeriodStart      pgtype.Timestamptz `json:"period_start"`
-	PeriodEnd        pgtype.Timestamptz `json:"period_end"`
-	HostedInvoiceUrl pgtype.Text        `json:"hosted_invoice_url"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 }
 
 type Issue struct {
@@ -540,20 +482,6 @@ type SkillFile struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-type Subscription struct {
-	ID                   pgtype.UUID        `json:"id"`
-	WorkspaceID          pgtype.UUID        `json:"workspace_id"`
-	StripeSubscriptionID pgtype.Text        `json:"stripe_subscription_id"`
-	StripeCustomerID     pgtype.Text        `json:"stripe_customer_id"`
-	Plan                 string             `json:"plan"`
-	Status               string             `json:"status"`
-	Seats                int32              `json:"seats"`
-	CurrentPeriodStart   pgtype.Timestamptz `json:"current_period_start"`
-	CurrentPeriodEnd     pgtype.Timestamptz `json:"current_period_end"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
-}
-
 type TaskGraphEdge struct {
 	ID         pgtype.UUID        `json:"id"`
 	FromNodeID pgtype.UUID        `json:"from_node_id"`
@@ -638,14 +566,6 @@ type TraceStep struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
-type UsageRecord struct {
-	ID          pgtype.UUID        `json:"id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	Metric      string             `json:"metric"`
-	Quantity    pgtype.Numeric     `json:"quantity"`
-	RecordedAt  pgtype.Timestamptz `json:"recorded_at"`
-}
-
 type User struct {
 	ID        pgtype.UUID        `json:"id"`
 	Name      string             `json:"name"`
@@ -677,8 +597,6 @@ type Workspace struct {
 	Repos         []byte             `json:"repos"`
 	IssuePrefix   string             `json:"issue_prefix"`
 	IssueCounter  int32              `json:"issue_counter"`
-	Plan          string             `json:"plan"`
-	MaxSeats      int32              `json:"max_seats"`
 	ClaimedDomain string             `json:"claimed_domain"`
 	SsoPolicy     string             `json:"sso_policy"`
 }

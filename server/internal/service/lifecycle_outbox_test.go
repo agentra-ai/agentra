@@ -40,7 +40,7 @@ func TestLifecycleOutboxCoreProjectionIsIdempotent(t *testing.T) {
 	}
 	task, err := q.CreateAgentTask(ctx, db.CreateAgentTaskParams{
 		AgentID: agent.ID, RuntimeID: agent.RuntimeID, IssueID: issue.ID,
-		Priority: 1, RuntimeType: "local", TaskType: "standard",
+		Priority: 1, TaskType: "standard",
 	})
 	if err != nil {
 		t.Fatal(err)

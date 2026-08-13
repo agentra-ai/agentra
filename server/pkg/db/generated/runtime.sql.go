@@ -239,7 +239,6 @@ WITH targets AS (
            )) AS run_id
     FROM agent_task_queue atq
     WHERE atq.runtime_id = $1
-      AND atq.runtime_type = 'local'
       AND (
           atq.status IN ('dispatched', 'running')
           OR (atq.status = 'failed' AND atq.error = 'runtime went offline')

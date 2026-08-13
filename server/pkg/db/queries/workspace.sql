@@ -34,23 +34,6 @@ UPDATE workspace SET issue_counter = issue_counter + 1
 WHERE id = $1
 RETURNING issue_counter;
 
--- name: CountActiveMembers :one
-SELECT count(*) FROM member
-WHERE workspace_id = $1 AND invitation_status IN ('invited', 'active');
-
--- name: GetWorkspacePlan :one
-SELECT id, plan, max_seats
-FROM workspace
-WHERE id = $1;
-
--- name: UpdateWorkspacePlan :one
-UPDATE workspace SET
-    plan = COALESCE(sqlc.narg('plan'), plan),
-    max_seats = COALESCE(sqlc.narg('max_seats'), max_seats),
-    updated_at = now()
-WHERE id = $1
-RETURNING id, plan, max_seats;
-
 -- name: DeleteWorkspace :exec
 DELETE FROM workspace WHERE id = $1;
 

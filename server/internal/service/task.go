@@ -35,11 +35,6 @@ type ClaimedTask struct {
 	RunID pgtype.UUID
 }
 
-// ErrGatewayTaskNotAuthorized intentionally hides whether a task exists in a
-// different workspace. Gateway callers must never be able to use task IDs as a
-// cross-tenant oracle.
-var ErrGatewayTaskNotAuthorized = errors.New("cloud gateway task not authorized")
-
 func NewTaskService(q *db.Queries, txStarter runLifecycleTxStarter, bus *events.Bus, traceSvc *TraceService) *TaskService {
 	return &TaskService{
 		Queries:      q,
@@ -47,33 +42,6 @@ func NewTaskService(q *db.Queries, txStarter runLifecycleTxStarter, bus *events.
 		TraceService: traceSvc,
 		Lifecycle:    NewRunLifecycle(txStarter, q),
 	}
-}
-
-// ValidateCloudGatewayTask binds a gateway event to the active cloud runtime
-// configured for its authenticated workspace.
-func (s *TaskService) ValidateCloudGatewayTask(ctx context.Context, workspaceID, taskID string) (db.AgentTaskQueue, error) {
-	workspaceID = strings.TrimSpace(workspaceID)
-	taskUUID := util.ParseUUID(taskID)
-	if workspaceID == "" || !taskUUID.Valid {
-		return db.AgentTaskQueue{}, ErrGatewayTaskNotAuthorized
-	}
-
-	task, err := s.Queries.GetAgentTask(ctx, taskUUID)
-	if err != nil || task.RuntimeType != "cloud" || !task.CloudRuntimeID.Valid {
-		return db.AgentTaskQueue{}, ErrGatewayTaskNotAuthorized
-	}
-
-	issue, err := s.Queries.GetIssue(ctx, task.IssueID)
-	if err != nil || util.UUIDToString(issue.WorkspaceID) != workspaceID {
-		return db.AgentTaskQueue{}, ErrGatewayTaskNotAuthorized
-	}
-
-	runtime, err := s.Queries.GetCloudRuntimeByID(ctx, task.CloudRuntimeID)
-	if err != nil || runtime.WorkspaceID != issue.WorkspaceID {
-		return db.AgentTaskQueue{}, ErrGatewayTaskNotAuthorized
-	}
-
-	return task, nil
 }
 
 // EnqueueTaskForIssue creates a queued task for an agent-assigned issue.
@@ -99,20 +67,6 @@ func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue, t
 		return db.AgentTaskQueue{}, fmt.Errorf("agent has no runtime")
 	}
 
-	// Determine runtime type and cloud runtime ID
-	var runtimeType interface{}
-	var cloudRuntimeID pgtype.UUID
-	taskWorkspaceID := issue.WorkspaceID
-	if s.ShouldUseCloudRuntime(ctx, taskWorkspaceID, &agent) {
-		runtimeType = "cloud"
-		cr, err := s.Queries.GetCloudRuntimeByWorkspace(ctx, agent.WorkspaceID)
-		if err == nil && cr.IsActive {
-			cloudRuntimeID = cr.ID
-		}
-	} else {
-		runtimeType = "local"
-	}
-
 	var commentID pgtype.UUID
 	if len(triggerCommentID) > 0 {
 		commentID = triggerCommentID[0]
@@ -124,8 +78,6 @@ func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue, t
 		IssueID:          issue.ID,
 		Priority:         priorityToInt(issue.Priority),
 		TriggerCommentID: commentID,
-		RuntimeType:      runtimeType,
-		CloudRuntimeID:   cloudRuntimeID,
 	})
 	if err != nil {
 		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", err)
@@ -154,28 +106,12 @@ func (s *TaskService) EnqueueTaskForMention(ctx context.Context, issue db.Issue,
 		return db.AgentTaskQueue{}, fmt.Errorf("agent has no runtime")
 	}
 
-	// Determine runtime type and cloud runtime ID
-	var runtimeType interface{}
-	var cloudRuntimeID pgtype.UUID
-	taskWorkspaceID := issue.WorkspaceID
-	if s.ShouldUseCloudRuntime(ctx, taskWorkspaceID, &agent) {
-		runtimeType = "cloud"
-		cr, err := s.Queries.GetCloudRuntimeByWorkspace(ctx, agent.WorkspaceID)
-		if err == nil && cr.IsActive {
-			cloudRuntimeID = cr.ID
-		}
-	} else {
-		runtimeType = "local"
-	}
-
 	task, err := s.Queries.CreateAgentTask(ctx, db.CreateAgentTaskParams{
 		AgentID:          agentID,
 		RuntimeID:        agent.RuntimeID,
 		IssueID:          issue.ID,
 		Priority:         priorityToInt(issue.Priority),
 		TriggerCommentID: triggerCommentID,
-		RuntimeType:      runtimeType,
-		CloudRuntimeID:   cloudRuntimeID,
 	})
 	if err != nil {
 		slog.Error("mention task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID), "error", err)
@@ -335,26 +271,6 @@ func (s *TaskService) claimTaskCandidate(ctx context.Context, candidate db.Agent
 	s.updateAgentStatus(ctx, task.AgentID, "working")
 	s.broadcastTaskDispatch(ctx, task, claimed.RunID)
 	return &ClaimedTask{Task: task, RunID: claimed.RunID}, true, nil
-}
-
-// ClaimCloudTask atomically allocates a Run and its durable push delivery.
-// Cloud Work Items never pass through the local daemon's pull claim path.
-func (s *TaskService) ClaimCloudTask(ctx context.Context, taskID pgtype.UUID) (*ClaimedTask, error) {
-	claimed, err := s.Queries.ClaimCloudTaskRunByID(ctx, taskID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("claim cloud task: %w", err)
-	}
-	task, err := s.Queries.GetAgentTask(ctx, claimed.TaskID)
-	if err != nil {
-		return nil, fmt.Errorf("load claimed cloud task: %w", err)
-	}
-	slog.Info("cloud task claimed", "task_id", util.UUIDToString(task.ID), "run_id", util.UUIDToString(claimed.RunID), "agent_id", util.UUIDToString(task.AgentID))
-	s.updateAgentStatus(ctx, task.AgentID, "working")
-	s.broadcastTaskDispatch(ctx, task, claimed.RunID)
-	return &ClaimedTask{Task: task, RunID: claimed.RunID}, nil
 }
 
 func (s *TaskService) rejectQueuedTask(ctx context.Context, taskID pgtype.UUID, errMsg string) (*db.AgentTaskQueue, error) {
@@ -654,23 +570,6 @@ type AgentSkillData struct {
 type AgentSkillFileData struct {
 	Path    string `json:"path"`
 	Content string `json:"content"`
-}
-
-// ShouldUseCloudRuntime determines if a task should use cloud runtime
-func (s *TaskService) ShouldUseCloudRuntime(ctx context.Context, workspaceID pgtype.UUID, agent *db.Agent) bool {
-	// If agent prefers local, don't use cloud
-	if agent != nil && agent.PreferredRuntime == "local" {
-		return false
-	}
-
-	// Check workspace has active cloud runtime
-	runtime, err := s.Queries.GetCloudRuntimeByWorkspace(ctx, workspaceID)
-	if err != nil || !runtime.IsActive {
-		return false
-	}
-
-	// Agent prefers 'cloud' or 'any' (or nil/empty) and workspace has cloud runtime
-	return agent == nil || agent.PreferredRuntime == "any" || agent.PreferredRuntime == "cloud"
 }
 
 func priorityToInt(p string) int32 {

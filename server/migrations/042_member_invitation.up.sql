@@ -1,10 +1,4 @@
--- Issue #21 Seat Management.
--- Workspace seat quota + member invitation lifecycle.
-
-ALTER TABLE workspace
-    ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free'
-        CHECK (plan IN ('free', 'pro', 'enterprise')),
-    ADD COLUMN IF NOT EXISTS max_seats INTEGER NOT NULL DEFAULT 5;
+-- Member invitation lifecycle.
 
 ALTER TABLE member
     ADD COLUMN IF NOT EXISTS invitation_status TEXT NOT NULL DEFAULT 'active'

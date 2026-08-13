@@ -272,7 +272,7 @@ func (w *LifecycleOutboxWorker) projectMetric(ctx context.Context, event db.Life
 	provider, model := w.resolveAgentProvider(ctx, task.AgentID)
 	_, err := w.queries.InsertAgentTaskMetric(ctx, db.InsertAgentTaskMetricParams{
 		WorkspaceID: issue.WorkspaceID, TaskID: task.ID, IssueID: task.IssueID, RunID: event.RunID,
-		Provider: provider, Model: model, RuntimeMode: task.RuntimeType,
+		Provider: provider, Model: model, RuntimeMode: "local",
 		TaskType: normalizeMetricTaskType(task.TaskType), IssuePriority: issue.Priority,
 		Status: status, ErrorCategory: run.Error, DurationMs: int64(run.DurationMs.Int32),
 		TokenInput: clampInt32(tokenInput), TokenOutput: clampInt32(tokenOutput),

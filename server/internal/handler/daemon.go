@@ -765,9 +765,9 @@ func validateTaskMessage(msg TaskMessageRequest) error {
 	return nil
 }
 
-// persistTaskMessage is the single task-output ledger path for both local
-// daemons and cloud gateways. It publishes only after a successful insert;
-// duplicate cursors are accepted but never broadcast twice.
+// persistTaskMessage is the single task-output ledger path for local daemons.
+// It publishes only after a successful insert; duplicate cursors are accepted
+// but never broadcast twice.
 func (h *Handler) persistTaskMessage(ctx context.Context, task db.AgentTaskQueue, runID pgtype.UUID, workspaceID, traceID string, msg TaskMessageRequest) (bool, error) {
 	msg.Content = redact.Text(msg.Content)
 	msg.Output = redact.Text(msg.Output)
@@ -817,42 +817,6 @@ func (h *Handler) persistTaskMessage(ctx context.Context, task db.AgentTaskQueue
 		Output:  msg.Output,
 	})
 	return true, nil
-}
-
-// RecordGatewayTaskLog validates tenant ownership and normalizes a cloud
-// gateway stdout/stderr frame into the same persisted task_message stream used
-// by local daemons.
-func (h *Handler) RecordGatewayTaskLog(ctx context.Context, workspaceID, taskID, runID string, seq int, stream, content string) error {
-	task, err := h.TaskService.ValidateCloudGatewayTask(ctx, workspaceID, taskID)
-	if err != nil {
-		return err
-	}
-	ref, err := daemonRunRef(taskID, runID)
-	if err != nil {
-		return err
-	}
-	if _, err := h.TaskService.Lifecycle.AssertRunning(ctx, ref); err != nil {
-		return err
-	}
-
-	messageType := "text"
-	if stream == protocol.GatewayStreamStderr {
-		messageType = "error"
-	} else if stream != protocol.GatewayStreamStdout {
-		return fmt.Errorf("unsupported gateway log stream %q", stream)
-	}
-	msg := TaskMessageRequest{Seq: seq, Type: messageType, Content: content}
-	if err := validateTaskMessage(msg); err != nil {
-		return err
-	}
-	traceID := ""
-	if h.TraceService != nil && h.TraceService.TraceService != nil {
-		if trace, lookupErr := h.TraceService.GetTraceByRun(ctx, runID); lookupErr == nil {
-			traceID = trace.ID
-		}
-	}
-	_, err = h.persistTaskMessage(ctx, task, ref.RunID, workspaceID, traceID, msg)
-	return err
 }
 
 // ReportTaskMessages receives a batch of agent execution messages from the daemon.

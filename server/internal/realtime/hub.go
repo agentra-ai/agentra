@@ -8,19 +8,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/agentra-ai/agentra/server/internal/gateway"
 	"github.com/gorilla/websocket"
 )
 
 // MembershipChecker verifies a user belongs to a workspace.
 type MembershipChecker interface {
 	IsMember(ctx context.Context, userID, workspaceID string) bool
-}
-
-// GatewayAuthorizer restricts infrastructure connections to workspace roles
-// allowed to operate a cloud runtime.
-type GatewayAuthorizer interface {
-	CanConnectGateway(ctx context.Context, userID, workspaceID string) bool
 }
 
 // UserAuthenticator validates a JWT or PAT and returns its user identity.
@@ -88,9 +81,6 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 	mu         sync.RWMutex
-
-	// GatewayHub manages Cloud Runtime Gateway connections
-	GatewayHub *gateway.Hub
 }
 
 // NewHub creates a new Hub instance.
@@ -100,7 +90,6 @@ func NewHub() *Hub {
 		broadcast:  make(chan []byte),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		GatewayHub: gateway.NewHub(),
 	}
 }
 
@@ -389,64 +378,4 @@ func (c *Client) writePump() {
 			return
 		}
 	}
-}
-
-// HandleGatewayWebSocket upgrades a server-to-server Cloud Runtime Gateway
-// connection. A valid user JWT/PAT in Authorization and workspace membership
-// bind the socket to exactly one tenant; secrets are never accepted in URLs.
-func HandleGatewayWebSocket(hub *Hub, authenticator UserAuthenticator, authorizer GatewayAuthorizer, w http.ResponseWriter, r *http.Request) {
-	gatewayID := strings.TrimSpace(r.URL.Query().Get("gateway_id"))
-	workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
-	if gatewayID == "" || len(gatewayID) > 128 {
-		http.Error(w, `{"error":"valid gateway_id required"}`, http.StatusBadRequest)
-		return
-	}
-	if workspaceID == "" {
-		http.Error(w, `{"error":"workspace_id required"}`, http.StatusBadRequest)
-		return
-	}
-
-	authHeader := r.Header.Get("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		http.Error(w, `{"error":"authorization header required"}`, http.StatusUnauthorized)
-		return
-	}
-	token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-	if token == "" || authenticator == nil {
-		http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
-		return
-	}
-	userID, err := authenticator.Authenticate(r.Context(), token)
-	if err != nil || strings.TrimSpace(userID) == "" {
-		http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
-		return
-	}
-	if authorizer == nil || !authorizer.CanConnectGateway(r.Context(), userID, workspaceID) {
-		http.Error(w, `{"error":"workspace owner or admin role required"}`, http.StatusForbidden)
-		return
-	}
-
-	gatewayUpgrader := websocket.Upgrader{
-		CheckOrigin: func(_ *http.Request) bool { return true },
-	}
-	conn, err := gatewayUpgrader.Upgrade(w, r, nil)
-	if err != nil {
-		slog.Error("gateway websocket upgrade failed", "error", err, "gateway_id", gatewayID)
-		return
-	}
-
-	gatewayClient := &gateway.Client{
-		ID:          gatewayID,
-		WorkspaceID: workspaceID,
-		Conn:        conn,
-		Hub:         hub.GatewayHub,
-		Send:        make(chan []byte, 256),
-	}
-
-	hub.GatewayHub.Register(gatewayClient)
-
-	go gatewayClient.WritePump()
-	go gatewayClient.ReadPump()
-
-	slog.Info("gateway connected", "gateway_id", gatewayID, "workspace_id", workspaceID)
 }

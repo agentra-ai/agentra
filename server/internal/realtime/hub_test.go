@@ -22,20 +22,6 @@ func (m *mockMembershipChecker) IsMember(_ context.Context, _, _ string) bool {
 	return true
 }
 
-func (m *mockMembershipChecker) CanConnectGateway(_ context.Context, _, _ string) bool {
-	return true
-}
-
-type rejectMembershipChecker struct{}
-
-func (m *rejectMembershipChecker) IsMember(_ context.Context, _, _ string) bool {
-	return false
-}
-
-func (m *rejectMembershipChecker) CanConnectGateway(_ context.Context, _, _ string) bool {
-	return false
-}
-
 type mockUserAuthenticator struct{}
 
 func (a *mockUserAuthenticator) Authenticate(_ context.Context, token string) (string, error) {
@@ -75,80 +61,6 @@ func connectWS(t *testing.T, server *httptest.Server) *websocket.Conn {
 		t.Fatalf("failed to connect WebSocket: %v", err)
 	}
 	return conn
-}
-
-func newGatewayTestServer(t *testing.T, authorizer GatewayAuthorizer) (*Hub, *httptest.Server) {
-	t.Helper()
-	hub := NewHub()
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/gateway/connect", func(w http.ResponseWriter, r *http.Request) {
-		HandleGatewayWebSocket(hub, &mockUserAuthenticator{}, authorizer, w, r)
-	})
-	return hub, httptest.NewServer(mux)
-}
-
-func gatewayWSURL(server *httptest.Server) string {
-	return "ws" + strings.TrimPrefix(server.URL, "http") + "/api/gateway/connect?gateway_id=gateway-1&workspace_id=" + testWorkspaceID
-}
-
-func TestGatewayWebSocketRequiresAuthorizationHeader(t *testing.T) {
-	_, server := newGatewayTestServer(t, &mockMembershipChecker{})
-	defer server.Close()
-
-	for _, rawURL := range []string{
-		gatewayWSURL(server),
-		gatewayWSURL(server) + "&token=test-token",
-	} {
-		conn, response, err := websocket.DefaultDialer.Dial(rawURL, nil)
-		if conn != nil {
-			conn.Close()
-		}
-		if response != nil && response.Body != nil {
-			response.Body.Close()
-		}
-		if err == nil {
-			t.Fatalf("gateway connected without authorization header: %s", rawURL)
-		}
-		if response == nil || response.StatusCode != http.StatusUnauthorized {
-			t.Fatalf("status = %v, want 401", response)
-		}
-	}
-}
-
-func TestGatewayWebSocketBindsAuthenticatedWorkspace(t *testing.T) {
-	hub, server := newGatewayTestServer(t, &mockMembershipChecker{})
-	defer server.Close()
-
-	header := http.Header{"Authorization": []string{"Bearer test-token"}}
-	conn, _, err := websocket.DefaultDialer.Dial(gatewayWSURL(server), header)
-	if err != nil {
-		t.Fatalf("connect gateway: %v", err)
-	}
-	defer conn.Close()
-
-	if got := hub.GatewayHub.GetGatewayForWorkspace(testWorkspaceID); got != "gateway-1" {
-		t.Fatalf("workspace gateway = %q, want gateway-1", got)
-	}
-}
-
-func TestGatewayWebSocketRejectsNonMember(t *testing.T) {
-	_, server := newGatewayTestServer(t, &rejectMembershipChecker{})
-	defer server.Close()
-
-	header := http.Header{"Authorization": []string{"Bearer test-token"}}
-	conn, response, err := websocket.DefaultDialer.Dial(gatewayWSURL(server), header)
-	if conn != nil {
-		conn.Close()
-	}
-	if response != nil && response.Body != nil {
-		defer response.Body.Close()
-	}
-	if err == nil {
-		t.Fatal("non-member gateway unexpectedly connected")
-	}
-	if response == nil || response.StatusCode != http.StatusForbidden {
-		t.Fatalf("status = %v, want 403", response)
-	}
 }
 
 func TestHub_AcceptsPATFromAuthorizationHeader(t *testing.T) {

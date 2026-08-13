@@ -19,37 +19,32 @@ import (
 )
 
 const (
-	setupDeploymentCloud    = "cloud"
-	setupDeploymentSelfHost = "self-host"
-	setupSelfHostServerURL  = "http://127.0.0.1:8080"
-	setupSelfHostAppURL     = "http://127.0.0.1:3000"
+	setupSelfHostServerURL = "http://127.0.0.1:8080"
+	setupSelfHostAppURL    = "http://127.0.0.1:3000"
 )
 
 type setupOptions struct {
-	Deployment string
-	ServerURL  string
-	AppURL     string
-	NoDaemon   bool
-	Reauth     bool
-	Timeout    time.Duration
+	ServerURL string
+	AppURL    string
+	NoDaemon  bool
+	Reauth    bool
+	Timeout   time.Duration
 }
 
 var setupCmd = &cobra.Command{
 	Use:   "setup",
 	Short: "Connect this machine to Agentra",
-	Long: `Configure a cloud or self-hosted Agentra endpoint, run preflight checks,
+	Long: `Configure a self-hosted Agentra endpoint, run preflight checks,
 authenticate, discover workspaces, and start the local agent daemon.
 
-Self-hosted setup defaults to the loopback ports published by docker compose.
-Cloud setup requires explicit server and app URLs until a public hosted service
-is released. Use --no-daemon on machines that should only use the management CLI.`,
+Setup defaults to the loopback ports published by docker compose. Use
+--no-daemon on machines that should only use the management CLI.`,
 	Args: cobra.NoArgs,
 	RunE: runSetup,
 }
 
 func init() {
 	f := setupCmd.Flags()
-	f.String("deployment", setupDeploymentSelfHost, "Deployment type: cloud or self-host")
 	f.String("app-url", "", "Agentra Web app URL")
 	f.Bool("token", false, "Authenticate by pasting a personal access token")
 	f.Bool("no-daemon", false, "Configure authentication and workspaces without starting a local daemon")
@@ -111,27 +106,17 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 }
 
 func resolveSetupOptions(cmd *cobra.Command) (setupOptions, error) {
-	deployment, _ := cmd.Flags().GetString("deployment")
-	deployment = strings.ToLower(strings.TrimSpace(deployment))
-	if deployment != setupDeploymentCloud && deployment != setupDeploymentSelfHost {
-		return setupOptions{}, fmt.Errorf("invalid --deployment %q (supported: cloud, self-host)", deployment)
-	}
-
 	serverURL := resolveServerURL(cmd)
 	appURL, _ := cmd.Flags().GetString("app-url")
 	appURL = strings.TrimSpace(appURL)
 	if appURL == "" {
 		appURL = resolveAppURL(cmd)
 	}
-	if deployment == setupDeploymentSelfHost {
-		if serverURL == "" {
-			serverURL = setupSelfHostServerURL
-		}
-		if appURL == "" {
-			appURL = setupSelfHostAppURL
-		}
-	} else if serverURL == "" || appURL == "" {
-		return setupOptions{}, fmt.Errorf("cloud setup requires --server-url and --app-url (or equivalent environment/config values)")
+	if serverURL == "" {
+		serverURL = setupSelfHostServerURL
+	}
+	if appURL == "" {
+		appURL = setupSelfHostAppURL
 	}
 
 	serverURL, err := normalizeSetupEndpoint("server", serverURL)
@@ -151,12 +136,11 @@ func resolveSetupOptions(cmd *cobra.Command) (setupOptions, error) {
 	}
 
 	return setupOptions{
-		Deployment: deployment,
-		ServerURL:  serverURL,
-		AppURL:     appURL,
-		NoDaemon:   noDaemon,
-		Reauth:     reauth,
-		Timeout:    timeout,
+		ServerURL: serverURL,
+		AppURL:    appURL,
+		NoDaemon:  noDaemon,
+		Reauth:    reauth,
+		Timeout:   timeout,
 	}, nil
 }
 

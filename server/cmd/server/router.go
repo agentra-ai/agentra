@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -25,9 +23,6 @@ import (
 	"github.com/agentra-ai/agentra/server/internal/service"
 	"github.com/agentra-ai/agentra/server/internal/storage"
 	db "github.com/agentra-ai/agentra/server/pkg/db/generated"
-	"github.com/agentra-ai/agentra/server/pkg/protocol"
-	"github.com/agentra-ai/agentra/server/pkg/redact"
-	stripelib "github.com/agentra-ai/agentra/server/pkg/stripe"
 )
 
 // allowedOrigins delegates to internal/corsconfig so the resolution logic
@@ -39,15 +34,15 @@ func allowedOrigins() []string {
 }
 
 // NewRouter creates the fully-configured Chi router with all middleware and routes.
-func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, stripeClient *stripelib.Client) chi.Router {
-	return newRouter(pool, hub, bus, nil, stripeClient)
+func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Router {
+	return newRouter(pool, hub, bus, nil)
 }
 
 // newRouter is the internal form that accepts an optional loop Coordinator
 // to wire into the Handler. The Handler falls back to a nil coordinator
 // (CreateLoop then no-ops the StartLoop call) when nil is passed, which is
 // what unit tests want.
-func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord *loop.Coordinator, stripeClient *stripelib.Client) chi.Router {
+func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord *loop.Coordinator) chi.Router {
 	queries := db.New(pool)
 	emailSvc := service.NewEmailService()
 
@@ -91,15 +86,11 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 	plannerSvc := service.NewPlannerService(queries, graphStore)
 	h := handler.New(queries, pool, hub, bus, graphStore, plannerSvc, emailSvc, fileStorage, cfSigner)
 	projectsHandler := handler.NewProjectHandler(queries)
-	billingHandler := handler.NewBillingHandler(queries, stripeClient)
 	memoryHandler := handler.NewMemoryHandler(queries)
 	metricsHandler := handler.NewMetricsHandler(queries)
 	if loopCoord != nil {
 		h.SetLoopCoordinator(loopCoord)
 	}
-
-	// Wire up GatewayHub callbacks to TaskService
-	setGatewayCallbacks(hub, h)
 
 	r := chi.NewRouter()
 
@@ -137,11 +128,6 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 		realtime.HandleWebSocket(hub, wa, mc, w, r)
 	})
 
-	// Cloud Runtime Gateway WebSocket
-	r.Get("/api/gateway/connect", func(w http.ResponseWriter, r *http.Request) {
-		realtime.HandleGatewayWebSocket(hub, wa, mc, w, r)
-	})
-
 	// Auth (public)
 	r.Post("/auth/send-code", h.SendCode)
 	r.Post("/auth/verify-code", h.VerifyCode)
@@ -155,11 +141,6 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 	r.Route("/github/oauth", func(r chi.Router) {
 		githubOAuth.RegisterRoutes(r)
 	})
-
-	// Stripe webhook — PUBLIC (no JWT). Must live outside the protected group
-	// so Stripe can POST without credentials. Signature verification is performed
-	// inside the handler using the configured STRIPE_WEBHOOK_SECRET.
-	r.Post("/webhooks/stripe", billingHandler.StripeWebhook)
 
 	// Daemon API routes (all require a valid token)
 	r.Route("/api/daemon", func(r chi.Router) {
@@ -241,19 +222,6 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 				})
 				// Goal-first execute endpoint
 				r.Post("/execute", h.ExecuteGoal)
-
-				// Billing (workspace-scoped, owner/admin). Must live inside the
-				// {id} subrouter so chi.URLParam(r, "id") resolves to the workspace
-				// id from the matched path — registering it as a sibling of {id}
-				// captures the literal segment "billing" as the id param instead.
-				r.Route("/billing", func(r chi.Router) {
-					r.Use(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner", "admin"))
-					r.Get("/subscription", billingHandler.GetSubscription)
-					r.Get("/checkout", billingHandler.CreateCheckoutSession)
-					r.Get("/portal", billingHandler.CreatePortalSession)
-					r.Get("/invoices", billingHandler.ListInvoices)
-					r.Get("/usage", billingHandler.GetUsage)
-				})
 
 				// Memories (workspace-scoped, member access). Team memories are
 				// shared across the workspace; the workspace id comes from {id}.
@@ -407,15 +375,6 @@ func newRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, loopCoord
 			r.Get("/{runtimeId}/update/{updateId}", h.GetUpdate)
 		})
 
-		// Cloud Runtime (admin-only)
-		r.Route("/api/cloud-runtime", func(r chi.Router) {
-			r.Use(middleware.RequireWorkspaceRole(queries, "owner", "admin"))
-			r.Post("/", h.RegisterCloudRuntime)
-			r.Get("/", h.GetCloudRuntime)
-			r.Delete("/", h.DeleteCloudRuntime)
-			r.Post("/validate", h.ValidateAPIKey)
-		})
-
 		// Traces
 		r.Get("/api/traces/{taskId}", h.GetTraceByTask)
 		// Inbox
@@ -471,135 +430,10 @@ func (mc *membershipChecker) IsMember(ctx context.Context, userID, workspaceID s
 	return err == nil
 }
 
-func (mc *membershipChecker) CanConnectGateway(ctx context.Context, userID, workspaceID string) bool {
-	member, err := mc.queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      parseUUID(userID),
-		WorkspaceID: parseUUID(workspaceID),
-	})
-	return err == nil && (member.Role == "owner" || member.Role == "admin")
-}
-
 func parseUUID(s string) pgtype.UUID {
 	var u pgtype.UUID
 	if err := u.Scan(s); err != nil {
 		return pgtype.UUID{}
 	}
 	return u
-}
-
-// setGatewayCallbacks wires up the GatewayHub callbacks to TaskService methods.
-func setGatewayCallbacks(hub *realtime.Hub, h *handler.Handler) {
-	authorize := func(ctx context.Context, gatewayID, workspaceID, taskID, event string) (db.AgentTaskQueue, bool) {
-		task, err := h.TaskService.ValidateCloudGatewayTask(ctx, workspaceID, taskID)
-		if err != nil {
-			slog.Warn("gateway event rejected", "gateway_id", gatewayID, "workspace_id", workspaceID, "task_id", taskID, "event", event)
-			return db.AgentTaskQueue{}, false
-		}
-		return task, true
-	}
-	terminalApplied := func(ctx context.Context, ref service.RunRef) bool {
-		applied, err := h.TaskService.Lifecycle.TerminalApplied(ctx, ref)
-		return err == nil && applied
-	}
-
-	hub.GatewayHub.OnTaskDispatched = func(gatewayID, workspaceID, taskID, runID, containerID string) {
-		ctx := context.Background()
-		task, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskDispatched)
-		if !ok {
-			return
-		}
-		ref := service.RunRef{WorkItemID: task.ID, RunID: parseUUID(runID)}
-		if task.Status == "running" && task.ActiveRunID == ref.RunID {
-			return
-		}
-		if task.Status != "dispatched" {
-			slog.Warn("gateway dispatched: invalid task state", "gateway_id", gatewayID, "task_id", taskID, "status", task.Status)
-			return
-		}
-		if _, err := h.TaskService.StartTask(ctx, ref); err != nil {
-			slog.Error("gateway dispatched: failed to start task", "gateway_id", gatewayID, "task_id", taskID, "container_id", containerID, "error", err)
-		}
-	}
-
-	hub.GatewayHub.OnTaskComplete = func(gatewayID, workspaceID, taskID, runID string, exitCode int, output string) bool {
-		ctx := context.Background()
-		task, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskCompleted)
-		if !ok {
-			return false
-		}
-		ref := service.RunRef{WorkItemID: task.ID, RunID: parseUUID(runID)}
-		if terminalApplied(ctx, ref) {
-			return true
-		}
-		output = boundedGatewayText(output)
-		// Exit code 0 = success, non-zero = failure
-		if exitCode == 0 {
-			result, err := json.Marshal(protocol.TaskCompletedPayload{TaskID: taskID, RunID: runID, Output: output})
-			if err != nil {
-				slog.Error("gateway complete: marshal result failed", "task_id", taskID, "error", err)
-				return false
-			}
-			_, err = h.TaskService.CompleteTask(ctx, ref, result, "", "")
-			if err != nil {
-				slog.Error("gateway complete: failed", "task_id", taskID, "error", err)
-				return terminalApplied(ctx, ref)
-			}
-		} else {
-			_, err := h.TaskService.FailTask(ctx, ref, output)
-			if err != nil {
-				slog.Error("gateway fail: failed", "task_id", taskID, "error", err)
-				return terminalApplied(ctx, ref)
-			}
-		}
-		return true
-	}
-
-	hub.GatewayHub.OnTaskFail = func(gatewayID, workspaceID, taskID, runID string, errorMsg string, retryable bool) bool {
-		ctx := context.Background()
-		task, ok := authorize(ctx, gatewayID, workspaceID, taskID, protocol.EventTaskFailed)
-		if !ok {
-			return false
-		}
-		ref := service.RunRef{WorkItemID: task.ID, RunID: parseUUID(runID)}
-		if terminalApplied(ctx, ref) {
-			return true
-		}
-		errorMsg = boundedGatewayText(errorMsg)
-
-		// If the failure is retryable, attempt to retry the task
-		if retryable {
-			if task, retried, err := h.TaskService.RetryTask(ctx, ref, errorMsg); err != nil {
-				slog.Error("gateway fail: retry failed", "task_id", taskID, "error", err)
-				// Fall through to mark as failed
-			} else if retried {
-				slog.Info("gateway fail: task re-queued for retry", "task_id", taskID,
-					"retry_count", task.RetryCount, "max_retries", task.MaxRetries)
-				return true
-			} else {
-				slog.Warn("gateway fail: retry not possible (max retries or invalid state)", "task_id", taskID)
-				// Fall through to mark as failed
-			}
-		}
-
-		_, err := h.TaskService.FailTask(ctx, ref, errorMsg)
-		if err != nil {
-			slog.Error("gateway fail: failed", "task_id", taskID, "error", err)
-			return terminalApplied(ctx, ref)
-		}
-		return true
-	}
-
-	hub.GatewayHub.OnTaskLogs = func(gatewayID, workspaceID, taskID, runID string, seq int, stream, content string) {
-		if err := h.RecordGatewayTaskLog(context.Background(), workspaceID, taskID, runID, seq, stream, content); err != nil {
-			slog.Warn("gateway logs rejected", "gateway_id", gatewayID, "workspace_id", workspaceID, "task_id", taskID, "seq", seq, "error", err)
-		}
-	}
-}
-
-func boundedGatewayText(value string) string {
-	value = redact.Text(strings.ToValidUTF8(value, "\uFFFD"))
-	if len(value) <= protocol.GatewayTaskResultBytes {
-		return value
-	}
-	return strings.ToValidUTF8(value[len(value)-protocol.GatewayTaskResultBytes:], "")
 }
