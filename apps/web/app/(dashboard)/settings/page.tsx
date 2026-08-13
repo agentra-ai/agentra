@@ -1,6 +1,6 @@
 "use client";
 
-import { User, Palette, Key, Settings, Users, FolderGit2, Cloud, Brain, CreditCard } from "lucide-react";
+import { User, Palette, Key, Settings, Users, FolderGit2, Brain } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useWorkspaceStore } from "@/features/workspace";
@@ -10,9 +10,7 @@ import { TokensTab } from "./_components/tokens-tab";
 import { WorkspaceTab } from "./_components/workspace-tab";
 import { MembersTab } from "./_components/members-tab";
 import { RepositoriesTab } from "./_components/repositories-tab";
-import { RuntimeTab } from "@/features/settings/components/runtime-tab";
 import { MemoryViewer } from "@/features/memory/components/MemoryViewer";
-import { BillingTab } from "../_components/billing-tab";
 
 export default function SettingsPage() {
   const t = useTranslations("settings");
@@ -29,9 +27,7 @@ export default function SettingsPage() {
     { value: "workspace", label: t("general"), icon: Settings },
     { value: "repositories", label: t("repositories"), icon: FolderGit2 },
     { value: "members", label: t("members"), icon: Users },
-    { value: "runtime", label: t("runtime"), icon: Cloud },
     { value: "memory", label: t("memory") ?? "Memory", icon: Brain },
-    { value: "billing", label: t("billing") ?? "Billing", icon: CreditCard },
   ];
 
   return (
@@ -75,9 +71,7 @@ export default function SettingsPage() {
           </TabsContent>
           <TabsContent value="repositories"><RepositoriesTab /></TabsContent>
           <TabsContent value="members"><MembersTab /></TabsContent>
-          <TabsContent value="runtime"><RuntimeTab /></TabsContent>
           <TabsContent value="memory"><MemoryViewer /></TabsContent>
-          {workspaceId ? <TabsContent value="billing"><BillingTab workspaceId={workspaceId} /></TabsContent> : null}
         </div>
       </div>
     </Tabs>
