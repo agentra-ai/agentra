@@ -37,7 +37,7 @@ description: 生产环境自托管 Agentra
 docker compose up -d --build
 ```
 
-bootstrap 将 PostgreSQL/JWT/MinIO 随机密钥写入仅所有者可访问的 `.env`，并拒绝覆盖已有文件。默认栈只在 loopback 发布前后端；PostgreSQL 与 MinIO 只留在 Compose 网络，Adminer（`debug`）和挂载 Docker socket 的 gateway（`cloud-runtime`）必须显式启用 profile。Gateway 使用命名卷 `gatewaystate` 在重启后重放尚未确认的 Run 终态；常规升级时应保留该卷。
+bootstrap 将 PostgreSQL/JWT/MinIO 随机密钥写入仅所有者可访问的 `.env`，并拒绝覆盖已有文件。默认栈只在 loopback 发布前后端；PostgreSQL 与 MinIO 只留在 Compose 网络，Adminer（`debug`）必须显式启用 profile。
 
 可用 `make env-check` 审计环境文件。不要在未协同轮换凭据时覆盖旧部署的 `.env`：PostgreSQL 只在初始化新 data volume 时应用 `POSTGRES_PASSWORD`。
 

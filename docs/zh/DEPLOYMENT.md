@@ -118,7 +118,7 @@ nano .env
 docker compose up -d --build
 ```
 
-默认 profile 让 PostgreSQL 与 MinIO 仅在内部网络可见，Web/API 只绑定 loopback，也不会启动 Adminer 或挂载 Docker socket 的 gateway。只有明确需要这些高权限入口时，才使用 `--profile debug` 或 `--profile cloud-runtime`。
+默认 profile 让 PostgreSQL 与 MinIO 仅在内部网络可见，Web/API 只绑定 loopback，也不会启动 Adminer。只有明确需要该高权限入口时，才使用 `--profile debug`。
 
 验证部署：
 

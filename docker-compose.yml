@@ -73,30 +73,6 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  gateway:
-    container_name: agentra-gateway
-    profiles: ["cloud-runtime"]
-    build:
-      context: .
-      target: gateway-runtime
-    env_file:
-      - .env
-    environment:
-      AGENTRA_SERVER_URL: ${GATEWAY_SERVER_URL:-ws://server:8080/ws}
-      GATEWAY_ID: ${GATEWAY_ID:-gateway-1}
-      GATEWAY_WORKSPACE_ID: ${GATEWAY_WORKSPACE_ID:-}
-      AGENTRA_AUTH_TOKEN: ${AGENTRA_AUTH_TOKEN:-}
-      DOCKER_HOST: ${DOCKER_HOST:-unix:///var/run/docker.sock}
-      BASE_IMAGE: ${BASE_IMAGE:-agentra/agent-runtime:latest}
-      GATEWAY_STATE_DIR: ${GATEWAY_STATE_DIR:-/var/lib/agentra-gateway}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - gatewaystate:/var/lib/agentra-gateway
-    depends_on:
-      server:
-        condition: service_healthy
-    restart: unless-stopped
-
   web:
     container_name: agentra-web
     labels:
@@ -137,4 +113,3 @@ services:
 volumes:
   pgdata:
   miniodata:
-  gatewaystate:

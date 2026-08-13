@@ -47,11 +47,11 @@
       "name": "Realtime workspace sync",
       "status": "beta",
       "surfaces": ["api", "web"],
-      "summary": "WebSocket broadcasts synchronize workspace entities and task lifecycle events; owner/admin-authenticated cloud gateways stream redacted logs through a durable cursor ledger with bounded Web snapshots and reconnect recovery.",
+      "summary": "WebSocket broadcasts synchronize workspace entities and task lifecycle events, streaming redacted task logs through a durable cursor ledger with bounded Web snapshots and reconnect recovery.",
       "limitations": ["Realtime fanout is still single-server and in-memory; sticky-free multi-replica delivery remains M7-02."],
       "evidence": {
-        "files": ["server/internal/realtime", "server/internal/gateway", "server/internal/handler/daemon.go", "apps/web/features/realtime", "apps/web/features/issues/hooks/use-streaming-logs.ts"],
-        "tests": ["server/internal/gateway/client_test.go", "server/internal/realtime/hub_test.go", "server/cmd/server/integration_test.go", "apps/web/features/issues/hooks/use-streaming-logs.test.ts"]
+        "files": ["server/internal/realtime", "server/internal/handler/daemon.go", "apps/web/features/realtime", "apps/web/features/issues/hooks/use-streaming-logs.ts"],
+        "tests": ["server/internal/realtime/hub_test.go", "server/cmd/server/integration_test.go", "apps/web/features/issues/hooks/use-streaming-logs.test.ts"]
       }
     },
     {
@@ -162,18 +162,6 @@
       }
     },
     {
-      "id": "cloud-runtime",
-      "name": "Cloud runtime",
-      "status": "experimental",
-      "surfaces": ["api", "web", "gateway"],
-      "summary": "A server-owned Cloud Dispatch worker atomically allocates a Run and durable per-Run delivery; the Gateway labels and adopts containers by Gateway/workspace/task/Run identity, persists terminal frames locally, and deletes them only after the server confirms the exact terminal Run transition.",
-      "limitations": ["Restarted log streaming replays from Docker without a durable per-Run log cursor, and production isolation, real-provider smoke, and hosted-CI crash/recovery evidence remain incomplete."],
-      "evidence": {
-        "files": ["server/internal/service/cloud_dispatch.go", "server/pkg/db/queries/cloud_dispatch.sql", "server/internal/gateway/gateway.go", "server/internal/gateway/terminal_spool.go", "server/cmd/gateway"],
-        "tests": ["server/internal/service/cloud_dispatch_test.go", "server/internal/gateway/gateway_dispatch_test.go", "server/internal/gateway/terminal_spool_test.go", "server/cmd/server/integration_test.go"]
-      }
-    },
-    {
       "id": "eval-harness",
       "name": "Agentra Eval harness",
       "status": "experimental",
@@ -211,7 +199,7 @@
       "surfaces": ["api"],
       "summary": "Separate liveness and readiness endpoints report database, migration, configured object storage, and scheduler health for self-hosted deployments.",
       "limitations": [
-        "Readiness does not yet cover realtime fanout, outbound email, or cloud gateway capacity.",
+        "Readiness does not yet cover realtime fanout or outbound email.",
         "N-1 migration rehearsal and Kubernetes packaging are not release gates yet."
       ],
       "evidence": {
@@ -254,9 +242,8 @@
       "name": "Guided machine setup",
       "status": "beta",
       "surfaces": ["cli", "daemon"],
-      "summary": "A single idempotent command preflights cloud or self-hosted readiness, Web access, and local coding-agent CLIs, authenticates, discovers workspaces, and starts the profile-isolated daemon.",
+      "summary": "A single idempotent command preflights self-hosted readiness, Web access, and local coding-agent CLIs, authenticates, discovers workspaces, and starts the profile-isolated daemon.",
       "limitations": [
-        "A public Agentra Cloud endpoint is not released, so cloud setup requires explicit HTTPS URLs.",
         "The command assumes the CLI is already installed; the first public release with verifiable macOS/Linux/Windows artifacts requires the next tag."
       ],
       "evidence": {
@@ -303,7 +290,7 @@
       "name": "Unified release metadata",
       "status": "beta",
       "surfaces": ["cli", "api", "web", "deployment"],
-      "summary": "One checked release metadata document drives package versions, release tags, CLI/server/gateway build info, the public version API, Web build metadata, README, and Roadmap claims.",
+      "summary": "One checked release metadata document drives package versions, release tags, CLI/server build info, the public version API, Web build metadata, README, and Roadmap claims.",
       "limitations": [
         "The next tagged release must run the updated workflows before publicly distributed CLI and container artifacts satisfy this contract.",
         "Direct local development builds intentionally report dev/unknown instead of pretending to be the current release."

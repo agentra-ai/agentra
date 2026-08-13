@@ -33,11 +33,11 @@ The scripts verify release archives against `checksums.txt`, install without aut
 ### Guided setup
 
 ```bash
-agentra setup --deployment self-host
-agentra setup --deployment cloud --server-url https://api.example.com --app-url https://app.example.com
+agentra setup
+agentra setup --server-url https://api.example.com --app-url https://app.example.com
 ```
 
-`setup` checks API readiness and the Web app, verifies that `claude`, `codex`, or `opencode` is available for a local runtime, authenticates, discovers workspaces, and starts the daemon. Self-host defaults to the loopback ports published by Compose. Cloud requires explicit HTTPS endpoints until a public hosted endpoint is released. Use `--token` for PAT login, `--no-daemon` for management-only machines, and `--profile` to isolate deployments.
+`setup` checks API readiness and the Web app, verifies that `claude`, `codex`, or `opencode` is available for a local runtime, authenticates, discovers workspaces, and starts the daemon. It defaults to the loopback ports published by Compose. Use `--token` for PAT login, `--no-daemon` for management-only machines, and `--profile` to isolate deployments.
 
 ### Authentication
 

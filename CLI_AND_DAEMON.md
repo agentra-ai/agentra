@@ -61,20 +61,20 @@ Direct installs download `checksums.txt`, verify the matching archive, and repla
 
 ```bash
 # Self-hosted Compose defaults: preflight, login, workspace discovery, daemon
-agentra setup --deployment self-host
+agentra setup
 ```
 
 `agentra setup` verifies API readiness and the Web app, detects a supported coding-agent CLI, authenticates, adds all available workspaces to the daemon watch list, and starts the daemon. It is safe to rerun: a valid token and matching daemon are reused. If an endpoint changes, credentials and workspace selections belonging to the previous server are cleared before authentication.
 
-For another deployment, pass explicit HTTPS endpoints:
+For another self-hosted deployment, pass explicit HTTPS endpoints:
 
 ```bash
-agentra setup --deployment cloud \
+agentra setup \
   --server-url https://api.example.com \
   --app-url https://app.example.com
 ```
 
-There is no hardcoded public Agentra Cloud endpoint until that service is released. Use `--token` for headless PAT authentication, `--no-daemon` for a management-only machine, and `--profile <name>` to isolate multiple deployments.
+Use `--token` for headless PAT authentication, `--no-daemon` for a management-only machine, and `--profile <name>` to isolate multiple deployments.
 
 ## Command Inventory
 
@@ -99,7 +99,7 @@ This table is the supported top-level CLI surface. Run `agentra` or `agentra --h
 | `agentra loop` | Manage Agentic Engineering Loops. |
 | `agentra repo` | Check out repositories for agent work. |
 | `agentra runtime` | Inspect and update registered runtimes. |
-| `agentra setup` | Configure a cloud or self-hosted deployment end to end. |
+| `agentra setup` | Configure a self-hosted deployment end to end. |
 | `agentra skill` | Manage workspace skills and skill files. |
 | `agentra update` | Update a direct CLI installation. |
 | `agentra version` | Print embedded version and commit metadata. |

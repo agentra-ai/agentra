@@ -6,7 +6,7 @@ import process from "node:process";
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const manifestPath = path.join(repositoryRoot, "docs", "capabilities.json");
 const allowedStatuses = new Set(["stable", "beta", "experimental", "planned"]);
-const allowedSurfaces = new Set(["api", "web", "cli", "daemon", "gateway", "mcp", "deployment"]);
+const allowedSurfaces = new Set(["api", "web", "cli", "daemon", "mcp", "deployment"]);
 
 function invariant(condition, message) {
   if (!condition) throw new Error(message);

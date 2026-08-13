@@ -1,8 +1,8 @@
 # Agentra Domain Context
 
 Agentra is an AI-native task management platform where people and Agents work
-through Issues. The product serves small AI-native teams and supports both
-local and cloud Runtime execution.
+through Issues. The product serves small AI-native teams with local Runtime
+execution.
 
 ## Core concepts
 
@@ -19,9 +19,8 @@ selected Runtime. Assigning an Agent to an Issue may enqueue a Work Item.
 
 ### Runtime
 
-A Runtime is the execution environment selected by an Agent. A local Runtime
-is served by a daemon and a Runtime Adapter; a cloud Runtime is served through
-the Cloud Gateway.
+A Runtime is the execution environment selected by an Agent. A Runtime is
+served by a local daemon and a Runtime Adapter.
 
 ### Work Item
 
@@ -35,8 +34,8 @@ or merge the observations from an earlier Run.
 ### Run
 
 A Run is one execution attempt of a Work Item. Its stable `run_id` is allocated
-when the Work Item is dispatched, before a local daemon or Cloud Gateway starts
-provisioning; execution begins when both records transition to running.
+when the Work Item is dispatched, before a local daemon starts provisioning;
+execution begins when both records transition to running.
 Messages, provider session checkpoints, usage, artifacts, and Trace data belong
 to that Run. A Run has exactly one terminal outcome.
 
@@ -71,8 +70,7 @@ projections of that persisted fact.
 - A Work Item is the logical request; a Run is one attempt.
 - Every dispatched or running Work Item has exactly one active Run, and their
   statuses agree.
-- Local daemon and Cloud Gateway callbacks must identify the Run they belong
-  to.
+- Local daemon callbacks must identify the Run they belong to.
 - Message sequence numbers are unique within a Run, not across all retries of a
   Work Item.
 - A terminal callback for an old Run cannot complete or fail a newer Run.

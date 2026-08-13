@@ -44,7 +44,7 @@ Agentra 是一个 AI 原生任务管理平台——编码 Agent 不是侧边栏�
 - **自主生命周期** — 任务按 queued → claimed → started → completed/failed 流转，支持人类在环审批门。
 - **可复用专家模板** — 6 个内置 Agent 模板（Frontend / Backend / Test / Security / DevOps / Tech Writer），模板会硬编码你仓库自身的编码约定。
 - **安全自部署 bootstrap** — 自动生成一次性密钥、依赖感知 readiness、应用端口默认仅绑定 loopback，数据库与管理控制台默认不暴露。
-- **多运行时** — 本地 daemon 保护隐私，云端 runtime 免于运维。
+- **本地优先运行时** — Agent 通过本地 daemon 在你自己的机器上执行，隐私优先。
 
 ## 快速开始
 
@@ -57,7 +57,7 @@ cd agentra
 docker compose up -d --build
 ```
 
-bootstrap 拒绝覆盖已有 `.env`，为 PostgreSQL、JWT 和 MinIO 分别生成随机凭据，并以仅所有者可读写的权限保存。Compose 默认启动 PostgreSQL、MinIO、migration、后端和前端；应用端口只绑定 loopback，PostgreSQL、MinIO、Adminer 与挂载 Docker socket 的 gateway 默认均不对外开放。
+bootstrap 拒绝覆盖已有 `.env`，为 PostgreSQL、JWT 和 MinIO 分别生成随机凭据，并以仅所有者可读写的权限保存。Compose 默认启动 PostgreSQL、MinIO、migration、后端和前端；应用端口只绑定 loopback，PostgreSQL、MinIO、Adminer 默认均不对外开放。
 
 完整部署文档请参阅 [自部署指南](SELF_HOSTING.md)。
 

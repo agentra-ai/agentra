@@ -37,7 +37,7 @@ Generate a secure environment and start the bundled stack:
 docker compose up -d --build
 ```
 
-The bootstrap writes random PostgreSQL/JWT/MinIO secrets to an owner-only `.env` and refuses to overwrite it. The default stack publishes backend and frontend on loopback only. PostgreSQL and MinIO stay on the Compose network; Adminer (`debug`) and the Docker-socket gateway (`cloud-runtime`) require explicit profiles. The Gateway uses the named `gatewaystate` volume to replay unacknowledged terminal Run deliveries after restart; retain that volume during routine upgrades.
+The bootstrap writes random PostgreSQL/JWT/MinIO secrets to an owner-only `.env` and refuses to overwrite it. The default stack publishes backend and frontend on loopback only. PostgreSQL and MinIO stay on the Compose network; Adminer (`debug`) requires an explicit profile.
 
 Use `make env-check` to audit an environment file. Never overwrite an older deployment's `.env` without coordinated credential rotation: PostgreSQL only applies `POSTGRES_PASSWORD` when initializing a new data volume.
 

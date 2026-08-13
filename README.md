@@ -44,7 +44,7 @@ Works with **Claude Code**, **Codex**, and **OpenCode**. Additional providers re
 - **Autonomous lifecycle** — tasks flow queued → claimed → started → completed/failed, with human-in-the-loop approval gates.
 - **Reusable specialist templates** — 6 built-in agent templates (Frontend, Backend, Test, Security, DevOps, Tech Writer) that hardcode *your repo's* coding conventions.
 - **Secure self-host bootstrap** — generated one-time secrets, dependency-aware readiness, loopback-only application ports, and no default database/admin-console exposure.
-- **Multi-runtime** — local daemon for privacy-first execution, cloud runtime for zero-ops scale.
+- **Local-first runtime** — agents execute on your own machine through the local daemon for privacy-first execution.
 
 ## Quick Start
 
@@ -57,7 +57,7 @@ cd agentra
 docker compose up -d --build
 ```
 
-The bootstrap refuses to overwrite an existing `.env`, generates independent PostgreSQL/JWT/MinIO credentials, and writes them with owner-only permissions. Compose starts PostgreSQL, MinIO, migrations, backend, and frontend. Application ports bind to loopback; PostgreSQL, MinIO, Adminer, and the Docker-socket gateway are not exposed by default.
+The bootstrap refuses to overwrite an existing `.env`, generates independent PostgreSQL/JWT/MinIO credentials, and writes them with owner-only permissions. Compose starts PostgreSQL, MinIO, migrations, backend, and frontend. Application ports bind to loopback; PostgreSQL, MinIO, and Adminer are not exposed by default.
 
 See the [Self-Hosting Guide](SELF_HOSTING.md) for full instructions.
 

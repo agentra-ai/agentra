@@ -23,13 +23,10 @@ jobs:
       attestations: write
     strategy:
       matrix:
-        target: [server-runtime, gateway-runtime, web-runtime]
+        target: [server-runtime, web-runtime]
         include:
           - target: server-runtime
             component: server
-            build-args: ""
-          - target: gateway-runtime
-            component: gateway
             build-args: ""
           - target: web-runtime
             component: web

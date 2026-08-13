@@ -41,7 +41,7 @@ Agentra 将编码 Agent 变成真正的团队成员。像分配给同事一样�
 
 ### 运行时控制
 
-统一控制面板管理本地或云端运行时。支持 Claude Code 和 Codex，自动检测可用 CLI。
+统一控制面板管理本地运行时。支持 Claude Code 和 Codex，自动检测可用 CLI。
 
 ---
 

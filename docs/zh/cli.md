@@ -61,11 +61,11 @@ Remove-Item .\install.ps1
 ### 引导式配置
 
 ```bash
-agentra setup --deployment self-host
-agentra setup --deployment cloud --server-url https://api.example.com --app-url https://app.example.com
+agentra setup
+agentra setup --server-url https://api.example.com --app-url https://app.example.com
 ```
 
-`setup` 会检查 API readiness 与 Web 应用，确认本机存在 `claude`、`codex` 或 `opencode`，然后完成认证、workspace 发现和 daemon 启动。self-host 默认使用 Compose 发布的 loopback 端口；在公开托管地址发布前，cloud 必须显式指定 HTTPS 端点。PAT 登录使用 `--token`，仅管理机器使用 `--no-daemon`，多个部署使用 `--profile` 隔离。
+`setup` 会检查 API readiness 与 Web 应用，确认本机存在 `claude`、`codex` 或 `opencode`，然后完成认证、workspace 发现和 daemon 启动。默认使用 Compose 发布的 loopback 端口。PAT 登录使用 `--token`，仅管理机器使用 `--no-daemon`，多个部署使用 `--profile` 隔离。
 
 ### 认证
 

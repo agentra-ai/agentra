@@ -118,7 +118,7 @@ nano .env
 docker compose up -d --build
 ```
 
-The default profile keeps PostgreSQL and MinIO internal, binds Web/API to loopback, and does not start Adminer or the Docker-socket gateway. Use `--profile debug` or `--profile cloud-runtime` only when those privileged surfaces are intentionally required.
+The default profile keeps PostgreSQL and MinIO internal, binds Web/API to loopback, and does not start Adminer. Use `--profile debug` only when that privileged surface is intentionally required.
 
 Verify the deployment:
 

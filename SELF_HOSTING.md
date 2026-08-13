@@ -44,16 +44,13 @@ This Compose stack:
 - publishes the backend on loopback `PORT` (default `127.0.0.1:8080`)
 - publishes the frontend on loopback `FRONTEND_PORT` (default `127.0.0.1:3000`)
 - serves public URLs from `FRONTEND_ORIGIN`, `NEXT_PUBLIC_API_URL`, and `NEXT_PUBLIC_WS_URL`
-- does not publish PostgreSQL or MinIO ports and does not start Adminer or the Docker-socket gateway by default
+- does not publish PostgreSQL or MinIO ports and does not start Adminer by default
 
 Use `SERVER_BIND_ADDRESS` / `WEB_BIND_ADDRESS` to change host bindings only when your firewall or reverse proxy requires it. Enable optional high-trust services explicitly:
 
 ```bash
 docker compose --profile debug up -d postgres-console
-docker compose --profile cloud-runtime up -d gateway
 ```
-
-The `cloud-runtime` profile mounts `/var/run/docker.sock`; treat it as host-equivalent privilege and configure its workspace/token before enabling it. Its named `gatewaystate` volume stores terminal-delivery frames until the server acknowledges the exact Run, so do not delete that volume during a routine Gateway restart. Override `GATEWAY_STATE_DIR` only when an equivalent persistent path is mounted there.
 
 Useful follow-up commands:
 

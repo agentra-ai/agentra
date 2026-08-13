@@ -62,17 +62,11 @@ const allProfiles = config(["--profile", "*"]);
 const development = config(["-f", "docker-compose.yml", "-f", "docker-compose.dev.yml"]);
 
 assert(!base.services["postgres-console"], "Adminer must be disabled by default");
-assert(!base.services.gateway, "Docker-socket gateway must be disabled by default");
+assert(!base.services.gateway, "No Docker-socket gateway service may exist");
 assert(base.services.postgres && !base.services.postgres.ports, "PostgreSQL must not publish a host port by default");
 assert(base.services.minio && !base.services.minio.ports, "MinIO API/console must not publish host ports by default");
 
 assert(allProfiles.services["postgres-console"]?.profiles?.includes("debug"), "Adminer must require the debug profile");
-assert(allProfiles.services.gateway?.profiles?.includes("cloud-runtime"), "Gateway must require the cloud-runtime profile");
-const gatewayVolumes = allProfiles.services.gateway?.volumes ?? [];
-assert(
-  gatewayVolumes.some((volume) => volume.target === "/var/lib/agentra-gateway" && volume.type === "volume"),
-  "Gateway durable state must use a named volume",
-);
 
 for (const serviceName of ["server", "web"]) {
   const ports = base.services[serviceName]?.ports ?? [];

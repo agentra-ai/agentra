@@ -41,7 +41,7 @@ Turn repeatable workflows into shared team capabilities. Skills compound over ti
 
 ### Runtime Control
 
-Manage local or cloud runtimes from one dashboard. Support for Claude Code and Codex with auto-detection of available CLIs.
+Manage local runtimes from one dashboard. Support for Claude Code and Codex with auto-detection of available CLIs.
 
 ---
 
